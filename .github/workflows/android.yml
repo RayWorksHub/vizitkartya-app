@@ -9,6 +9,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL: ${{ secrets.VIZIT_DEV_SUPABASE_URL }}
+      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY: ${{ secrets.VIZIT_DEV_SUPABASE_KEY }}
+      ORG_GRADLE_PROJECT_VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
+      ORG_GRADLE_PROJECT_VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
+      ORG_GRADLE_PROJECT_VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
+      ORG_GRADLE_PROJECT_VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
 
     steps:
       - name: Checkout
@@ -42,6 +49,14 @@ jobs:
 
       - name: Build development APK
         run: ./gradlew assembleDevDebug
+
+      - name: Upload development APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vizit-dev-debug
+          path: app/build/outputs/apk/dev/debug/app-dev-debug.apk
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build beta APK
         run: ./gradlew assembleBetaDebug
