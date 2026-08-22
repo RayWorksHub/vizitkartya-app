@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,10 +22,12 @@ import hu.rayworks.vizit.ui.screens.HomeScreen
 import hu.rayworks.vizit.ui.screens.NfcShareScreen
 import hu.rayworks.vizit.ui.screens.ProfileScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
+import hu.rayworks.vizit.ui.screens.ShareScreen
 
 private enum class AppSection(val label: String) {
     HOME("Kezdőlap"),
-    PROFILE("Névjegy"),
+    PROFILE("Névjegyem"),
+    SHARE("Átadás"),
     SETTINGS("Beállítások"),
 }
 
@@ -54,6 +57,7 @@ fun VizitApp(viewModel: VizitViewModel) {
                                 imageVector = when (section) {
                                     AppSection.HOME -> Icons.Outlined.Home
                                     AppSection.PROFILE -> Icons.Outlined.Person
+                                    AppSection.SHARE -> Icons.Outlined.Share
                                     AppSection.SETTINGS -> Icons.Outlined.Settings
                                 },
                                 contentDescription = null,
@@ -78,6 +82,13 @@ fun VizitApp(viewModel: VizitViewModel) {
             AppSection.PROFILE -> ProfileScreen(
                 profile = viewModel.profile,
                 onSave = viewModel::saveProfile,
+                modifier = Modifier.padding(innerPadding),
+            )
+
+            AppSection.SHARE -> ShareScreen(
+                profile = viewModel.profile,
+                nfcStatus = viewModel.nfcStatus,
+                onStartNfcShare = viewModel::startNfcShare,
                 modifier = Modifier.padding(innerPadding),
             )
 

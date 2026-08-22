@@ -4,12 +4,22 @@ Két mód készül ugyanabból a lokális profilból.
 
 ## Kontakt QR
 
-Szabványos vCard 3.0 szöveg. A QR nem tartalmaz Base64 profilképet. Internet nélkül generálható.
+`IMPLEMENTED`: szabványos vCard 3.0 szöveg, Base64 profilkép nélkül. Internet nélkül generálható. Fizikai kamera/QR kompatibilitási teszt szükséges Androidon és iPhone-on, ezért még nem `SUPPORTED`.
 
 ## VIZIT profil QR
 
-Alapértelmezett üzleti mód: stabil HTTPS URL `https://<profile-host>/p/{slug}`. Androidon App Link nyithatja a VIZIT-et, app nélkül böngésző nyílik. iPhone-on Safari fallback az alap.
+`PARTIALLY SUPPORTED`: stabil HTTPS URL `https://<profile-host>/p/{slug}` generálása és az Android App Link intent elkészült. A publikus profiloldal és a domain `assetlinks.json` még szükséges a teljes end-to-end működéshez.
 
 ## UX
 
-Nagy kontraszt, megfelelő quiet zone, teljes képernyős mód és ideiglenes fényerő-emelés. Kilépéskor az eredeti fényerőt vissza kell állítani.
+Megvalósítva:
+
+- nagy kontrasztú fekete-fehér QR és 4 modul quiet zone;
+- VIZIT profil / Kontakt mód váltás;
+- teljes képernyős QR;
+- teljes képernyőn ideiglenes maximális fényerő, kilépéskor visszaállítással;
+- QR megosztása PNG-ként;
+- mentés `Pictures/VIZIT` alá Android 10+ MediaStore használatával;
+- profil-link másolása.
+
+A QR-generátor determinisztikus azonos payload és konfiguráció mellett.
