@@ -2,7 +2,7 @@
 
 Audit dátuma: 2026-08-22
 
-Auditált távoli commit: `6964b1f` (`origin/develop`)
+Auditált alap commit: `ec32933` (`origin/develop`, PR #2 merge)
 
 Master követelmény: `docs/VIZIT_MASTER_SPEC_V1.md`
 
@@ -17,7 +17,7 @@ Master követelmény: `docs/VIZIT_MASTER_SPEC_V1.md`
 
 ## Ellenőrzött alapállapot
 
-Az `Android CI` 8. futása sikeresen teljesítette a unit test, lint, DEV/BETA debug build és PROD release compile lépéseket a `6964b1f` commiton.
+Az `Android CI` 10. futása sikeresen teljesítette a unit test, lint, DEV/BETA debug build és PROD release compile lépéseket a PR #2 merge előtti, azonos tartalmú feature headen. A `develop` alap ennek squash merge commitja.
 
 | Terület | Állapot | Audit eredménye |
 |---|---|---|
@@ -25,21 +25,21 @@ Az `Android CI` 8. futása sikeresen teljesítette a unit test, lint, DEV/BETA d
 | DEV/BETA/PROD flavor | `TESTED` | Külön application ID/név/config mezők létrejöttek; a végleges PROD package ID még nincs jóváhagyva. |
 | CI | `TESTED` | Unit test, lint és mindhárom környezet buildje sikeres. |
 | Projektstruktúra | `REQUIRES REFACTOR` | Még gyökérszintű `app/`; a master szerinti `apps/android`, `shared` és teljes docs struktúra nincs kész. |
-| Hivatalos branding | `REQUIRES REFACTOR` | Az auditált commit ideiglenes, nem hivatalos launcher ikont használt; a jóváhagyott asset ebben a feature blokkban került be. |
-| Auth | `PARTIALLY SUPPORTED` | Email/jelszó, session, reset, Google adapter és Edge Function shell kész; jogi checkbox, jogi dokumentumok, megerősített törlési UI és élő Supabase E2E teszt hiányzik. |
+| Hivatalos branding | `TESTED` | A jóváhagyott master asset, adaptive/round/themed launcher ikon és kontrollált brandfelületek buildelnek. |
+| Auth | `PARTIALLY SUPPORTED` | Email/jelszó, session, reset, kötelező jogi gate, Google adapter és Edge Function shell kész; megerősített törlési UX és élő Supabase E2E teszt hiányzik. |
 | Supabase kliens | `IMPLEMENTED` | Auth/PostgREST/Storage/Functions kliens és flavor config kész, de távoli projekten nincs ellenőrizve. |
-| Supabase schema/RLS | `REQUIRES REFACTOR` | Alap migration kész, de a publikus RPC a core profilmezők mezőszintű láthatóságát megkerüli; slug- és Storage-szabályok szigorítandók. |
-| Room | `IMPLEMENTED` | Entitások és DAO készültek, de a futó profilrepository még nem használja őket. |
-| DataStore | `IMPLEMENTED` | Beállítási store elkészült, de nincs bekötve az alkalmazásállapotba. |
-| Offline sync | `BLOCKED` | Repository/outbox/WorkManager/retry/konfliktuskezelés nincs kész. |
-| Profilmodell | `REQUIRES REFACTOR` | A futó UI még egyetlen név/telefon/email modellt és SharedPreferences-t használ; többértékű mezők, sorrend és láthatóság nincs bekötve. |
+| Supabase schema/RLS | `IMPLEMENTED` | Forward-only privacy hardening és verzióellenőrzött profil-sync migráció kész; távoli projekten még nincs alkalmazva vagy E2E tesztelve. |
+| Room | `IMPLEMENTED` | A futó profilrepository Room source of truth; v1→v2 migráció és a korábbi SharedPreferences adat egyszeri átemelése elkészült. |
+| DataStore | `IMPLEMENTED` | Az automatikus szinkron, az aktív profiltulajdonos és a legacy migráció állapota futásidőben be van kötve. |
+| Offline sync | `IMPLEMENTED` | Atomi, összevont outbox, WorkManager hálózati constraint, exponenciális retry, sync lease, idempotens Supabase RPC és verziókonfliktus-blokkolás készült. Élő Supabase E2E még szükséges. |
+| Profilmodell | `REQUIRES REFACTOR` | A Room séma normalizált, de a futó UI még egyetlen telefon/e-mail/cím/link mezőt mutat; többértékű szerkesztés, sorrend és láthatóság nincs bekötve. |
 | Profilkép | `PARTIALLY SUPPORTED` | Photo Picker és tömörítés működik; crop/pan/zoom UI, külön display/thumbnail/contact asset pipeline nincs kész. |
 | Céges logó | `BLOCKED` | Külön `contain` alapú cégeslogó-kezelés még nincs. |
-| NFC HCE/NDEF/APDU | `TESTED`, `REQUIRES REFACTOR` | Type 4 Tag és APDU unit tesztelt; a payload személyes adatot ír SharedPreferences-be, nincs session guard és preferred HCE service. |
-| vCard | `TESTED`, `REQUIRES REFACTOR` | vCard 3.0 és alapmezők készültek; strukturált név, több mező és UTF-8 bájthelyes folding javítandó. |
+| NFC HCE/NDEF/APDU | `TESTED` | Process-local payload, session guard, foreground preferred service és teljes NDEF-olvasás unit/build szinten ellenőrzött; fizikai teszt hiányzik. |
+| vCard | `TESTED`, `PARTIALLY SUPPORTED` | Strukturált név és UTF-8 bájthelyes folding kész; a többértékű profil UI bekötése hiányzik. |
 | NFC kép/payload | `IMPLEMENTED` | Adaptív fotótömörítés és fallback létezik; a 24 KiB célérték fizikai teszt nélkül nem tekinthető támogatottnak. |
 | NFC lifecycle/UX | `PARTIALLY SUPPORTED` | Start/stop/timeout/semleges read visszajelzés kész; fizikai lifecycle és OEM működés nincs igazolva. |
-| Kontakt QR | `PARTIALLY SUPPORTED` | Offline vCard QR és UI kész; nem ez az alapértelmezett mód, nincs méretbudget és nincs round-trip teszt. |
+| Kontakt QR | `TESTED`, `PARTIALLY SUPPORTED` | Elsődleges offline vCard QR, méretbudget és round-trip unit teszt kész; fizikai kamera-teszt hiányzik. |
 | Profil QR | `PARTIALLY SUPPORTED` | Konfigurált HTTPS URL kész; slug validáció, publikus webprofil és domain még hiányzik. |
 | QR UX | `PARTIALLY SUPPORTED` | Fullscreen, fényerő, megosztás és mentés kész; Kontakt QR prioritás és eszközteszt hiányzik. |
 | Publikus profil/App Link | `PARTIALLY SUPPORTED` | App Link intent megvan; weboldal, `assetlinks.json` és biztonságos publikus endpoint E2E nincs. |
@@ -47,7 +47,7 @@ Az `Android CI` 8. futása sikeresen teljesítette a unit test, lint, DEV/BETA d
 | Fizikai kompatibilitás | `BLOCKED BY EXTERNAL ACCESS` | Egyetlen NFC/QR sor sem `DEVICE TESTED`; Xiaomi/Redmi/POCO/Samsung/Pixel/iPhone tesztpark szükséges. |
 | Crash/performance/security review | `BLOCKED` | Crash monitoring, ANR mérés és teljes release security review nincs kész. |
 
-## Első javítási blokk ezen a feature ágon
+## Első, developba merge-elt javítási blokk
 
 Az alábbiak implementálva és statikusan ellenőrizve vannak. A PR 9. Android CI-futása sikeresen teljesítette a unit test, lint, DEV/BETA debug build és PROD release compile lépéseket; az automatizálható részek ezért `TESTED` státuszúak. Fizikai készülékteszt még nem történt.
 
@@ -62,13 +62,23 @@ Az alábbiak implementálva és statikusan ellenőrizve vannak. A PR 9. Android 
 
 A következő kötelező bizonyíték: távoli Supabase/Auth E2E, majd valós NFC/QR készülékteszt.
 
+## Második javítási blokk ezen a feature ágon
+
+| Terület | Feature ág állapota |
+|---|---|
+| Room runtime | `IMPLEMENTED`: a profil UI Room `Flow` source of truth-ból él; a v1→v2 adatbázis-migráció és a legacy SharedPreferences átemelése adatvesztés ellen védett. |
+| DataStore runtime | `IMPLEMENTED`: automatikus sync, aktív profiltulajdonos és migrációjelző futásidőben bekötve. |
+| Outbox/retry | `IMPLEMENTED`: a profilmentés és az összevont outbox atomi; network constraint, exponenciális backoff, process-kill lease és kézi retry készült. |
+| Konfliktuskezelés | `IMPLEMENTED`: szerververzió-ütközésnél a helyi és távoli snapshot megmarad, az automatikus overwrite leáll és a UI visszajelez. |
+| Supabase sync | `IMPLEMENTED`: idempotens, tranzakciós push/pull RPC és mobiladapter készült. Távoli migráció/E2E engedély és DEV hozzáférés nélkül nem futott. |
+| Automatizált ellenőrzés | `PENDING CI`: mapper, PII-kizárás, stabil ID, retry, sessionhiány, push, pull és konfliktus JVM tesztek készültek. |
+
 ## P0 javítási sorrend
 
-1. Room + Supabase local-first repository és outbox sync;
-2. teljes Auth UX és Supabase DEV E2E;
-3. többértékű profil, mezősorrend/láthatóság, kép- és cégeslogó pipeline;
-4. publikus profil és App Link end-to-end;
-5. fizikai Xiaomi/cross-OEM teszt és kompatibilitási mátrix.
+1. teljes Auth UX és Supabase DEV E2E;
+2. többértékű profil, mezősorrend/láthatóság, kép- és cégeslogó pipeline;
+3. publikus profil és App Link end-to-end;
+4. fizikai Xiaomi/cross-OEM teszt és kompatibilitási mátrix.
 
 ## Külső blokkolók
 

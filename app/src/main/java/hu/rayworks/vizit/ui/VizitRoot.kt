@@ -9,6 +9,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -24,8 +25,32 @@ import hu.rayworks.vizit.ui.screens.AuthScreen
 fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
     val session by authViewModel.sessionState.collectAsState()
 
+    LaunchedEffect(session, authViewModel.debugLocalProfile) {
+        when {
+            authViewModel.debugLocalProfile -> vizitViewModel.bindProfileOwner(
+                userId = LOCAL_DEBUG_PROFILE_OWNER_ID,
+                enableCloudSync = false,
+            )
+
+            session is AuthSessionState.Authenticated -> vizitViewModel.bindProfileOwner(
+                userId = (session as AuthSessionState.Authenticated).userId,
+                enableCloudSync = true,
+            )
+
+            session is AuthSessionState.RefreshFailed -> {
+                (session as AuthSessionState.RefreshFailed).cachedUserId?.let { userId ->
+                    vizitViewModel.bindProfileOwner(userId = userId, enableCloudSync = true)
+                }
+            }
+        }
+    }
+
     if (authViewModel.debugLocalProfile) {
-        VizitApp(viewModel = vizitViewModel)
+        if (vizitViewModel.hasOfflineProfileSession) {
+            VizitApp(viewModel = vizitViewModel)
+        } else {
+            CenteredStatus { CircularProgressIndicator() }
+        }
         return
     }
 
@@ -35,7 +60,11 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
     }
 
     when (session) {
-        AuthSessionState.Authenticated -> VizitApp(viewModel = vizitViewModel)
+        is AuthSessionState.Authenticated -> if (vizitViewModel.hasOfflineProfileSession) {
+            VizitApp(viewModel = vizitViewModel)
+        } else {
+            CenteredStatus { CircularProgressIndicator() }
+        }
         AuthSessionState.Initializing -> CenteredStatus { CircularProgressIndicator() }
         AuthSessionState.BackendUnavailable -> CenteredStatus {
             Text("A VIZIT backend ebben a buildben még nincs konfigurálva.", textAlign = TextAlign.Center)
@@ -43,10 +72,19 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
                 Button(onClick = authViewModel::useDebugLocalProfile) { Text("Helyi DEV tesztprofil használata") }
             }
         }
-        is AuthSessionState.RefreshFailed,
+        is AuthSessionState.RefreshFailed -> if (vizitViewModel.hasOfflineProfileSession) {
+            VizitApp(viewModel = vizitViewModel, offlineMode = true)
+        } else {
+            CenteredStatus {
+                Text(session.message, textAlign = TextAlign.Center)
+                Button(onClick = authViewModel::logout) { Text("Újra bejelentkezem") }
+            }
+        }
         AuthSessionState.SignedOut -> AuthScreen(viewModel = authViewModel)
     }
 }
+
+private const val LOCAL_DEBUG_PROFILE_OWNER_ID = "local-dev-profile"
 
 @Composable
 private fun CenteredStatus(content: @Composable () -> Unit) {

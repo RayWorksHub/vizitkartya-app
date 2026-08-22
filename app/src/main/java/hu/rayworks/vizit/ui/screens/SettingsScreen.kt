@@ -13,10 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,10 +29,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.BuildConfig
 import hu.rayworks.vizit.NfcStatus
+import hu.rayworks.vizit.data.sync.ProfileSyncState
+import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 
 @Composable
 fun SettingsScreen(
     nfcStatus: NfcStatus,
+    syncState: ProfileSyncState,
+    automaticSyncEnabled: Boolean,
+    onAutomaticSyncChanged: (Boolean) -> Unit,
+    onRetrySync: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -63,6 +72,42 @@ fun SettingsScreen(
             )
         }
         item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Sync, contentDescription = null)
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 14.dp),
+                        ) {
+                            Text("Profil szinkron", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = syncState.description(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        Switch(
+                            checked = automaticSyncEnabled,
+                            onCheckedChange = onAutomaticSyncChanged,
+                        )
+                    }
+                    if (syncState.status == ProfileSyncStatus.RETRY_SCHEDULED) {
+                        Button(onClick = onRetrySync, modifier = Modifier.fillMaxWidth()) {
+                            Text("Szinkron újrapróbálása")
+                        }
+                    }
+                }
+            }
+        }
+        item {
             SettingsCard(
                 icon = Icons.Outlined.Person,
                 title = "Google-belépés",
@@ -88,6 +133,16 @@ fun SettingsScreen(
             )
         }
     }
+}
+
+private fun ProfileSyncState.description(): String = when (status) {
+    ProfileSyncStatus.LOCAL_ONLY -> "Csak ezen az eszközön tárolva."
+    ProfileSyncStatus.SYNCED -> "A helyi és a felhőprofil szinkronban van."
+    ProfileSyncStatus.PENDING -> "A módosítás helyben mentve, felhőszinkronra vár."
+    ProfileSyncStatus.SYNCING -> "Felhőszinkron folyamatban."
+    ProfileSyncStatus.RETRY_SCHEDULED -> lastError
+        ?: "A helyi adat biztonságban van; a szinkron automatikusan újrapróbálkozik."
+    ProfileSyncStatus.CONFLICT -> "A helyi adat megmaradt; az automatikus felülírás konfliktus miatt leállt."
 }
 
 @Composable

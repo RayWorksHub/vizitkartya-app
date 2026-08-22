@@ -17,7 +17,7 @@ A fejlesztés elsődleges követelményforrása a [`docs/VIZIT_MASTER_SPEC_V1.md
 - Kotlin, Jetpack Compose, Material 3, API 29–36;
 - DEV/BETA/PROD build flavor;
 - Supabase Auth/Storage/PostgREST/Functions kliens és Google Credential Manager adapter;
-- Room és DataStore alapréteg;
+- Room source of truth, DataStore beállítások, atomi outbox és WorkManager profil-szinkron;
 - vCard 3.0, NFC Forum Type 4 Tag / NDEF HCE;
 - Kontakt QR és HTTPS profil QR alapfolyamat;
 - email/jelszó Auth shell, jelszó-visszaállítás és szerveroldali fióktörlési funkció;
@@ -50,6 +50,7 @@ A Supabase, Google OAuth és publikus profil értékei Gradle propertyből érke
 - [`docs/BRANDING.md`](docs/BRANDING.md)
 - [`docs/AUTH.md`](docs/AUTH.md)
 - [`docs/SUPABASE.md`](docs/SUPABASE.md)
+- [`docs/OFFLINE_SYNC.md`](docs/OFFLINE_SYNC.md)
 - [`docs/NFC.md`](docs/NFC.md)
 - [`docs/QR.md`](docs/QR.md)
 - [`docs/PLATFORM_COMPATIBILITY.md`](docs/PLATFORM_COMPATIBILITY.md)
