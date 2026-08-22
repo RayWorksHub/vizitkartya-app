@@ -48,21 +48,26 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
 
     if (authViewModel.debugLocalProfile) {
         if (vizitViewModel.hasOfflineProfileSession) {
-            VizitApp(viewModel = vizitViewModel)
+            VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
         } else {
             CenteredStatus { CircularProgressIndicator() }
         }
         return
     }
 
-    if (authViewModel.passwordRecovery && currentSession is AuthSessionState.Authenticated) {
+    if (
+        authViewModel.passwordRecovery &&
+        (currentSession is AuthSessionState.Authenticated ||
+            currentSession is AuthSessionState.LegalAcceptanceRequired ||
+            currentSession is AuthSessionState.LegalAcceptanceCheckFailed)
+    ) {
         AuthScreen(viewModel = authViewModel, forceNewPassword = true)
         return
     }
 
     when (currentSession) {
         is AuthSessionState.Authenticated -> if (vizitViewModel.hasOfflineProfileSession) {
-            VizitApp(viewModel = vizitViewModel)
+            VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
         } else {
             CenteredStatus { CircularProgressIndicator() }
         }
@@ -74,12 +79,25 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
             }
         }
         is AuthSessionState.RefreshFailed -> if (vizitViewModel.hasOfflineProfileSession) {
-            VizitApp(viewModel = vizitViewModel, offlineMode = true)
+            VizitApp(
+                viewModel = vizitViewModel,
+                authViewModel = authViewModel,
+                offlineMode = true,
+            )
         } else {
             CenteredStatus {
                 Text(currentSession.message, textAlign = TextAlign.Center)
                 Button(onClick = authViewModel::logout) { Text("Újra bejelentkezem") }
             }
+        }
+        is AuthSessionState.LegalAcceptanceRequired -> AuthScreen(
+            viewModel = authViewModel,
+            forceLegalAcceptance = true,
+        )
+        is AuthSessionState.LegalAcceptanceCheckFailed -> CenteredStatus {
+            Text(currentSession.message, textAlign = TextAlign.Center)
+            Button(onClick = authViewModel::retryLegalAcceptanceCheck) { Text("Újrapróbálás") }
+            Button(onClick = authViewModel::logout) { Text("Kijelentkezés") }
         }
         AuthSessionState.SignedOut -> AuthScreen(viewModel = authViewModel)
     }

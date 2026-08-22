@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import hu.rayworks.vizit.auth.AuthCallback
+import hu.rayworks.vizit.auth.AuthCallbackParser
 import hu.rayworks.vizit.auth.AuthViewModel
 import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.ui.VizitRoot
@@ -46,7 +48,15 @@ class MainActivity : ComponentActivity() {
     private fun handleAuthIntent(intent: Intent?) {
         val actualIntent = intent ?: return
         val rawUrl = actualIntent.dataString.orEmpty()
-        if (rawUrl.contains("type=recovery", ignoreCase = true)) authViewModel.markPasswordRecovery()
+        when (val callback = AuthCallbackParser.parse(rawUrl, BuildConfig.AUTH_SCHEME)) {
+            AuthCallback.PasswordRecovery -> authViewModel.markPasswordRecovery()
+            is AuthCallback.Error -> {
+                authViewModel.reportDeepLinkErrorCode(callback.code)
+                return
+            }
+            AuthCallback.Generic -> Unit
+            null -> return
+        }
         SupabaseProvider.getOrNull()?.handleDeeplinks(
             actualIntent,
             onError = authViewModel::reportDeepLinkError,

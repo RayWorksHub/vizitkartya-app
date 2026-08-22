@@ -84,6 +84,15 @@ interface ProfileDao {
     @Query("DELETE FROM profile_sync_outbox WHERE userId = :userId")
     suspend fun deleteOutbox(userId: String)
 
+    @Query("DELETE FROM profile_field_settings WHERE userId = :userId")
+    suspend fun deleteFieldSettings(userId: String)
+
+    @Query("DELETE FROM profile_sync_metadata WHERE userId = :userId")
+    suspend fun deleteSyncMetadata(userId: String)
+
+    @Query("DELETE FROM profiles WHERE userId = :userId")
+    suspend fun deleteProfile(userId: String)
+
     @Query(
         """
         UPDATE profile_sync_outbox
@@ -186,5 +195,16 @@ interface ProfileDao {
         if (getOutbox(snapshot.profile.userId) != null) return false
         replaceSnapshot(snapshot, metadata, null)
         return true
+    }
+
+    @Transaction
+    suspend fun deleteUserData(userId: String) {
+        deleteOutbox(userId)
+        deleteSyncMetadata(userId)
+        deleteFieldSettings(userId)
+        deleteContacts(userId)
+        deleteLinks(userId)
+        deleteAddresses(userId)
+        deleteProfile(userId)
     }
 }

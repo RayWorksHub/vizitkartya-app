@@ -26,6 +26,11 @@ jobs:
       - name: Install Android platform
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Check Supabase source syntax
+        run: |
+          node --check scripts/supabase-auth-e2e.mjs
+          node scripts/check-supabase-source.mjs
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 

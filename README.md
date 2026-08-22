@@ -20,7 +20,7 @@ A fejlesztés elsődleges követelményforrása a [`docs/VIZIT_MASTER_SPEC_V1.md
 - Room source of truth, DataStore beállítások, atomi outbox és WorkManager profil-szinkron;
 - vCard 3.0, NFC Forum Type 4 Tag / NDEF HCE;
 - Kontakt QR és HTTPS profil QR alapfolyamat;
-- email/jelszó Auth shell, jelszó-visszaállítás és szerveroldali fióktörlési funkció;
+- teljes email/jelszó Auth UX, jogi gate, biztonságos callback és explicit, médiát is takarító fióktörlés;
 - hivatalos VIZIT brand asset és adaptív launcher icon;
 - GitHub Actions unit test, lint, DEV/BETA build és PROD release compile.
 

@@ -2,7 +2,7 @@
 
 Audit dátuma: 2026-08-22
 
-Auditált alap commit: `ec32933` (`origin/develop`, PR #2 merge)
+Auditált alap commit: `d7be71f` (`origin/develop`, PR #3 merge)
 
 Master követelmény: `docs/VIZIT_MASTER_SPEC_V1.md`
 
@@ -26,9 +26,9 @@ Az `Android CI` 10. futása sikeresen teljesítette a unit test, lint, DEV/BETA 
 | CI | `TESTED` | Unit test, lint és mindhárom környezet buildje sikeres. |
 | Projektstruktúra | `REQUIRES REFACTOR` | Még gyökérszintű `app/`; a master szerinti `apps/android`, `shared` és teljes docs struktúra nincs kész. |
 | Hivatalos branding | `TESTED` | A jóváhagyott master asset, adaptive/round/themed launcher ikon és kontrollált brandfelületek buildelnek. |
-| Auth | `PARTIALLY SUPPORTED` | Email/jelszó, session, reset, kötelező jogi gate, Google adapter és Edge Function shell kész; megerősített törlési UX és élő Supabase E2E teszt hiányzik. |
+| Auth | `IMPLEMENTED`, élő E2E blokkolt | Teljes email/jelszó UX, session/reset, validált callback, post-auth jogi gate, Google adapter, explicit fióktörlés és lokális purge kész; élő DEV bizonyíték hiányzik. |
 | Supabase kliens | `IMPLEMENTED` | Auth/PostgREST/Storage/Functions kliens és flavor config kész, de távoli projekten nincs ellenőrizve. |
-| Supabase schema/RLS | `IMPLEMENTED` | Forward-only privacy hardening és verzióellenőrzött profil-sync migráció kész; távoli projekten még nincs alkalmazva vagy E2E tesztelve. |
+| Supabase schema/RLS | `IMPLEMENTED` | Forward-only privacy/auth/storage hardening, jogi RPC és verzióellenőrzött profil-sync kész; távoli DEV projekten még nincs alkalmazva vagy E2E tesztelve. |
 | Room | `IMPLEMENTED` | A futó profilrepository Room source of truth; v1→v2 migráció és a korábbi SharedPreferences adat egyszeri átemelése elkészült. |
 | DataStore | `IMPLEMENTED` | Az automatikus szinkron, az aktív profiltulajdonos és a legacy migráció állapota futásidőben be van kötve. |
 | Offline sync | `IMPLEMENTED` | Atomi, összevont outbox, WorkManager hálózati constraint, exponenciális retry, sync lease, idempotens Supabase RPC és verziókonfliktus-blokkolás készült. Élő Supabase E2E még szükséges. |
@@ -81,6 +81,20 @@ Az `Android CI` 16. futása sikeresen teljesítette a unit test, lint, DEV/BETA 
 2. többértékű profil, mezősorrend/láthatóság, kép- és cégeslogó pipeline;
 3. publikus profil és App Link end-to-end;
 4. fizikai Xiaomi/cross-OEM teszt és kompatibilitási mátrix.
+
+## Harmadik javítási blokk ezen a feature ágon
+
+| Terület | Feature ág állapota |
+|---|---|
+| Auth UX | `IMPLEMENTED`: külön regisztráció/email-verifikáció/elfelejtett jelszó/reset/jogi állapot, password visibility, loading lock és emberi hibák készültek. |
+| Callback security | `TESTED` JVM szinten: pontos flavor scheme/host/path ellenőrzés, spoof/port/userinfo/méret tiltás és biztonságos lejárt-link visszajelzés készült. |
+| Jogi gate | `IMPLEMENTED`: signup trigger mellett OAuth/régi user RPC-ellenőrzés és elfogadás, user+verzió kötött offline cache, valamint profil-RPC gate készült. |
+| Fiókkezelés | `IMPLEMENTED`: beállításokbeli logout, `TÖRLÉS` megerősítés, lokális Room/outbox purge, rekurzív storage cleanup és Auth-kaszkád készült. |
+| Storage security | `IMPLEMENTED`: törölt Auth-user még élő JWT-je nem írhat a user bucketjeibe; a törlőfunkció pre/post cleanupot végez. |
+| Supabase tesztek | `IMPLEMENTED`, futtatás blokkolt: 24 állításos pgTAP RLS/RPC suite és őrzött távoli Auth/Profile/RLS/Storage/Delete E2E runner készült. |
+| Élő DEV bizonyíték | `BLOCKED BY EXTERNAL ACCESS`: az elérhető VIZIT projekt `main / Production`; külön DEV projekt vagy branch nincs azonosítva, ezért távoli módosítás nem történt. |
+
+A feature ág CI-státusza a PR létrehozása után kerül rögzítésre.
 
 ## Külső blokkolók
 

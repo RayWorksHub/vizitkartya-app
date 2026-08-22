@@ -4,15 +4,36 @@ sealed interface AuthSessionState {
     data object Initializing : AuthSessionState
     data object SignedOut : AuthSessionState
     data class Authenticated(val userId: String) : AuthSessionState
+    data class LegalAcceptanceRequired(val userId: String) : AuthSessionState
+    data class LegalAcceptanceCheckFailed(val userId: String, val message: String) : AuthSessionState
     data class RefreshFailed(val message: String, val cachedUserId: String?) : AuthSessionState
     data object BackendUnavailable : AuthSessionState
 }
 
 sealed interface AuthActionState {
     data object Idle : AuthActionState
-    data object Loading : AuthActionState
-    data class Success(val message: String) : AuthActionState
-    data class Error(val message: String) : AuthActionState
+    data class Loading(val operation: AuthOperation) : AuthActionState
+    data class Success(val operation: AuthOperation, val message: String) : AuthActionState
+    data class Error(val operation: AuthOperation?, val message: String) : AuthActionState
 }
 
-enum class AuthScreenMode { LOGIN, REGISTER, FORGOT_PASSWORD, NEW_PASSWORD }
+enum class AuthOperation {
+    LOGIN,
+    REGISTER,
+    PASSWORD_RESET_REQUEST,
+    PASSWORD_UPDATE,
+    GOOGLE_SIGN_IN,
+    LEGAL_ACCEPTANCE,
+    LOGOUT,
+    DELETE_ACCOUNT,
+}
+
+enum class AuthScreenMode {
+    LOGIN,
+    REGISTER,
+    EMAIL_VERIFICATION_SENT,
+    FORGOT_PASSWORD,
+    PASSWORD_RESET_SENT,
+    NEW_PASSWORD,
+    LEGAL_ACCEPTANCE,
+}

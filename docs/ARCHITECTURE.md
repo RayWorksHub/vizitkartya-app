@@ -28,6 +28,15 @@ A korábbi `vizit_profile` SharedPreferences tartalom egyszer, sikeres Room-ment
 
 A DataStore futásidőben kezeli az automatikus szinkron beállítását, az aktív profilazonosítót és a legacy migráció jelzőjét. Strukturált profiladat nem kerül DataStore-ba.
 
+## Auth és jogi adatút
+
+1. A Supabase Auth PKCE sessiont ad vissza a flavor-specifikus, szigorúan validált callbacken.
+2. Emailes signupnál a trigger, OAuth vagy korábbi user esetén hitelesített RPC naplózza a dokumentumverziókat.
+3. A session csak az aktuális jogi verzió ellenőrzése után köthető a Room profilhoz.
+4. Offline session kizárólag ugyanahhoz a user ID-hoz és dokumentumverzió-párhoz tartozó lokális elfogadási cache-sel nyílhat meg.
+5. A profil-RPC-k jogi rekord nélkül szerveroldalon is leállnak.
+6. Fióktörléskor előbb a két storage bucket takarítása, majd az Auth-kaszkád és a lokális Room/DataStore purge fut le.
+
 ## Environment
 
 - DEV: `hu.rayworks.vizit.dev`, `VIZIT Dev`.
