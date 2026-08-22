@@ -33,7 +33,10 @@ class SupabaseProfileRemoteDataSource(
             parameters = buildJsonObject {
                 put("p_operation_id", JsonPrimitive(mutation.operationId))
                 put("p_base_version", JsonPrimitive(mutation.baseServerVersion))
-                put("p_snapshot", json.encodeToJsonElement(mutation.payload))
+                put(
+                    "p_snapshot",
+                    json.encodeToJsonElement(ProfileSyncPayload.serializer(), mutation.payload),
+                )
             },
         ).data.let { json.decodeFromString<ProfileSyncRpcResponse>(it) }
 
