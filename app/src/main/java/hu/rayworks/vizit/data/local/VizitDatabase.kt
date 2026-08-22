@@ -15,8 +15,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "profiles")
 data class ProfileEntity(
-    @PrimaryKey
-    @QueryName val userId: String,
+    @PrimaryKey val userId: String,
     val firstName: String,
     val lastName: String,
     val displayName: String,
@@ -31,10 +30,6 @@ data class ProfileEntity(
     val updatedAtEpochMs: Long,
     val pendingSync: Boolean,
 )
-
-@Target(AnnotationTarget.FIELD)
-@Retention(AnnotationRetention.BINARY)
-private annotation class QueryName
 
 @Entity(
     tableName = "profile_contacts",
