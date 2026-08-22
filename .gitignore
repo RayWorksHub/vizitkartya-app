@@ -9,3 +9,9 @@
 .externalNativeBuild
 .cxx
 app/build
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+supabase/.temp

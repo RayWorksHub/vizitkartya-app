@@ -29,5 +29,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Test and build
-        run: ./gradlew testDebugUnitTest assembleDebug
+      - name: Test
+        run: ./gradlew testDevDebugUnitTest
+
+      - name: Lint
+        run: ./gradlew lintDevDebug
+
+      - name: Build installable environments
+        run: ./gradlew assembleDevDebug assembleBetaDebug assembleProdDebug

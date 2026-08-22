@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.ui.components.ProfileAvatar
+import hu.rayworks.vizit.ui.components.VizitBrandMark
 import hu.rayworks.vizit.ui.theme.VizitBlue
 import hu.rayworks.vizit.ui.theme.VizitNavy
 import hu.rayworks.vizit.ui.theme.VizitTeal
@@ -67,12 +68,7 @@ fun NfcShareScreen(
             .padding(horizontal = 24.dp, vertical = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "VIZIT",
-            color = VizitTeal,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-        )
+        VizitBrandMark()
         Spacer(Modifier.weight(0.7f))
 
         Box(

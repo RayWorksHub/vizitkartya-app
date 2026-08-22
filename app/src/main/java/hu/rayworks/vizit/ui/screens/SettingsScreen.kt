@@ -79,7 +79,7 @@ fun SettingsScreen(
 
         item {
             Text(
-                text = "VIZIT ${BuildConfig.VERSION_NAME}",
+                text = "VIZIT ${BuildConfig.VERSION_NAME} · ${BuildConfig.ENVIRONMENT}",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 18.dp),
