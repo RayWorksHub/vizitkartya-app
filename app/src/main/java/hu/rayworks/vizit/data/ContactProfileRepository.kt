@@ -17,6 +17,7 @@ class ContactProfileRepository(context: Context) {
         website = preferences.getString(KEY_WEBSITE, "").orEmpty(),
         address = preferences.getString(KEY_ADDRESS, "").orEmpty(),
         linkedIn = preferences.getString(KEY_LINKED_IN, "").orEmpty(),
+        publicProfileSlug = preferences.getString(KEY_PUBLIC_PROFILE_SLUG, "").orEmpty(),
         publicProfileUrl = preferences.getString(KEY_PUBLIC_PROFILE_URL, "").orEmpty(),
         note = preferences.getString(KEY_NOTE, "").orEmpty(),
         photoBase64 = preferences.getString(KEY_PHOTO, "").orEmpty(),
@@ -34,6 +35,7 @@ class ContactProfileRepository(context: Context) {
             putString(KEY_WEBSITE, profile.website.trim())
             putString(KEY_ADDRESS, profile.address.trim())
             putString(KEY_LINKED_IN, profile.linkedIn.trim())
+            putString(KEY_PUBLIC_PROFILE_SLUG, profile.publicProfileSlug.trim())
             putString(KEY_PUBLIC_PROFILE_URL, profile.publicProfileUrl.trim())
             putString(KEY_NOTE, profile.note.trim())
             putString(KEY_PHOTO, profile.photoBase64)
@@ -52,6 +54,7 @@ class ContactProfileRepository(context: Context) {
         const val KEY_WEBSITE = "website"
         const val KEY_ADDRESS = "address"
         const val KEY_LINKED_IN = "linked_in"
+        const val KEY_PUBLIC_PROFILE_SLUG = "public_profile_slug"
         const val KEY_PUBLIC_PROFILE_URL = "public_profile_url"
         const val KEY_NOTE = "note"
         const val KEY_PHOTO = "photo_base64"

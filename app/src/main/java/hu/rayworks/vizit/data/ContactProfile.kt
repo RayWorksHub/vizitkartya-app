@@ -11,6 +11,7 @@ data class ContactProfile(
     val website: String = "",
     val address: String = "",
     val linkedIn: String = "",
+    val publicProfileSlug: String = "",
     val publicProfileUrl: String = "",
     val note: String = "",
     val photoBase64: String = "",
@@ -42,6 +43,10 @@ object ContactProfileValidator {
 
         profile.email.isNotBlank() && !profile.email.contains("@") ->
             "Az e-mail-cím formátuma nem megfelelő."
+
+        profile.publicProfileSlug.isNotBlank() &&
+            !hu.rayworks.vizit.qr.PublicProfileUrlFactory.isValidSlug(profile.publicProfileSlug) ->
+            "A profilazonosító 3–50 kisbetűből, számból vagy kötőjelből állhat."
 
         else -> null
     }
