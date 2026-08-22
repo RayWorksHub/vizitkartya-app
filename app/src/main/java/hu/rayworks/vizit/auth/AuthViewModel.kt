@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import hu.rayworks.vizit.BuildConfig
 import hu.rayworks.vizit.config.AppEnvironment
 import hu.rayworks.vizit.data.remote.SupabaseProvider
+import hu.rayworks.vizit.data.settings.AppSettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val client = SupabaseProvider.getOrNull()
     private val repository = client?.let(::SupabaseAuthRepository)
     private val googleAdapter = client?.let(::GoogleAuthAdapter)
+    private val settingsStore = AppSettingsStore(application)
     private val unavailable = MutableStateFlow<AuthSessionState>(AuthSessionState.BackendUnavailable)
 
     val sessionState: StateFlow<AuthSessionState> = repository?.sessionState?.stateIn(
@@ -94,11 +96,15 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun logout() = runAction("Kijelentkeztél.") { repositoryOrThrow().logout() }
+    fun logout() = runAction("Kijelentkeztél.") {
+        repositoryOrThrow().logout()
+        settingsStore.setActiveProfileOwnerId(null)
+    }
 
     fun deleteAccount() = runAction("A fiók törlése befejeződött.") {
         repositoryOrThrow().deleteAccount()
         runCatching { repositoryOrThrow().logout() }
+        settingsStore.setActiveProfileOwnerId(null)
     }
 
     fun signInWithGoogle(activity: Activity) {

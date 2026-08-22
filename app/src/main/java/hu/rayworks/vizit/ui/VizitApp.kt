@@ -1,6 +1,7 @@
 package hu.rayworks.vizit.ui
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
@@ -10,6 +11,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.VizitViewModel
 import hu.rayworks.vizit.ui.screens.HomeScreen
 import hu.rayworks.vizit.ui.screens.NfcShareScreen
@@ -32,7 +35,7 @@ private enum class AppSection(val label: String) {
 }
 
 @Composable
-fun VizitApp(viewModel: VizitViewModel) {
+fun VizitApp(viewModel: VizitViewModel, offlineMode: Boolean = false) {
     var selectedSection by rememberSaveable { mutableStateOf(AppSection.HOME) }
 
     if (viewModel.isNfcShareActive) {
@@ -46,6 +49,19 @@ fun VizitApp(viewModel: VizitViewModel) {
     }
 
     Scaffold(
+        topBar = {
+            if (offlineMode) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer,
+                ) {
+                    Text(
+                        text = "Offline mód – a helyi profil használható, a szinkron később folytatódik.",
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    )
+                }
+            }
+        },
         bottomBar = {
             NavigationBar {
                 AppSection.entries.forEach { section ->
@@ -94,6 +110,10 @@ fun VizitApp(viewModel: VizitViewModel) {
 
             AppSection.SETTINGS -> SettingsScreen(
                 nfcStatus = viewModel.nfcStatus,
+                syncState = viewModel.profileSyncState,
+                automaticSyncEnabled = viewModel.automaticSyncEnabled,
+                onAutomaticSyncChanged = viewModel::updateAutomaticSyncEnabled,
+                onRetrySync = viewModel::retryProfileSync,
                 modifier = Modifier.padding(innerPadding),
             )
         }

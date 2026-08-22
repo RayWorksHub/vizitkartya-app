@@ -48,7 +48,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ProfileScreen(
     profile: ContactProfile,
-    onSave: (ContactProfile) -> String?,
+    onSave: suspend (ContactProfile) -> String?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -56,6 +56,7 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var draft by remember(profile) { mutableStateOf(profile) }
     var isPhotoLoading by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -232,17 +233,27 @@ fun ProfileScreen(
             item {
                 Button(
                     onClick = {
-                        val error = onSave(draft)
                         scope.launch {
-                            snackbarHostState.showSnackbar(error ?: "A névjegy mentve.")
+                            isSaving = true
+                            val message = runCatching { onSave(draft) }
+                                .fold(
+                                    onSuccess = { it ?: "A névjegy helyben mentve." },
+                                    onFailure = { "A helyi mentés nem sikerült. Próbáld újra." },
+                                )
+                            snackbarHostState.showSnackbar(message)
+                            isSaving = false
                         }
                     },
+                    enabled = !isSaving,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(18.dp),
                 ) {
-                    Text("Névjegy mentése", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (isSaving) "Mentés…" else "Névjegy mentése",
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
                 Spacer(Modifier.height(18.dp))
             }

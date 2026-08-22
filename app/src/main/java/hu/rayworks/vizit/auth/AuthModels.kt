@@ -3,8 +3,8 @@ package hu.rayworks.vizit.auth
 sealed interface AuthSessionState {
     data object Initializing : AuthSessionState
     data object SignedOut : AuthSessionState
-    data object Authenticated : AuthSessionState
-    data class RefreshFailed(val message: String) : AuthSessionState
+    data class Authenticated(val userId: String) : AuthSessionState
+    data class RefreshFailed(val message: String, val cachedUserId: String?) : AuthSessionState
     data object BackendUnavailable : AuthSessionState
 }
 

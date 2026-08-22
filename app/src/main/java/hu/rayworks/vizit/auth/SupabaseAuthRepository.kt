@@ -14,10 +14,13 @@ class SupabaseAuthRepository(private val client: SupabaseClient) {
     val sessionState: Flow<AuthSessionState> = client.auth.sessionStatus.map { status ->
         when (status) {
             SessionStatus.Initializing -> AuthSessionState.Initializing
-            is SessionStatus.Authenticated -> AuthSessionState.Authenticated
+            is SessionStatus.Authenticated -> status.session.user?.id
+                ?.let(AuthSessionState::Authenticated)
+                ?: AuthSessionState.SignedOut
             is SessionStatus.NotAuthenticated -> AuthSessionState.SignedOut
             is SessionStatus.RefreshFailure -> AuthSessionState.RefreshFailed(
                 "A munkamenet megújítása nem sikerült. Ellenőrizd az internetkapcsolatot, majd jelentkezz be újra.",
+                client.auth.currentSessionOrNull()?.user?.id,
             )
         }
     }

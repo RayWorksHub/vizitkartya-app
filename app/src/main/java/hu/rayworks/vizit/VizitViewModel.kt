@@ -12,8 +12,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import hu.rayworks.vizit.data.ContactProfile
-import hu.rayworks.vizit.data.ContactProfileRepository
 import hu.rayworks.vizit.data.ContactProfileValidator
+import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.nfc.HcePayloadStore
 import hu.rayworks.vizit.nfc.NfcPayloadFactory
 import hu.rayworks.vizit.nfc.NfcShareEvent
@@ -24,12 +24,26 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class VizitViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = ContactProfileRepository(application)
+    private val container = (application as VizitApplication).container
+    private val repository = container.profileRepository
+    private val settingsStore = container.settingsStore
     private val hcePayloadStore = HcePayloadStore()
+    private var profileObservationJob: Job? = null
     private var nfcTimeoutJob: Job? = null
     private var activeNfcSessionId: Long? = null
+    private var activeProfileOwnerId: String? = null
+    private var cloudSyncEnabled = false
 
-    var profile by mutableStateOf(repository.load())
+    var profile by mutableStateOf(ContactProfile())
+        private set
+
+    var profileSyncState by mutableStateOf(ProfileSyncState())
+        private set
+
+    var automaticSyncEnabled by mutableStateOf(true)
+        private set
+
+    var hasOfflineProfileSession by mutableStateOf(false)
         private set
 
     var nfcStatus by mutableStateOf(readNfcStatus(application))
@@ -46,6 +60,11 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            settingsStore.settings.collect { settings ->
+                automaticSyncEnabled = settings.automaticSyncEnabled
+            }
+        }
+        viewModelScope.launch {
             NfcShareEvents.events.collect { event ->
                 if (
                     event is NfcShareEvent.PayloadRead &&
@@ -60,14 +79,62 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveProfile(updatedProfile: ContactProfile): String? {
+    fun bindProfileOwner(userId: String, enableCloudSync: Boolean) {
+        if (activeProfileOwnerId == userId && cloudSyncEnabled == enableCloudSync) {
+            viewModelScope.launch {
+                repository.prepare(
+                    userId = userId,
+                    cloudSyncEnabled = enableCloudSync,
+                )
+            }
+            return
+        }
+        activeProfileOwnerId = userId
+        cloudSyncEnabled = enableCloudSync
+        profile = ContactProfile()
+        profileSyncState = ProfileSyncState()
+        hasOfflineProfileSession = false
+        profileObservationJob?.cancel()
+        profileObservationJob = viewModelScope.launch {
+            repository.prepare(
+                userId = userId,
+                cloudSyncEnabled = enableCloudSync,
+            )
+            repository.observe(userId).collect { state ->
+                profile = state.profile
+                profileSyncState = state.sync
+                hasOfflineProfileSession = true
+            }
+        }
+    }
+
+    suspend fun saveProfile(updatedProfile: ContactProfile): String? {
         val error = ContactProfileValidator.validate(updatedProfile)
         if (error != null) return error
-
-        repository.save(updatedProfile)
-        profile = repository.load()
+        val userId = activeProfileOwnerId ?: return "A profil munkamenete még nem áll készen."
+        repository.save(
+            userId = userId,
+            profile = updatedProfile,
+            cloudSyncEnabled = cloudSyncEnabled,
+            automaticSyncEnabled = automaticSyncEnabled,
+        )
         stopNfcShare()
         return null
+    }
+
+    fun retryProfileSync() {
+        val userId = activeProfileOwnerId ?: return
+        viewModelScope.launch { repository.retrySync(userId) }
+    }
+
+    fun updateAutomaticSyncEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.setAutomaticSyncEnabled(enabled)
+            if (enabled && cloudSyncEnabled) {
+                activeProfileOwnerId?.let { repository.retrySync(it) }
+            }
+            repository.setAutomaticSyncEnabled(enabled && cloudSyncEnabled)
+        }
     }
 
     fun startNfcShare(): String? {
