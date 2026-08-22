@@ -53,3 +53,20 @@ Auditált kiinduló commit: `cde0286` (`main`, korábbi `0.1.0` proof-of-concept
 - iPhone és ismeretlen fogadó esetén a stabil alapértelmezett fallback a rövid HTTPS profil-URL és annak QR-kódja.
 - A Supabase alapmodell normalizált, több telefon/email/link kezelésére alkalmas, és minden publikus olvasást szűkített RPC-n keresztül végez.
 - A jelenlegi POC csak akkor nevezhető támogatottnak, ha a fizikai kompatibilitási mátrix adott sora `SUPPORTED` állapotú.
+
+## Elkészült a `develop` ágon
+
+| Fejlesztési blokk | Állapot |
+|---|---|
+| DEV/BETA/PROD flavor és külön application ID | `IMPLEMENTED`, `TESTED` |
+| Flavoronkénti környezeti Supabase/Google konfigurációs pont | `IMPLEMENTED`, `TESTED` |
+| CI unit test + lint + három debug artifact | `IMPLEMENTED`, `TESTED` |
+| Végleges brand asset és adaptív launcher icon | `IMPLEMENTED`, `TESTED` |
+| Strukturált keresztnév/vezetéknév és byte-helyes vCard folding | `IMPLEMENTED`, `TESTED` |
+| Memóriabeli, session-azonosítós, TTL-es HCE payload | `IMPLEMENTED`, `TESTED` |
+| 16 KiB budgetre dinamikusan optimalizált külön kontakt-avatar | `IMPLEMENTED`, builddel ellenőrzött |
+| Teljes NDEF-kiolvasás APDU coverage alapján | `IMPLEMENTED`, `TESTED` |
+| Semleges `NFC-adat kiolvasva` állapot + haptic | `IMPLEMENTED`, fizikai teszt szükséges |
+| Android foreground preferred HCE service | `IMPLEMENTED`, fizikai teszt szükséges |
+
+Ezek egyike sem jelent még `DEVICE TESTED` vagy `SUPPORTED` NFC státuszt.

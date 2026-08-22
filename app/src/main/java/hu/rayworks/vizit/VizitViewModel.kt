@@ -9,16 +9,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.ContactProfileRepository
 import hu.rayworks.vizit.data.ContactProfileValidator
 import hu.rayworks.vizit.nfc.HcePayloadStore
-import hu.rayworks.vizit.nfc.NdefVCardEncoder
-import hu.rayworks.vizit.nfc.VCardBuilder
+import hu.rayworks.vizit.nfc.HceShareEvent
+import hu.rayworks.vizit.nfc.HceShareEventBus
+import hu.rayworks.vizit.nfc.NfcPayloadFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ContactProfileRepository(application)
-    private val hcePayloadStore = HcePayloadStore(application)
+    private val hcePayloadStore = HcePayloadStore()
+    private var preparationJob: Job? = null
+    private var timeoutJob: Job? = null
 
     var profile by mutableStateOf(repository.load())
         private set
@@ -26,8 +37,22 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     var nfcStatus by mutableStateOf(readNfcStatus(application))
         private set
 
-    var isNfcShareActive by mutableStateOf(false)
+    var nfcShareState by mutableStateOf<NfcShareState>(NfcShareState.Idle)
         private set
+
+    val isNfcShareActive: Boolean
+        get() = nfcShareState != NfcShareState.Idle
+
+    init {
+        viewModelScope.launch {
+            HceShareEventBus.events.collectLatest { event ->
+                when (event) {
+                    is HceShareEvent.PayloadRead -> handlePayloadRead(event)
+                    is HceShareEvent.LinkDeactivated -> Unit
+                }
+            }
+        }
+    }
 
     fun saveProfile(updatedProfile: ContactProfile): String? {
         val error = ContactProfileValidator.validate(updatedProfile)
@@ -48,15 +73,38 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         if (!nfcStatus.hasHostCardEmulation) return "A telefon nem támogatja az NFC-kártyaemulációt."
         if (!nfcStatus.isEnabled) return "Kapcsold be az NFC-t a telefon beállításaiban."
 
-        val vCard = VCardBuilder.build(profile)
-        hcePayloadStore.activate(NdefVCardEncoder.encode(vCard))
-        isNfcShareActive = true
+        preparationJob?.cancel()
+        timeoutJob?.cancel()
+        nfcShareState = NfcShareState.Preparing
+        preparationJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                NfcPayloadFactory.create(profile)
+            }
+            ensureActive()
+            result.onSuccess { payload ->
+                val sessionId = hcePayloadStore.activate(payload.ndefMessage)
+                nfcShareState = NfcShareState.Active(
+                    sessionId = sessionId,
+                    payloadBytes = payload.ndefMessage.size,
+                    embeddedPhotoBytes = payload.embeddedPhotoBytes,
+                )
+                scheduleShareTimeout(sessionId)
+            }.onFailure {
+                nfcShareState = NfcShareState.Error(
+                    "A névjegy nem készíthető elő NFC-átadáshoz. Használd a QR-megosztást.",
+                )
+            }
+        }
         return null
     }
 
     fun stopNfcShare() {
+        preparationJob?.cancel()
+        preparationJob = null
+        timeoutJob?.cancel()
+        timeoutJob = null
         hcePayloadStore.deactivate()
-        isNfcShareActive = false
+        nfcShareState = NfcShareState.Idle
     }
 
     fun refreshNfcStatus() {
@@ -65,7 +113,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
 
     fun shareAsText(context: Context) {
         val contactText = buildString {
-            appendLine(profile.fullName)
+            appendLine(profile.resolvedDisplayName)
             if (profile.jobTitle.isNotBlank()) appendLine(profile.jobTitle)
             if (profile.company.isNotBlank()) appendLine(profile.company)
             if (profile.phone.isNotBlank()) appendLine(profile.phone)
@@ -76,7 +124,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         val intent = Intent.createChooser(
             Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "${profile.fullName} – VIZIT")
+                putExtra(Intent.EXTRA_SUBJECT, "${profile.resolvedDisplayName} – VIZIT")
                 putExtra(Intent.EXTRA_TEXT, contactText)
             },
             "Névjegy megosztása",
@@ -87,6 +135,28 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         stopNfcShare()
         super.onCleared()
+    }
+
+    private fun handlePayloadRead(event: HceShareEvent.PayloadRead) {
+        val current = nfcShareState as? NfcShareState.Active ?: return
+        if (current.sessionId != event.sessionId) return
+        timeoutJob?.cancel()
+        timeoutJob = null
+        nfcShareState = NfcShareState.PayloadRead(
+            sessionId = event.sessionId,
+            payloadBytes = event.payloadBytes,
+        )
+    }
+
+    private fun scheduleShareTimeout(sessionId: Long) {
+        timeoutJob?.cancel()
+        timeoutJob = viewModelScope.launch {
+            delay(HcePayloadStore.DEFAULT_TTL_MILLIS)
+            val current = nfcShareState as? NfcShareState.Active ?: return@launch
+            if (current.sessionId == sessionId && hcePayloadStore.deactivate(sessionId)) {
+                nfcShareState = NfcShareState.TimedOut
+            }
+        }
     }
 
     private fun readNfcStatus(context: Context): NfcStatus {

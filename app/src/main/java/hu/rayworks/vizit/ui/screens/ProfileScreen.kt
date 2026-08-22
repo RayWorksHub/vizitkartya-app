@@ -138,9 +138,23 @@ fun ProfileScreen(
 
             item {
                 ProfileTextField(
+                    value = draft.lastName,
+                    onValueChange = { draft = draft.copy(lastName = it) },
+                    label = "Vezetéknév",
+                )
+            }
+            item {
+                ProfileTextField(
+                    value = draft.firstName,
+                    onValueChange = { draft = draft.copy(firstName = it) },
+                    label = "Keresztnév",
+                )
+            }
+            item {
+                ProfileTextField(
                     value = draft.fullName,
                     onValueChange = { draft = draft.copy(fullName = it) },
-                    label = "Teljes név",
+                    label = "Megjelenített név (opcionális)",
                 )
             }
             item {
@@ -179,6 +193,21 @@ fun ProfileScreen(
                     onValueChange = { draft = draft.copy(website = it) },
                     label = "Weboldal",
                     keyboardType = KeyboardType.Uri,
+                )
+            }
+            item {
+                ProfileTextField(
+                    value = draft.publicProfileUrl,
+                    onValueChange = { draft = draft.copy(publicProfileUrl = it) },
+                    label = "Nyilvános VIZIT profil URL",
+                    keyboardType = KeyboardType.Uri,
+                )
+            }
+            item {
+                ProfileTextField(
+                    value = draft.note,
+                    onValueChange = { draft = draft.copy(note = it) },
+                    label = "Megjegyzés",
                 )
             }
             item {

@@ -20,14 +20,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.HourglassTop
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +42,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import hu.rayworks.vizit.NfcShareState
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.ui.components.ProfileAvatar
 import hu.rayworks.vizit.ui.components.VizitBrandMark
@@ -48,8 +56,19 @@ import hu.rayworks.vizit.ui.theme.VizitTeal
 @Composable
 fun NfcShareScreen(
     profile: ContactProfile,
+    state: NfcShareState,
     onStop: () -> Unit,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
+    val isActivelySharing = state is NfcShareState.Active
+    NfcPreferredServiceEffect(enabled = isActivelySharing)
+
+    LaunchedEffect(state) {
+        if (state is NfcShareState.PayloadRead) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+
     val transition = rememberInfiniteTransition(label = "nfcPulse")
     val pulseScale by transition.animateFloat(
         initialValue = 0.86f,
@@ -88,25 +107,73 @@ fun NfcShareScreen(
                     .background(VizitTeal, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Nfc,
-                    contentDescription = null,
-                    tint = VizitNavy,
-                    modifier = Modifier.size(66.dp),
-                )
+                when (state) {
+                    NfcShareState.Preparing -> CircularProgressIndicator(
+                        color = VizitNavy,
+                        modifier = Modifier.size(56.dp),
+                    )
+
+                    is NfcShareState.PayloadRead -> Icon(
+                        imageVector = Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = VizitNavy,
+                        modifier = Modifier.size(66.dp),
+                    )
+
+                    NfcShareState.TimedOut -> Icon(
+                        imageVector = Icons.Outlined.HourglassTop,
+                        contentDescription = null,
+                        tint = VizitNavy,
+                        modifier = Modifier.size(66.dp),
+                    )
+
+                    is NfcShareState.Error -> Icon(
+                        imageVector = Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        tint = VizitNavy,
+                        modifier = Modifier.size(66.dp),
+                    )
+
+                    else -> Icon(
+                        imageVector = Icons.Outlined.Nfc,
+                        contentDescription = null,
+                        tint = VizitNavy,
+                        modifier = Modifier.size(66.dp),
+                    )
+                }
             }
         }
 
         Spacer(Modifier.height(28.dp))
         Text(
-            text = "NFC-küldés aktív",
+            text = when (state) {
+                NfcShareState.Preparing -> "Névjegy előkészítése"
+                is NfcShareState.Active -> "NFC-küldés aktív"
+                is NfcShareState.PayloadRead -> "NFC-adat kiolvasva"
+                NfcShareState.TimedOut -> "A megosztás lejárt"
+                is NfcShareState.Error -> "Az NFC nem indítható"
+                NfcShareState.Idle -> "NFC-küldés"
+            },
             color = Color.White,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Érintsd a másik feloldott Android telefon hátlapját ehhez a készülékhez.",
+            text = when (state) {
+                NfcShareState.Preparing -> "A profilképet az NFC-kapcsolathoz optimalizáljuk."
+                is NfcShareState.Active ->
+                    "Érintsd a másik feloldott Android telefon hátlapját ehhez a készülékhez."
+
+                is NfcShareState.PayloadRead ->
+                    "A fogadó telefon kiolvasta az adatot. A kontakt mentését ott kell befejezni."
+
+                NfcShareState.TimedOut ->
+                    "Biztonsági okból az adat már nem olvasható. Indíts új megosztást a kezdőlapról."
+
+                is NfcShareState.Error -> state.message
+                NfcShareState.Idle -> "A megosztás már nem aktív."
+            },
             color = Color.White.copy(alpha = 0.78f),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
@@ -128,7 +195,11 @@ fun NfcShareScreen(
                     size = 56.dp,
                 )
                 Column(modifier = Modifier.padding(start = 14.dp)) {
-                    Text(profile.fullName, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        profile.resolvedDisplayName,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     Text(
                         listOf(profile.jobTitle, profile.company)
                             .filter(String::isNotBlank)
@@ -141,7 +212,11 @@ fun NfcShareScreen(
 
         Spacer(Modifier.weight(1f))
         Text(
-            text = "A küldés leállításakor az NFC-adat azonnal törlődik.",
+            text = if (isActivelySharing) {
+                "Az adat egyszer olvasható, 60 másodperc után vagy kilépéskor automatikusan törlődik."
+            } else {
+                "iPhone vagy nem kompatibilis fogadó esetén használd a QR-/profil-link megosztást."
+            },
             color = Color.White.copy(alpha = 0.62f),
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
@@ -155,7 +230,14 @@ fun NfcShareScreen(
             shape = RoundedCornerShape(18.dp),
         ) {
             Icon(Icons.Outlined.Close, contentDescription = null)
-            Text("Küldés leállítása", modifier = Modifier.padding(start = 8.dp))
+            Text(
+                if (isActivelySharing || state == NfcShareState.Preparing) {
+                    "Küldés leállítása"
+                } else {
+                    "Bezárás"
+                },
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
     }
 }

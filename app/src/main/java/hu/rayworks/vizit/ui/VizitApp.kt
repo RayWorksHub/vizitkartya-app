@@ -35,6 +35,7 @@ fun VizitApp(viewModel: VizitViewModel) {
     if (viewModel.isNfcShareActive) {
         NfcShareScreen(
             profile = viewModel.profile,
+            state = viewModel.nfcShareState,
             onStop = viewModel::stopNfcShare,
         )
         return

@@ -32,6 +32,8 @@ Ez az esemény nem jelenti azt, hogy a felhasználó a fogadó készüléken meg
 - Ha a kép nem fér el, kisebb dimenzió/minőség következik; végső fallbackként a vCard kép nélkül készül el.
 - Túlméretes payload nem okozhat crasht.
 
+A jelenlegi szoftveres védőkorlát 16 KiB. Ez nem végleges kompatibilitási ígéret; a készülékmátrix eredménye alapján lefelé módosítható.
+
 Az Android HCE dokumentáció rövid APDU-folyamatot javasol, és körülbelül 1 KB-ot említ ésszerű felső becslésként gyors tranzakcióhoz. A képes vCard ennél nagyobb, ezért a tényleges elfogadható budgetet kizárólag készülékmátrix alapján lehet véglegesíteni.
 
 ## iPhone irány

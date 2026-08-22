@@ -109,7 +109,7 @@ fun HomeScreen(
                                 .padding(horizontal = 16.dp),
                         ) {
                             Text(
-                                text = profile.fullName.ifBlank { "Állítsd össze a névjegyed" },
+                                text = profile.resolvedDisplayName.ifBlank { "Állítsd össze a névjegyed" },
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.SemiBold,
                             )

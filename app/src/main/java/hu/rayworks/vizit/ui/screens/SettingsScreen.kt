@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.BuildConfig
 import hu.rayworks.vizit.NfcStatus
+import hu.rayworks.vizit.ui.components.VizitBrandLockup
 
 @Composable
 fun SettingsScreen(
@@ -40,6 +41,10 @@ fun SettingsScreen(
     ) {
         item {
             Spacer(Modifier.height(12.dp))
+            VizitBrandLockup(modifier = Modifier.fillMaxWidth())
+        }
+
+        item {
             Text(
                 text = "Beállítások",
                 style = MaterialTheme.typography.headlineMedium,

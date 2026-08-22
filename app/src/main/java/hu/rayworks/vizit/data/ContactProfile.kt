@@ -2,6 +2,8 @@ package hu.rayworks.vizit.data
 
 data class ContactProfile(
     val fullName: String = "",
+    val firstName: String = "",
+    val lastName: String = "",
     val jobTitle: String = "",
     val company: String = "",
     val phone: String = "",
@@ -9,10 +11,20 @@ data class ContactProfile(
     val website: String = "",
     val address: String = "",
     val linkedIn: String = "",
+    val publicProfileUrl: String = "",
+    val note: String = "",
     val photoBase64: String = "",
 ) {
+    val resolvedDisplayName: String
+        get() = fullName.trim().ifBlank {
+            listOf(lastName, firstName)
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .joinToString(" ")
+        }
+
     val initials: String
-        get() = fullName
+        get() = resolvedDisplayName
             .trim()
             .split(Regex("\\s+"))
             .filter(String::isNotBlank)
@@ -24,7 +36,7 @@ data class ContactProfile(
 
 object ContactProfileValidator {
     fun validate(profile: ContactProfile): String? = when {
-        profile.fullName.isBlank() -> "Add meg a nevedet a névjegyben."
+        profile.resolvedDisplayName.isBlank() -> "Add meg a nevedet a névjegyben."
         profile.phone.isBlank() && profile.email.isBlank() ->
             "Legalább egy telefonszámot vagy e-mail-címet adj meg."
 
