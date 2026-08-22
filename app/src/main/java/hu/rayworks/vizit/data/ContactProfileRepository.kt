@@ -72,4 +72,9 @@ class ContactProfileRepository(
     fun setAutomaticSyncEnabled(enabled: Boolean) {
         if (enabled) syncScheduler.enqueue() else syncScheduler.cancel()
     }
+
+    suspend fun deleteLocalProfile(userId: String) {
+        syncScheduler.cancel()
+        localStore.deleteUserData(userId)
+    }
 }

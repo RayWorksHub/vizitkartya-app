@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.VizitViewModel
+import hu.rayworks.vizit.auth.AuthViewModel
 import hu.rayworks.vizit.ui.screens.HomeScreen
 import hu.rayworks.vizit.ui.screens.NfcShareScreen
 import hu.rayworks.vizit.ui.screens.ProfileScreen
@@ -35,7 +36,11 @@ private enum class AppSection(val label: String) {
 }
 
 @Composable
-fun VizitApp(viewModel: VizitViewModel, offlineMode: Boolean = false) {
+fun VizitApp(
+    viewModel: VizitViewModel,
+    authViewModel: AuthViewModel,
+    offlineMode: Boolean = false,
+) {
     var selectedSection by rememberSaveable { mutableStateOf(AppSection.HOME) }
 
     if (viewModel.isNfcShareActive) {
@@ -114,6 +119,12 @@ fun VizitApp(viewModel: VizitViewModel, offlineMode: Boolean = false) {
                 automaticSyncEnabled = viewModel.automaticSyncEnabled,
                 onAutomaticSyncChanged = viewModel::updateAutomaticSyncEnabled,
                 onRetrySync = viewModel::retryProfileSync,
+                authActionState = authViewModel.actionState,
+                googleSignInEnabled = authViewModel.googleSignInEnabled,
+                cloudAccountAvailable = authViewModel.cloudAccountAvailable,
+                onClearAuthAction = authViewModel::clearActionState,
+                onLogout = authViewModel::logout,
+                onDeleteAccount = authViewModel::deleteAccount,
                 modifier = Modifier.padding(innerPadding),
             )
         }

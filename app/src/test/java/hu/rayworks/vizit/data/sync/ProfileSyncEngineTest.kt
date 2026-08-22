@@ -167,6 +167,11 @@ class ProfileSyncEngineTest {
         }
 
         override suspend fun retryNow(userId: String, nowEpochMs: Long): Boolean = pending
+
+        override suspend fun deleteUserData(userId: String) {
+            mutation = null
+            pending = false
+        }
     }
 
     private class FakeRemoteDataSource(

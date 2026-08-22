@@ -63,6 +63,8 @@ interface ProfileLocalStore {
     ): Boolean
 
     suspend fun retryNow(userId: String, nowEpochMs: Long): Boolean
+
+    suspend fun deleteUserData(userId: String)
 }
 
 class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
@@ -328,6 +330,10 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
             lastError = null,
             metadata = metadata,
         )
+    }
+
+    override suspend fun deleteUserData(userId: String) {
+        dao.deleteUserData(userId)
     }
 
     private fun syncState(

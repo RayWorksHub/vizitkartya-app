@@ -20,6 +20,8 @@ data class AppSettings(
     val analyticsEnabled: Boolean = true,
     val automaticSyncEnabled: Boolean = true,
     val lastActiveProfileOwnerId: String? = null,
+    val legalAcceptanceOwnerId: String? = null,
+    val legalAcceptanceVersion: String? = null,
     val legacyProfileMigrated: Boolean = false,
 )
 
@@ -35,6 +37,8 @@ class AppSettingsStore(private val context: Context) {
                 analyticsEnabled = preferences[ANALYTICS_ENABLED] ?: true,
                 automaticSyncEnabled = preferences[AUTOMATIC_SYNC_ENABLED] ?: true,
                 lastActiveProfileOwnerId = preferences[LAST_ACTIVE_PROFILE_OWNER_ID],
+                legalAcceptanceOwnerId = preferences[LEGAL_ACCEPTANCE_OWNER_ID],
+                legalAcceptanceVersion = preferences[LEGAL_ACCEPTANCE_VERSION],
                 legacyProfileMigrated = preferences[LEGACY_PROFILE_MIGRATED] ?: false,
             )
         }
@@ -65,6 +69,37 @@ class AppSettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun rememberLegalAcceptance(
+        userId: String,
+        privacyPolicyVersion: String,
+        termsVersion: String,
+    ) {
+        context.vizitSettingsDataStore.edit { preferences ->
+            preferences[LEGAL_ACCEPTANCE_OWNER_ID] = userId
+            preferences[LEGAL_ACCEPTANCE_VERSION] = legalVersion(
+                privacyPolicyVersion = privacyPolicyVersion,
+                termsVersion = termsVersion,
+            )
+        }
+    }
+
+    suspend fun hasRememberedLegalAcceptance(
+        userId: String,
+        privacyPolicyVersion: String,
+        termsVersion: String,
+    ): Boolean = current().let { settings ->
+        settings.legalAcceptanceOwnerId == userId &&
+            settings.legalAcceptanceVersion == legalVersion(privacyPolicyVersion, termsVersion)
+    }
+
+    suspend fun clearAuthenticationCache() {
+        context.vizitSettingsDataStore.edit { preferences ->
+            preferences.remove(LAST_ACTIVE_PROFILE_OWNER_ID)
+            preferences.remove(LEGAL_ACCEPTANCE_OWNER_ID)
+            preferences.remove(LEGAL_ACCEPTANCE_VERSION)
+        }
+    }
+
     suspend fun markLegacyProfileMigrated() {
         context.vizitSettingsDataStore.edit { it[LEGACY_PROFILE_MIGRATED] = true }
     }
@@ -77,6 +112,11 @@ class AppSettingsStore(private val context: Context) {
         val ANALYTICS_ENABLED = booleanPreferencesKey("analytics_enabled")
         val AUTOMATIC_SYNC_ENABLED = booleanPreferencesKey("automatic_sync_enabled")
         val LAST_ACTIVE_PROFILE_OWNER_ID = stringPreferencesKey("last_active_profile_owner_id")
+        val LEGAL_ACCEPTANCE_OWNER_ID = stringPreferencesKey("legal_acceptance_owner_id")
+        val LEGAL_ACCEPTANCE_VERSION = stringPreferencesKey("legal_acceptance_version")
         val LEGACY_PROFILE_MIGRATED = booleanPreferencesKey("legacy_profile_migrated")
+
+        fun legalVersion(privacyPolicyVersion: String, termsVersion: String): String =
+            "${privacyPolicyVersion.length}:$privacyPolicyVersion${termsVersion.length}:$termsVersion"
     }
 }
