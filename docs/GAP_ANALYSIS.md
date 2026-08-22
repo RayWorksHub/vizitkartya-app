@@ -64,6 +64,8 @@ A következő kötelező bizonyíték: távoli Supabase/Auth E2E, majd valós NF
 
 ## Második javítási blokk ezen a feature ágon
 
+Az `Android CI` 16. futása sikeresen teljesítette a unit test, lint, DEV/BETA debug build és PROD release compile lépéseket. A Room-migráció, valamint a távoli Supabase RPC működése továbbra is külön integrációs/E2E bizonyítékot igényel.
+
 | Terület | Feature ág állapota |
 |---|---|
 | Room runtime | `IMPLEMENTED`: a profil UI Room `Flow` source of truth-ból él; a v1→v2 adatbázis-migráció és a legacy SharedPreferences átemelése adatvesztés ellen védett. |
@@ -71,7 +73,7 @@ A következő kötelező bizonyíték: távoli Supabase/Auth E2E, majd valós NF
 | Outbox/retry | `IMPLEMENTED`: a profilmentés és az összevont outbox atomi; network constraint, exponenciális backoff, process-kill lease és kézi retry készült. |
 | Konfliktuskezelés | `IMPLEMENTED`: szerververzió-ütközésnél a helyi és távoli snapshot megmarad, az automatikus overwrite leáll és a UI visszajelez. |
 | Supabase sync | `IMPLEMENTED`: idempotens, tranzakciós push/pull RPC és mobiladapter készült. Távoli migráció/E2E engedély és DEV hozzáférés nélkül nem futott. |
-| Automatizált ellenőrzés | `PENDING CI`: mapper, PII-kizárás, stabil ID, retry, sessionhiány, push, pull és konfliktus JVM tesztek készültek. |
+| Automatizált ellenőrzés | `TESTED`: mapper, PII-kizárás, stabil ID, retry, sessionhiány, push, pull és konfliktus JVM tesztek, továbbá lint és mindhárom környezet buildje sikeres. |
 
 ## P0 javítási sorrend
 
