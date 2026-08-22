@@ -112,7 +112,7 @@ fun VizitApp(viewModel: VizitViewModel, offlineMode: Boolean = false) {
                 nfcStatus = viewModel.nfcStatus,
                 syncState = viewModel.profileSyncState,
                 automaticSyncEnabled = viewModel.automaticSyncEnabled,
-                onAutomaticSyncChanged = viewModel::setAutomaticSyncEnabled,
+                onAutomaticSyncChanged = viewModel::updateAutomaticSyncEnabled,
                 onRetrySync = viewModel::retryProfileSync,
                 modifier = Modifier.padding(innerPadding),
             )

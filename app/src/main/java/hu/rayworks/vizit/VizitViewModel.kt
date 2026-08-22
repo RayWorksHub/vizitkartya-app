@@ -127,7 +127,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.retrySync(userId) }
     }
 
-    fun setAutomaticSyncEnabled(enabled: Boolean) {
+    fun updateAutomaticSyncEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.setAutomaticSyncEnabled(enabled)
             if (enabled && cloudSyncEnabled) {
