@@ -8,9 +8,10 @@ import hu.rayworks.vizit.data.sync.RemoteProfileSyncResult
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 
 class SupabaseProfileRemoteDataSource(
     private val client: SupabaseClient?,
@@ -29,11 +30,11 @@ class SupabaseProfileRemoteDataSource(
 
         val response = actualClient.postgrest.rpc(
             function = "sync_profile_snapshot",
-            parameters = ProfileSyncRpcParameters(
-                operationId = mutation.operationId,
-                baseVersion = mutation.baseServerVersion,
-                snapshot = mutation.payload,
-            ),
+            parameters = buildJsonObject {
+                put("p_operation_id", JsonPrimitive(mutation.operationId))
+                put("p_base_version", JsonPrimitive(mutation.baseServerVersion))
+                put("p_snapshot", json.encodeToJsonElement(mutation.payload))
+            },
         ).data.let { json.decodeFromString<ProfileSyncRpcResponse>(it) }
 
         return when (response.status) {
@@ -60,13 +61,6 @@ class SupabaseProfileRemoteDataSource(
         return response.snapshot?.let { RemoteProfileSnapshot(response.serverVersion, it) }
     }
 }
-
-@Serializable
-private data class ProfileSyncRpcParameters(
-    @SerialName("p_operation_id") val operationId: String,
-    @SerialName("p_base_version") val baseVersion: Long,
-    @SerialName("p_snapshot") val snapshot: ProfileSyncPayload,
-)
 
 @Serializable
 private data class ProfileSyncRpcResponse(

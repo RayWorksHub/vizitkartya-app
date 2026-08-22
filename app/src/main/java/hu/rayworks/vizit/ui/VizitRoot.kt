@@ -24,21 +24,22 @@ import hu.rayworks.vizit.ui.screens.AuthScreen
 @Composable
 fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
     val session by authViewModel.sessionState.collectAsState()
+    val currentSession = session
 
-    LaunchedEffect(session, authViewModel.debugLocalProfile) {
+    LaunchedEffect(currentSession, authViewModel.debugLocalProfile) {
         when {
             authViewModel.debugLocalProfile -> vizitViewModel.bindProfileOwner(
                 userId = LOCAL_DEBUG_PROFILE_OWNER_ID,
                 enableCloudSync = false,
             )
 
-            session is AuthSessionState.Authenticated -> vizitViewModel.bindProfileOwner(
-                userId = (session as AuthSessionState.Authenticated).userId,
+            currentSession is AuthSessionState.Authenticated -> vizitViewModel.bindProfileOwner(
+                userId = currentSession.userId,
                 enableCloudSync = true,
             )
 
-            session is AuthSessionState.RefreshFailed -> {
-                (session as AuthSessionState.RefreshFailed).cachedUserId?.let { userId ->
+            currentSession is AuthSessionState.RefreshFailed -> {
+                currentSession.cachedUserId?.let { userId ->
                     vizitViewModel.bindProfileOwner(userId = userId, enableCloudSync = true)
                 }
             }
@@ -54,12 +55,12 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
         return
     }
 
-    if (authViewModel.passwordRecovery && session is AuthSessionState.Authenticated) {
+    if (authViewModel.passwordRecovery && currentSession is AuthSessionState.Authenticated) {
         AuthScreen(viewModel = authViewModel, forceNewPassword = true)
         return
     }
 
-    when (session) {
+    when (currentSession) {
         is AuthSessionState.Authenticated -> if (vizitViewModel.hasOfflineProfileSession) {
             VizitApp(viewModel = vizitViewModel)
         } else {
@@ -76,7 +77,7 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
             VizitApp(viewModel = vizitViewModel, offlineMode = true)
         } else {
             CenteredStatus {
-                Text(session.message, textAlign = TextAlign.Center)
+                Text(currentSession.message, textAlign = TextAlign.Center)
                 Button(onClick = authViewModel::logout) { Text("Újra bejelentkezem") }
             }
         }
