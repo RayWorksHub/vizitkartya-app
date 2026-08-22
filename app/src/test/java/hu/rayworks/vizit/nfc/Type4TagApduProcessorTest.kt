@@ -2,6 +2,8 @@ package hu.rayworks.vizit.nfc
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class Type4TagApduProcessorTest {
@@ -27,6 +29,25 @@ class Type4TagApduProcessorTest {
     }
 
     @Test
+    fun `partial NDEF reads are not reported as complete until all bytes were read`() {
+        val progress = mutableListOf<NdefReadProgress>()
+        val trackedProcessor = Type4TagApduProcessor(
+            ndefMessage = byteArrayOf(0x11, 0x22, 0x33),
+            onNdefReadProgress = progress::add,
+        )
+        trackedProcessor.process(hex("00A4040007D276000085010100"))
+        trackedProcessor.process(hex("00A4000C02E104"))
+
+        trackedProcessor.process(hex("00B0000002"))
+        assertFalse(progress.last().isComplete)
+
+        trackedProcessor.process(hex("00B0000203"))
+        assertTrue(progress.last().isComplete)
+        assertEquals(5, progress.last().coveredBytes)
+        assertEquals(5, progress.last().totalBytes)
+    }
+
+    @Test
     fun `capability container exposes read only NDEF file`() {
         processor.process(hex("00A4040007D276000085010100"))
         processor.process(hex("00A4000C02E103"))
@@ -38,6 +59,26 @@ class Type4TagApduProcessorTest {
         assertEquals(0xFF, response[14].toInt() and 0xFF)
         assertEquals(0x90, response[15].toInt() and 0xFF)
         assertEquals(0x00, response[16].toInt())
+    }
+
+    @Test
+    fun `file selection is rejected before NDEF application selection`() {
+        assertArrayEquals(
+            Type4TagApduProcessor.STATUS_COMMAND_NOT_ALLOWED,
+            processor.process(hex("00A4000C02E104")),
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `oversized NDEF message is rejected`() {
+        Type4TagApduProcessor(ByteArray(Type4TagApduProcessor.MAX_NDEF_SIZE + 1))
+    }
+
+    @Test
+    fun `unknown file is rejected`() {
+        processor.process(hex("00A4040007D276000085010100"))
+        val response = processor.process(hex("00A4000C02E105"))
+        assertArrayEquals(byteArrayOf(0x6A, 0x82.toByte()), response)
     }
 
     private fun hex(value: String): ByteArray = value

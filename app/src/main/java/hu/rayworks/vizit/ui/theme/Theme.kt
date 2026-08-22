@@ -39,7 +39,7 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun VizitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colors = when {

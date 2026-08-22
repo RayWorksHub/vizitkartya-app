@@ -40,4 +40,52 @@ class VCardBuilderTest {
         assertTrue(result.contains("ORG:Példa\\; Kft."))
         assertFalse(result.contains("PHOTO"))
     }
+
+    @Test
+    fun `build can omit photo for size constrained transports and add VIZIT URL`() {
+        val result = VCardBuilder.build(
+            profile = ContactProfile(
+                fullName = "Árvíztűrő Tükörfúrógép",
+                phone = "+36 30 123 4567",
+                photoBase64 = "AAABBBCCC",
+            ),
+            includePhoto = false,
+            vizitProfileUrl = "https://vizit.hu/p/arvizturo",
+        )
+
+        assertFalse(result.contains("PHOTO"))
+        assertTrue(result.contains("FN:Árvíztűrő Tükörfúrógép"))
+        assertTrue(result.contains("URL;TYPE=VIZIT:https://vizit.hu/p/arvizturo"))
+    }
+
+    @Test
+    fun `build writes structured Hungarian name`() {
+        val result = VCardBuilder.build(
+            ContactProfile(
+                firstName = "Rajmund",
+                lastName = "Csukárdi",
+                phone = "+36 30 123 4567",
+            ),
+        )
+
+        assertTrue(result.contains("N:Csukárdi;Rajmund;;;\r\n"))
+        assertTrue(result.contains("FN:Csukárdi Rajmund\r\n"))
+    }
+
+    @Test
+    fun `folding respects 75 UTF-8 octets and preserves unicode code points`() {
+        val result = VCardBuilder.build(
+            ContactProfile(
+                fullName = "Árvíztűrő tükörfúrógép ".repeat(8),
+                phone = "+36 30 123 4567",
+            ),
+        )
+
+        result.split("\r\n")
+            .filter(String::isNotEmpty)
+            .forEach { line ->
+                assertTrue("Line exceeds 75 octets: $line", line.toByteArray(Charsets.UTF_8).size <= 75)
+            }
+        assertFalse(result.contains("�"))
+    }
 }

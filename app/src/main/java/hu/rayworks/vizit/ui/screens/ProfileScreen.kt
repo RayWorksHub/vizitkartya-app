@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,7 +48,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ProfileScreen(
     profile: ContactProfile,
-    onSave: (ContactProfile) -> String?,
+    onSave: suspend (ContactProfile) -> String?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -55,6 +56,7 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var draft by remember(profile) { mutableStateOf(profile) }
     var isPhotoLoading by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -198,19 +200,60 @@ fun ProfileScreen(
             }
 
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Publikus VIZIT profil", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = "A Profil QR csak az itt engedélyezett publikus profilhoz használható.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(
+                        checked = draft.isPublic,
+                        onCheckedChange = { draft = draft.copy(isPublic = it) },
+                    )
+                }
+            }
+
+            if (draft.isPublic) {
+                item {
+                    ProfileTextField(
+                        value = draft.publicSlug,
+                        onValueChange = { draft = draft.copy(publicSlug = it.lowercase()) },
+                        label = "Profilazonosító (például: csukardi-rajmund)",
+                        keyboardType = KeyboardType.Uri,
+                    )
+                }
+            }
+
+            item {
                 Button(
                     onClick = {
-                        val error = onSave(draft)
                         scope.launch {
-                            snackbarHostState.showSnackbar(error ?: "A névjegy mentve.")
+                            isSaving = true
+                            val message = runCatching { onSave(draft) }
+                                .fold(
+                                    onSuccess = { it ?: "A névjegy helyben mentve." },
+                                    onFailure = { "A helyi mentés nem sikerült. Próbáld újra." },
+                                )
+                            snackbarHostState.showSnackbar(message)
+                            isSaving = false
                         }
                     },
+                    enabled = !isSaving,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(18.dp),
                 ) {
-                    Text("Névjegy mentése", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (isSaving) "Mentés…" else "Névjegy mentése",
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
                 Spacer(Modifier.height(18.dp))
             }

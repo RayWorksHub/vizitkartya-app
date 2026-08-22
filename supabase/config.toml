@@ -1,0 +1,19 @@
+project_id = "vizit-v2-local"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "vizit-dev://auth-callback",
+  "vizit-beta://auth-callback",
+  "vizit://auth-callback",
+]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[functions.delete-account]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"
