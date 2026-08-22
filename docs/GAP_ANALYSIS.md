@@ -49,27 +49,26 @@ Az `Android CI` 8. futása sikeresen teljesítette a unit test, lint, DEV/BETA d
 
 ## Első javítási blokk ezen a feature ágon
 
-Az alábbiak lokálisan implementálva és statikusan ellenőrizve vannak, de ezen az ágon még nem futott GitHub CI, ezért nem kapnak `TESTED` státuszt:
+Az alábbiak implementálva és statikusan ellenőrizve vannak. A PR 9. Android CI-futása sikeresen teljesítette a unit test, lint, DEV/BETA debug build és PROD release compile lépéseket; az automatizálható részek ezért `TESTED` státuszúak. Fizikai készülékteszt még nem történt.
 
 | Terület | Feature ág állapota |
 |---|---|
-| Hivatalos branding | A csatolt master asset byte-pontosan bekerült; official markos adaptive/round/themed ikon, kontrollált brandfelületek és kikapcsolt alapértelmezett Dynamic Color készült. |
-| Supabase privacy | Külön forward-only hardening migráció javítja a publikus RPC mezőszintű szűrését, a privacy-safe defaultokat, slug-integritást, search pathot és jogi elfogadás naplózását. |
-| NFC HCE | A payload process-local memóriába került; session guard, foreground preferred service, teljes NDEF-olvasás visszajelzés és 16 KiB konzervatív budget készült. |
-| vCard/NDEF | Strukturált név, UTF-8 oktettalapú folding és egyetlen MIME vCard NDEF rekord készült. |
-| Kontakt QR | Elsődleges alapmód, 1800 bájtos budget, M hibajavítás, 4 modul quiet zone, slug/HTTPS validáció és round-trip teszt készült. |
-| Auth jogi gate | Kötelező checkbox, HTTPS dokumentumkonfiguráció, verziózott signup metadata és DEV-only Google adapter gate készült. |
+| Hivatalos branding | `TESTED`: a csatolt master asset byte-pontosan bekerült; official markos adaptive/round/themed ikon, kontrollált brandfelületek és kikapcsolt alapértelmezett Dynamic Color készült. |
+| Supabase privacy | `TESTED` buildszinten: külön forward-only hardening migráció javítja a publikus RPC mezőszintű szűrését, a privacy-safe defaultokat, slug-integritást, search pathot és jogi elfogadás naplózását. Távoli Supabase E2E még szükséges. |
+| NFC HCE | `TESTED` unit/build szinten: a payload process-local memóriába került; session guard, foreground preferred service, teljes NDEF-olvasás visszajelzés és 16 KiB konzervatív budget készült. Fizikai NFC-teszt még szükséges. |
+| vCard/NDEF | `TESTED`: strukturált név, UTF-8 oktettalapú folding és egyetlen MIME vCard NDEF rekord készült. |
+| Kontakt QR | `TESTED` unit/build szinten: elsődleges alapmód, 1800 bájtos budget, M hibajavítás, 4 modul quiet zone, slug/HTTPS validáció és round-trip teszt készült. Fizikai kamera-teszt még szükséges. |
+| Auth jogi gate | `TESTED` unit/build szinten: kötelező checkbox, HTTPS dokumentumkonfiguráció, verziózott signup metadata és DEV-only Google adapter gate készült. Távoli Auth E2E még szükséges. |
 
-A következő kötelező bizonyíték: unit test + lint + DEV/BETA/PROD build CI-n, majd valós NFC/QR készülékteszt.
+A következő kötelező bizonyíték: távoli Supabase/Auth E2E, majd valós NFC/QR készülékteszt.
 
 ## P0 javítási sorrend
 
-1. az elkészült brand/privacy/NFC/vCard/QR/Auth blokk CI-validálása és javítása;
-2. Room + Supabase local-first repository és outbox sync;
-3. teljes Auth UX és Supabase DEV E2E;
-4. többértékű profil, mezősorrend/láthatóság, kép- és cégeslogó pipeline;
-5. publikus profil és App Link end-to-end;
-6. fizikai Xiaomi/cross-OEM teszt és kompatibilitási mátrix.
+1. Room + Supabase local-first repository és outbox sync;
+2. teljes Auth UX és Supabase DEV E2E;
+3. többértékű profil, mezősorrend/láthatóság, kép- és cégeslogó pipeline;
+4. publikus profil és App Link end-to-end;
+5. fizikai Xiaomi/cross-OEM teszt és kompatibilitási mátrix.
 
 ## Külső blokkolók
 

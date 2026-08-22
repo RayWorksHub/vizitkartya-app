@@ -4,7 +4,7 @@ Két mód készül ugyanabból a lokális profilból.
 
 ## Kontakt QR
 
-`IMPLEMENTED`, `TESTS ADDED`, `PENDING CI`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, Base64 profilkép nélkül, legfeljebb 1800 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor M hibajavítást és 4 modul quiet zone-t használ; a magyar szöveghez determinisztikus round-trip unit teszt készült. Fizikai kamera/QR kompatibilitási teszt szükséges Androidon és iPhone-on, ezért még nem `TESTED` vagy `SUPPORTED` ezen a feature ágon.
+`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, Base64 profilkép nélkül, legfeljebb 1800 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor M hibajavítást és 4 modul quiet zone-t használ; a magyar szöveg determinisztikus round-trip unit tesztje a 9. Android CI-futásban sikeres. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on, ezért még nem `DEVICE TESTED` vagy `SUPPORTED`.
 
 ## VIZIT profil QR
 
