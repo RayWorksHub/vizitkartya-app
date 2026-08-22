@@ -1,17 +1,28 @@
 package hu.rayworks.vizit.nfc
 
-class Type4TagApduProcessor(private val ndefMessage: ByteArray) {
-    private var selectedFile = SelectedFile.NONE
+data class NdefReadProgress(
+    val coveredBytes: Int,
+    val totalBytes: Int,
+) {
+    val isComplete: Boolean = coveredBytes == totalBytes
+}
+
+class Type4TagApduProcessor(
+    private val ndefMessage: ByteArray,
+    private val onNdefReadProgress: (NdefReadProgress) -> Unit = {},
+) {
     private val ndefFile = byteArrayOf(
         ((ndefMessage.size shr 8) and 0xFF).toByte(),
         (ndefMessage.size and 0xFF).toByte(),
     ) + ndefMessage
     private val ndefReadCoverage = BooleanArray(ndefFile.size)
 
-    val isNdefFullyRead: Boolean
-        get() = ndefReadCoverage.all { it }
+    private var isApplicationSelected = false
+    private var selectedFile = SelectedFile.NONE
+    private var coveredNdefBytes = 0
 
     init {
+        require(ndefMessage.isNotEmpty()) { "The NDEF message must not be empty." }
         require(ndefMessage.size <= MAX_NDEF_SIZE) {
             "The NDEF message is larger than the configured Type 4 tag capacity."
         }
@@ -19,11 +30,16 @@ class Type4TagApduProcessor(private val ndefMessage: ByteArray) {
 
     fun process(command: ByteArray): ByteArray {
         if (isSelectApplication(command)) {
+            isApplicationSelected = true
             selectedFile = SelectedFile.NONE
+            resetReadCoverage()
             return STATUS_OK
         }
 
-        if (isSelectFile(command)) {
+        if (!isApplicationSelected) return STATUS_COMMAND_NOT_ALLOWED
+
+        if (isSelectFileInstruction(command)) {
+            if (!isWellFormedSelectFile(command)) return STATUS_WRONG_LENGTH
             return when (selectedFileId(command)) {
                 CAPABILITY_CONTAINER_FILE_ID -> {
                     selectedFile = SelectedFile.CAPABILITY_CONTAINER
@@ -39,43 +55,62 @@ class Type4TagApduProcessor(private val ndefMessage: ByteArray) {
             }
         }
 
-        if (isReadBinary(command)) {
-            return when (selectedFile) {
-                SelectedFile.CAPABILITY_CONTAINER -> readBinary(command, CAPABILITY_CONTAINER, trackNdef = false)
-                SelectedFile.NDEF -> readBinary(command, ndefFile, trackNdef = true)
-                SelectedFile.NONE -> STATUS_COMMAND_NOT_ALLOWED
+        if (isReadBinaryInstruction(command)) {
+            val file = when (selectedFile) {
+                SelectedFile.CAPABILITY_CONTAINER -> CAPABILITY_CONTAINER
+                SelectedFile.NDEF -> ndefFile
+                SelectedFile.NONE -> return STATUS_COMMAND_NOT_ALLOWED
             }
+            return readBinary(command, file)
         }
 
         return STATUS_INSTRUCTION_NOT_SUPPORTED
     }
 
-    private fun readBinary(command: ByteArray, file: ByteArray, trackNdef: Boolean): ByteArray {
+    private fun readBinary(command: ByteArray, file: ByteArray): ByteArray {
         if (command.size < 5) return STATUS_WRONG_LENGTH
         val offset = ((command[2].toInt() and 0xFF) shl 8) or (command[3].toInt() and 0xFF)
         if (offset > file.size) return STATUS_WRONG_PARAMETERS
         val requestedLength = (command[4].toInt() and 0xFF).let { if (it == 0) 256 else it }
         val end = minOf(offset + requestedLength, file.size)
 
-        if (trackNdef && end > offset) {
-            for (index in offset until end) ndefReadCoverage[index] = true
+        if (selectedFile == SelectedFile.NDEF && end > offset) {
+            markNdefBytesRead(offset, end)
         }
 
         return file.copyOfRange(offset, end) + STATUS_OK
     }
 
-    private fun isSelectFile(command: ByteArray): Boolean =
-        command.size >= 7 &&
+    private fun markNdefBytesRead(start: Int, end: Int) {
+        for (index in start until end) {
+            if (!ndefReadCoverage[index]) {
+                ndefReadCoverage[index] = true
+                coveredNdefBytes += 1
+            }
+        }
+        onNdefReadProgress(NdefReadProgress(coveredNdefBytes, ndefFile.size))
+    }
+
+    private fun resetReadCoverage() {
+        ndefReadCoverage.fill(false)
+        coveredNdefBytes = 0
+    }
+
+    private fun isSelectFileInstruction(command: ByteArray): Boolean =
+        command.size >= 3 &&
             command[0] == 0x00.toByte() &&
             command[1] == 0xA4.toByte() &&
-            command[2] == 0x00.toByte() &&
+            command[2] == 0x00.toByte()
+
+    private fun isWellFormedSelectFile(command: ByteArray): Boolean =
+        command.size >= 7 &&
             (command[4].toInt() and 0xFF) == 2
 
     private fun selectedFileId(command: ByteArray): Int =
         ((command[5].toInt() and 0xFF) shl 8) or (command[6].toInt() and 0xFF)
 
-    private fun isReadBinary(command: ByteArray): Boolean =
-        command.size >= 5 &&
+    private fun isReadBinaryInstruction(command: ByteArray): Boolean =
+        command.size >= 2 &&
             command[0] == 0x00.toByte() &&
             command[1] == 0xB0.toByte()
 
@@ -88,7 +123,7 @@ class Type4TagApduProcessor(private val ndefMessage: ByteArray) {
     companion object {
         private const val CAPABILITY_CONTAINER_FILE_ID = 0xE103
         private const val NDEF_FILE_ID = 0xE104
-        private const val MAX_NDEF_SIZE = 0x7FFF
+        const val MAX_NDEF_SIZE = 0x7FFF
 
         private val NDEF_APPLICATION_AID = byteArrayOf(
             0xD2.toByte(),
@@ -114,7 +149,7 @@ class Type4TagApduProcessor(private val ndefMessage: ByteArray) {
 
         val STATUS_OK = byteArrayOf(0x90.toByte(), 0x00)
         val STATUS_SECURITY_NOT_SATISFIED = byteArrayOf(0x69, 0x85.toByte())
-        private val STATUS_COMMAND_NOT_ALLOWED = byteArrayOf(0x69, 0x86.toByte())
+        val STATUS_COMMAND_NOT_ALLOWED = byteArrayOf(0x69, 0x86.toByte())
         private val STATUS_WRONG_LENGTH = byteArrayOf(0x67, 0x00)
         private val STATUS_FILE_NOT_FOUND = byteArrayOf(0x6A, 0x82.toByte())
         private val STATUS_WRONG_PARAMETERS = byteArrayOf(0x6B, 0x00)

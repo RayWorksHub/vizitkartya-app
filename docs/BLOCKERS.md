@@ -7,5 +7,9 @@
 - Apple Developer hozzáférés: külön iOS kliens jelenleg nem cél; iOS-specifikus app/entitlement teszthez később kellhet.
 - Távoli Supabase projekt és environment credentialek: migration, Auth kliens és `delete-account` Edge Function elkészült; tényleges deployhoz projekt-hozzáférés szükséges.
 - `vizit.hu` vagy végleges publikus profil domain DNS/hosting és `assetlinks.json`: Android App Link verifikációhoz szükséges.
+- Végleges production application ID: store release előtt üzleti döntés és jóváhagyás szükséges.
+- Production signing: keystore, SHA-256 fingerprint és CI secret nélkül release nem publikálható.
+- Adatkezelési tájékoztató és ÁSZF végleges tartalma/URL-je: a kötelező regisztrációs elfogadás teljes E2E aktiválásához szükséges.
+- Fizikai készülékpark: Xiaomi, Redmi, POCO, Samsung, Pixel és iPhone nélkül nincs `DEVICE TESTED` vagy `SUPPORTED` NFC/QR státusz.
 
 Ezek egyike sem indok a lokális Android/NFC/QR fejlesztés leállítására.

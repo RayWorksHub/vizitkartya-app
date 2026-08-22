@@ -1,39 +1,58 @@
-# VIZIT Android
+# VIZIT Android v2
 
-A VIZIT natív Android/Xiaomi alkalmazása. Az első kiadás célja, hogy a felhasználó a saját telefonját NFC-forrásként használva adhassa át a névjegyét egy másik Android telefonnak.
+A VIZIT Xiaomi/HyperOS-first natív Android digitális névjegy- és kontaktmegosztó alkalmazás.
+
+A fejlesztés elsődleges követelményforrása a [`docs/VIZIT_MASTER_SPEC_V1.md`](docs/VIZIT_MASTER_SPEC_V1.md). A jelenlegi kód alpha állapotú; nem production kiadás.
+
+## Termékcél
+
+- telefon → telefon → új kontakt NFC-vel;
+- beolvasás → új kontakt Kontakt QR-rel;
+- fogadóoldali VIZIT-telepítés nélkül;
+- `.vcf` letöltés és fájlkezelő nélkül a támogatott fő folyamatokban;
+- QR + HTTPS publikus profil stabil platformfüggetlen fallbackként.
 
 ## Jelenlegi állapot
 
-- natív Kotlin és Jetpack Compose felület;
-- helyben tárolt, szerkeszthető kontaktprofil;
-- automatikusan négyzetesre vágott és tömörített profilkép;
-- vCard 3.0 generálás profilképpel;
-- NFC Forum Type 4 Tag / NDEF HCE prototípus;
-- az NFC-adat csak aktív küldés közben érhető el;
-- világos, sötét és Android dinamikus színtéma;
-- JVM egységtesztek az NFC APDU-folyamathoz és a vCardhoz.
+- Kotlin, Jetpack Compose, Material 3, API 29–36;
+- DEV/BETA/PROD build flavor;
+- Supabase Auth/Storage/PostgREST/Functions kliens és Google Credential Manager adapter;
+- Room és DataStore alapréteg;
+- vCard 3.0, NFC Forum Type 4 Tag / NDEF HCE;
+- Kontakt QR és HTTPS profil QR alapfolyamat;
+- email/jelszó Auth shell, jelszó-visszaállítás és szerveroldali fióktörlési funkció;
+- hivatalos VIZIT brand asset és adaptív launcher icon;
+- GitHub Actions unit test, lint, DEV/BETA build és PROD release compile.
 
-## NFC működés
+A pontos, bizonyítékhoz kötött modulstátuszt a [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) tartalmazza. A `DEVICE TESTED` és `SUPPORTED` NFC/QR státuszhoz valós készülékteszt kötelező.
 
-A küldő telefon a szabványos NDEF alkalmazás-AID-t (`D2760000850101`) emulálja, és egy `text/vcard` rekordot szolgál ki. A fogadó készülékre nem kell telepíteni a VIZIT alkalmazást.
-
-Az Android gyártói NFC-kezelése eltérhet. Az automatikus Kontaktok-megnyitást és a profilkép átvitelét ezért valódi Xiaomi/HyperOS és célkészülékeken kell kompatibilitási mátrixban ellenőrizni.
-
-## Fejlesztői indítás
+## Fejlesztői ellenőrzés
 
 1. Nyisd meg a projektet a legfrissebb stabil Android Studióban.
 2. Telepítsd az Android 16 / API 36 SDK-t.
-3. Indítsd az `app` konfigurációt egy NFC/HCE-képes Android 10+ készüléken.
+3. Indítsd a DEV buildet NFC/HCE-képes Android 10+ készüléken.
 
 Parancssori ellenőrzés:
 
 ```bash
-./gradlew testDebugUnitTest assembleDebug
+./gradlew testDevDebugUnitTest lintDevDebug assembleDevDebug assembleBetaDebug assembleProdRelease
 ```
 
-## Következő fejlesztési blokkok
+## Környezeti konfiguráció
 
-1. Xiaomi/HyperOS NFC készülékteszt és APDU naplózás.
-2. QR-alapú átadás ugyanebből a profilból.
-3. backend szinkron és Google-belépés.
-4. béta/production build változatok és aláírás.
+A Supabase, Google OAuth és publikus profil értékei Gradle propertyből érkeznek. Production secret vagy service-role kulcs nem kerülhet a mobil buildbe vagy Gitbe. Részletek: [`docs/SUPABASE.md`](docs/SUPABASE.md) és [`docs/AUTH.md`](docs/AUTH.md).
+
+## Dokumentáció
+
+- [`docs/VIZIT_MASTER_SPEC_V1.md`](docs/VIZIT_MASTER_SPEC_V1.md)
+- [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/BRANDING.md`](docs/BRANDING.md)
+- [`docs/AUTH.md`](docs/AUTH.md)
+- [`docs/SUPABASE.md`](docs/SUPABASE.md)
+- [`docs/NFC.md`](docs/NFC.md)
+- [`docs/QR.md`](docs/QR.md)
+- [`docs/PLATFORM_COMPATIBILITY.md`](docs/PLATFORM_COMPATIBILITY.md)
+- [`docs/TESTING.md`](docs/TESTING.md)
+- [`docs/RELEASE.md`](docs/RELEASE.md)
+- [`docs/BLOCKERS.md`](docs/BLOCKERS.md)

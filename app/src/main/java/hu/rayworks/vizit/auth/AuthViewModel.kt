@@ -38,17 +38,36 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val canUseDebugLocalProfile: Boolean
         get() = BuildConfig.DEBUG && AppEnvironment.current == AppEnvironment.DEV
     val googleSignInEnabled: Boolean
-        get() = googleAdapter?.isEnabled == true
+        get() = googleAdapter?.isEnabled == true && canUseDebugLocalProfile
+    val legalDocumentsReady: Boolean
+        get() = BuildConfig.LEGAL_DOCUMENTS_READY
+    val privacyPolicyUrl: String
+        get() = BuildConfig.PRIVACY_POLICY_URL
+    val termsUrl: String
+        get() = BuildConfig.TERMS_URL
 
     fun useDebugLocalProfile() {
         if (canUseDebugLocalProfile) debugLocalProfile = true
     }
 
-    fun register(email: String, password: String, confirmation: String) {
-        val validation = AuthValidator.registration(email, password, confirmation)
+    fun register(
+        email: String,
+        password: String,
+        confirmation: String,
+        legalAccepted: Boolean,
+    ) {
+        if (!legalDocumentsReady) {
+            return setError("A regisztráció jogi dokumentumai még nincsenek konfigurálva.")
+        }
+        val validation = AuthValidator.registration(email, password, confirmation, legalAccepted)
         if (validation != null) return setError(validation)
         runAction("Megerősítő e-mail elküldve. A belépéshez erősítsd meg az e-mail-címedet.") {
-            repositoryOrThrow().register(email, password)
+            repositoryOrThrow().register(
+                email = email,
+                password = password,
+                privacyPolicyVersion = BuildConfig.PRIVACY_POLICY_VERSION,
+                termsVersion = BuildConfig.TERMS_VERSION,
+            )
         }
     }
 

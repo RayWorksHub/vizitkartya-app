@@ -4,8 +4,17 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 sealed interface NfcShareEvent {
-    data object PayloadRead : NfcShareEvent
-    data class Deactivated(val reason: Int) : NfcShareEvent
+    val sessionId: Long
+
+    data class PayloadRead(
+        override val sessionId: Long,
+        val payloadBytes: Int,
+    ) : NfcShareEvent
+
+    data class Deactivated(
+        override val sessionId: Long,
+        val reason: Int,
+    ) : NfcShareEvent
 }
 
 object NfcShareEvents {

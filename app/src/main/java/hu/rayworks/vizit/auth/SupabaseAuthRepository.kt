@@ -7,6 +7,8 @@ import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.functions.functions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class SupabaseAuthRepository(private val client: SupabaseClient) {
     val sessionState: Flow<AuthSessionState> = client.auth.sessionStatus.map { status ->
@@ -20,10 +22,19 @@ class SupabaseAuthRepository(private val client: SupabaseClient) {
         }
     }
 
-    suspend fun register(email: String, password: String) {
+    suspend fun register(
+        email: String,
+        password: String,
+        privacyPolicyVersion: String,
+        termsVersion: String,
+    ) {
         client.auth.signUpWith(Email) {
             this.email = email.trim()
             this.password = password
+            data = buildJsonObject {
+                put("privacy_policy_version", privacyPolicyVersion)
+                put("terms_version", termsVersion)
+            }
         }
     }
 

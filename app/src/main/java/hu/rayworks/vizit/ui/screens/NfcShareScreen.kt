@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.NfcSharePhase
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.ui.components.ProfileAvatar
+import hu.rayworks.vizit.ui.components.VizitBrandMark
 import hu.rayworks.vizit.ui.theme.VizitBlue
 import hu.rayworks.vizit.ui.theme.VizitNavy
 import hu.rayworks.vizit.ui.theme.VizitTeal
@@ -59,6 +60,7 @@ fun NfcShareScreen(
     onStop: () -> Unit,
 ) {
     BackHandler(onBack = onStop)
+    NfcPreferredServiceEffect(enabled = phase == NfcSharePhase.WAITING)
     val haptics = LocalHapticFeedback.current
     LaunchedEffect(phase) {
         if (phase == NfcSharePhase.PAYLOAD_READ) {
@@ -100,12 +102,7 @@ fun NfcShareScreen(
             .padding(horizontal = 24.dp, vertical = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "VIZIT",
-            color = VizitTeal,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-        )
+        VizitBrandMark()
         Spacer(Modifier.weight(0.7f))
 
         Box(
@@ -173,7 +170,7 @@ fun NfcShareScreen(
                     size = 56.dp,
                 )
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(profile.fullName, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(profile.resolvedDisplayName, color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
                         listOf(profile.jobTitle, profile.company)
                             .filter(String::isNotBlank)

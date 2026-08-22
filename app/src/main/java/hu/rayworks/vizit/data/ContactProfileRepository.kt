@@ -8,6 +8,8 @@ class ContactProfileRepository(context: Context) {
 
     fun load(): ContactProfile = ContactProfile(
         fullName = preferences.getString(KEY_FULL_NAME, "").orEmpty(),
+        firstName = preferences.getString(KEY_FIRST_NAME, "").orEmpty(),
+        lastName = preferences.getString(KEY_LAST_NAME, "").orEmpty(),
         jobTitle = preferences.getString(KEY_JOB_TITLE, "").orEmpty(),
         company = preferences.getString(KEY_COMPANY, "").orEmpty(),
         phone = preferences.getString(KEY_PHONE, "").orEmpty(),
@@ -23,6 +25,8 @@ class ContactProfileRepository(context: Context) {
     fun save(profile: ContactProfile) {
         preferences.edit {
             putString(KEY_FULL_NAME, profile.fullName.trim())
+            putString(KEY_FIRST_NAME, profile.firstName.trim())
+            putString(KEY_LAST_NAME, profile.lastName.trim())
             putString(KEY_JOB_TITLE, profile.jobTitle.trim())
             putString(KEY_COMPANY, profile.company.trim())
             putString(KEY_PHONE, profile.phone.trim())
@@ -39,6 +43,8 @@ class ContactProfileRepository(context: Context) {
     private companion object {
         const val PREFERENCES_NAME = "vizit_profile"
         const val KEY_FULL_NAME = "full_name"
+        const val KEY_FIRST_NAME = "first_name"
+        const val KEY_LAST_NAME = "last_name"
         const val KEY_JOB_TITLE = "job_title"
         const val KEY_COMPANY = "company"
         const val KEY_PHONE = "phone"
