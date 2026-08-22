@@ -40,4 +40,21 @@ class VCardBuilderTest {
         assertTrue(result.contains("ORG:Példa\\; Kft."))
         assertFalse(result.contains("PHOTO"))
     }
+
+    @Test
+    fun `build can omit photo for size constrained transports and add VIZIT URL`() {
+        val result = VCardBuilder.build(
+            profile = ContactProfile(
+                fullName = "Árvíztűrő Tükörfúrógép",
+                phone = "+36 30 123 4567",
+                photoBase64 = "AAABBBCCC",
+            ),
+            includePhoto = false,
+            vizitProfileUrl = "https://vizit.hu/p/arvizturo",
+        )
+
+        assertFalse(result.contains("PHOTO"))
+        assertTrue(result.contains("FN:Árvíztűrő Tükörfúrógép"))
+        assertTrue(result.contains("URL;TYPE=VIZIT:https://vizit.hu/p/arvizturo"))
+    }
 }

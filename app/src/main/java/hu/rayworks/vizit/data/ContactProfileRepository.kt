@@ -16,6 +16,8 @@ class ContactProfileRepository(context: Context) {
         address = preferences.getString(KEY_ADDRESS, "").orEmpty(),
         linkedIn = preferences.getString(KEY_LINKED_IN, "").orEmpty(),
         photoBase64 = preferences.getString(KEY_PHOTO, "").orEmpty(),
+        publicSlug = preferences.getString(KEY_PUBLIC_SLUG, "").orEmpty(),
+        isPublic = preferences.getBoolean(KEY_IS_PUBLIC, false),
     )
 
     fun save(profile: ContactProfile) {
@@ -29,6 +31,8 @@ class ContactProfileRepository(context: Context) {
             putString(KEY_ADDRESS, profile.address.trim())
             putString(KEY_LINKED_IN, profile.linkedIn.trim())
             putString(KEY_PHOTO, profile.photoBase64)
+            putString(KEY_PUBLIC_SLUG, profile.publicSlug.trim())
+            putBoolean(KEY_IS_PUBLIC, profile.isPublic)
         }
     }
 
@@ -43,5 +47,7 @@ class ContactProfileRepository(context: Context) {
         const val KEY_ADDRESS = "address"
         const val KEY_LINKED_IN = "linked_in"
         const val KEY_PHOTO = "photo_base64"
+        const val KEY_PUBLIC_SLUG = "public_slug"
+        const val KEY_IS_PUBLIC = "is_public"
     }
 }

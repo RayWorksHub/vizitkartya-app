@@ -2,6 +2,14 @@ package hu.rayworks.vizit.nfc
 
 class Type4TagApduProcessor(private val ndefMessage: ByteArray) {
     private var selectedFile = SelectedFile.NONE
+    private val ndefFile = byteArrayOf(
+        ((ndefMessage.size shr 8) and 0xFF).toByte(),
+        (ndefMessage.size and 0xFF).toByte(),
+    ) + ndefMessage
+    private val ndefReadCoverage = BooleanArray(ndefFile.size)
+
+    val isNdefFullyRead: Boolean
+        get() = ndefReadCoverage.all { it }
 
     init {
         require(ndefMessage.size <= MAX_NDEF_SIZE) {
@@ -32,28 +40,27 @@ class Type4TagApduProcessor(private val ndefMessage: ByteArray) {
         }
 
         if (isReadBinary(command)) {
-            val file = when (selectedFile) {
-                SelectedFile.CAPABILITY_CONTAINER -> CAPABILITY_CONTAINER
-                SelectedFile.NDEF -> ndefFile()
-                SelectedFile.NONE -> return STATUS_COMMAND_NOT_ALLOWED
+            return when (selectedFile) {
+                SelectedFile.CAPABILITY_CONTAINER -> readBinary(command, CAPABILITY_CONTAINER, trackNdef = false)
+                SelectedFile.NDEF -> readBinary(command, ndefFile, trackNdef = true)
+                SelectedFile.NONE -> STATUS_COMMAND_NOT_ALLOWED
             }
-            return readBinary(command, file)
         }
 
         return STATUS_INSTRUCTION_NOT_SUPPORTED
     }
 
-    private fun ndefFile(): ByteArray = byteArrayOf(
-        ((ndefMessage.size shr 8) and 0xFF).toByte(),
-        (ndefMessage.size and 0xFF).toByte(),
-    ) + ndefMessage
-
-    private fun readBinary(command: ByteArray, file: ByteArray): ByteArray {
+    private fun readBinary(command: ByteArray, file: ByteArray, trackNdef: Boolean): ByteArray {
         if (command.size < 5) return STATUS_WRONG_LENGTH
         val offset = ((command[2].toInt() and 0xFF) shl 8) or (command[3].toInt() and 0xFF)
         if (offset > file.size) return STATUS_WRONG_PARAMETERS
         val requestedLength = (command[4].toInt() and 0xFF).let { if (it == 0) 256 else it }
         val end = minOf(offset + requestedLength, file.size)
+
+        if (trackNdef && end > offset) {
+            for (index in offset until end) ndefReadCoverage[index] = true
+        }
+
         return file.copyOfRange(offset, end) + STATUS_OK
     }
 

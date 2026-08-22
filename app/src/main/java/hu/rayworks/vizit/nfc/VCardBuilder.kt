@@ -3,7 +3,11 @@ package hu.rayworks.vizit.nfc
 import hu.rayworks.vizit.data.ContactProfile
 
 object VCardBuilder {
-    fun build(profile: ContactProfile): String = buildString {
+    fun build(
+        profile: ContactProfile,
+        includePhoto: Boolean = true,
+        vizitProfileUrl: String? = null,
+    ): String = buildString {
         appendLine("BEGIN:VCARD")
         appendLine("VERSION:3.0")
         appendLine("N:;${escape(profile.fullName)};;;")
@@ -17,13 +21,18 @@ object VCardBuilder {
             appendLine("EMAIL;TYPE=INTERNET:${escape(profile.email)}")
         }
         appendOptional("URL", profile.website)
+        vizitProfileUrl
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?.takeIf { it != profile.website.trim() }
+            ?.let { appendLine("URL;TYPE=VIZIT:${escape(it)}") }
         if (profile.address.isNotBlank()) {
             appendLine("ADR;TYPE=WORK:;;${escape(profile.address)};;;;")
         }
         if (profile.linkedIn.isNotBlank()) {
             appendLine("X-SOCIALPROFILE;TYPE=linkedin:${escape(profile.linkedIn)}")
         }
-        if (profile.photoBase64.isNotBlank()) {
+        if (includePhoto && profile.photoBase64.isNotBlank()) {
             appendFolded("PHOTO;ENCODING=b;TYPE=JPEG:${profile.photoBase64}")
         }
         append("END:VCARD\r\n")

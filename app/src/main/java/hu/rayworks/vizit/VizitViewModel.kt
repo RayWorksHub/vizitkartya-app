@@ -4,21 +4,29 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.nfc.NfcAdapter
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.ContactProfileRepository
 import hu.rayworks.vizit.data.ContactProfileValidator
 import hu.rayworks.vizit.nfc.HcePayloadStore
-import hu.rayworks.vizit.nfc.NdefVCardEncoder
-import hu.rayworks.vizit.nfc.VCardBuilder
+import hu.rayworks.vizit.nfc.NfcPayloadFactory
+import hu.rayworks.vizit.nfc.NfcShareEvent
+import hu.rayworks.vizit.nfc.NfcShareEvents
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ContactProfileRepository(application)
     private val hcePayloadStore = HcePayloadStore(application)
+    private var nfcTimeoutJob: Job? = null
 
     var profile by mutableStateOf(repository.load())
         private set
@@ -26,8 +34,26 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     var nfcStatus by mutableStateOf(readNfcStatus(application))
         private set
 
-    var isNfcShareActive by mutableStateOf(false)
+    var nfcSharePhase by mutableStateOf(NfcSharePhase.IDLE)
         private set
+
+    var nfcPhotoIncluded by mutableStateOf(false)
+        private set
+
+    val isNfcShareActive: Boolean
+        get() = nfcSharePhase != NfcSharePhase.IDLE
+
+    init {
+        viewModelScope.launch {
+            NfcShareEvents.events.collect { event ->
+                if (event is NfcShareEvent.PayloadRead && nfcSharePhase == NfcSharePhase.WAITING) {
+                    nfcTimeoutJob?.cancel()
+                    hcePayloadStore.deactivate()
+                    nfcSharePhase = NfcSharePhase.PAYLOAD_READ
+                }
+            }
+        }
+    }
 
     fun saveProfile(updatedProfile: ContactProfile): String? {
         val error = ContactProfileValidator.validate(updatedProfile)
@@ -48,15 +74,34 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         if (!nfcStatus.hasHostCardEmulation) return "A telefon nem támogatja az NFC-kártyaemulációt."
         if (!nfcStatus.isEnabled) return "Kapcsold be az NFC-t a telefon beállításaiban."
 
-        val vCard = VCardBuilder.build(profile)
-        hcePayloadStore.activate(NdefVCardEncoder.encode(vCard))
-        isNfcShareActive = true
+        val fallbackUrl = profile.publicSlug
+            .takeIf { profile.isPublic && it.isNotBlank() }
+            ?.let { "${BuildConfig.PUBLIC_PROFILE_BASE_URL}/${Uri.encode(it)}" }
+
+        val prepared = runCatching { NfcPayloadFactory.create(profile, fallbackUrl) }
+            .getOrElse { return "A névjegy NFC-adatcsomagja túl nagy. Rövidíts néhány mezőt, majd próbáld újra." }
+
+        hcePayloadStore.activate(prepared.bytes, NFC_SHARE_TIMEOUT_MILLIS)
+        nfcPhotoIncluded = prepared.photoIncluded
+        nfcSharePhase = NfcSharePhase.WAITING
+
+        nfcTimeoutJob?.cancel()
+        nfcTimeoutJob = viewModelScope.launch {
+            delay(NFC_SHARE_TIMEOUT_MILLIS)
+            if (nfcSharePhase == NfcSharePhase.WAITING) {
+                hcePayloadStore.deactivate()
+                nfcSharePhase = NfcSharePhase.TIMED_OUT
+            }
+        }
         return null
     }
 
     fun stopNfcShare() {
+        nfcTimeoutJob?.cancel()
+        nfcTimeoutJob = null
         hcePayloadStore.deactivate()
-        isNfcShareActive = false
+        nfcSharePhase = NfcSharePhase.IDLE
+        nfcPhotoIncluded = false
     }
 
     fun refreshNfcStatus() {
@@ -98,5 +143,9 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
                 PackageManager.FEATURE_NFC_HOST_CARD_EMULATION,
             ),
         )
+    }
+
+    private companion object {
+        const val NFC_SHARE_TIMEOUT_MILLIS = 60_000L
     }
 }

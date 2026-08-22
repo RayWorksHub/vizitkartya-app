@@ -6,6 +6,7 @@ import android.os.Bundle
 class VizitHostApduService : HostApduService() {
     private lateinit var payloadStore: HcePayloadStore
     private var processor: Type4TagApduProcessor? = null
+    private var readEventEmitted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -19,13 +20,24 @@ class VizitHostApduService : HostApduService() {
             val payload = payloadStore.payload()
                 ?: return Type4TagApduProcessor.STATUS_SECURITY_NOT_SATISFIED
             processor = Type4TagApduProcessor(payload)
+            readEventEmitted = false
         }
 
-        return processor?.process(commandApdu)
-            ?: Type4TagApduProcessor.STATUS_SECURITY_NOT_SATISFIED
+        val activeProcessor = processor
+            ?: return Type4TagApduProcessor.STATUS_SECURITY_NOT_SATISFIED
+        val response = activeProcessor.process(commandApdu)
+
+        if (activeProcessor.isNdefFullyRead && !readEventEmitted) {
+            readEventEmitted = true
+            NfcShareEvents.emit(NfcShareEvent.PayloadRead)
+        }
+
+        return response
     }
 
     override fun onDeactivated(reason: Int) {
         processor = null
+        readEventEmitted = false
+        NfcShareEvents.emit(NfcShareEvent.Deactivated(reason))
     }
 }

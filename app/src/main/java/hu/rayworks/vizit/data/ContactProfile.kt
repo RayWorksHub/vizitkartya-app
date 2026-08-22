@@ -10,6 +10,8 @@ data class ContactProfile(
     val address: String = "",
     val linkedIn: String = "",
     val photoBase64: String = "",
+    val publicSlug: String = "",
+    val isPublic: Boolean = false,
 ) {
     val initials: String
         get() = fullName

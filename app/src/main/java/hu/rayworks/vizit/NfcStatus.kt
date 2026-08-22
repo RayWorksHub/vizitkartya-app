@@ -8,3 +8,10 @@ data class NfcStatus(
     val isReady: Boolean
         get() = isAvailable && isEnabled && hasHostCardEmulation
 }
+
+enum class NfcSharePhase {
+    IDLE,
+    WAITING,
+    PAYLOAD_READ,
+    TIMED_OUT,
+}
