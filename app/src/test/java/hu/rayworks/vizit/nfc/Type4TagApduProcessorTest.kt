@@ -26,19 +26,25 @@ class Type4TagApduProcessorTest {
             byteArrayOf(0x00, 0x03, 0x11, 0x22, 0x33, 0x90.toByte(), 0x00),
             response,
         )
-        assertTrue(processor.isNdefFullyRead)
     }
 
     @Test
     fun `partial NDEF reads are not reported as complete until all bytes were read`() {
-        processor.process(hex("00A4040007D276000085010100"))
-        processor.process(hex("00A4000C02E104"))
+        val progress = mutableListOf<NdefReadProgress>()
+        val trackedProcessor = Type4TagApduProcessor(
+            ndefMessage = byteArrayOf(0x11, 0x22, 0x33),
+            onNdefReadProgress = progress::add,
+        )
+        trackedProcessor.process(hex("00A4040007D276000085010100"))
+        trackedProcessor.process(hex("00A4000C02E104"))
 
-        processor.process(hex("00B0000002"))
-        assertFalse(processor.isNdefFullyRead)
+        trackedProcessor.process(hex("00B0000002"))
+        assertFalse(progress.last().isComplete)
 
-        processor.process(hex("00B0000203"))
-        assertTrue(processor.isNdefFullyRead)
+        trackedProcessor.process(hex("00B0000203"))
+        assertTrue(progress.last().isComplete)
+        assertEquals(5, progress.last().coveredBytes)
+        assertEquals(5, progress.last().totalBytes)
     }
 
     @Test
@@ -53,7 +59,19 @@ class Type4TagApduProcessorTest {
         assertEquals(0xFF, response[14].toInt() and 0xFF)
         assertEquals(0x90, response[15].toInt() and 0xFF)
         assertEquals(0x00, response[16].toInt())
-        assertFalse(processor.isNdefFullyRead)
+    }
+
+    @Test
+    fun `file selection is rejected before NDEF application selection`() {
+        assertArrayEquals(
+            Type4TagApduProcessor.STATUS_COMMAND_NOT_ALLOWED,
+            processor.process(hex("00A4000C02E104")),
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `oversized NDEF message is rejected`() {
+        Type4TagApduProcessor(ByteArray(Type4TagApduProcessor.MAX_NDEF_SIZE + 1))
     }
 
     @Test

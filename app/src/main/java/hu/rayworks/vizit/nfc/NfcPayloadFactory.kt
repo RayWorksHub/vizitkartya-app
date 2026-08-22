@@ -4,7 +4,7 @@ import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.PhotoProcessor
 
 object NfcPayloadFactory {
-    private const val TARGET_NDEF_BYTES = 24_000
+    private const val TARGET_NDEF_BYTES = 16_384
     private const val HARD_MAX_NDEF_BYTES = 0x7FFF
     private const val PHOTO_OVERHEAD_RESERVE = 700
     private const val MIN_PHOTO_JPEG_BYTES = 1_200
@@ -21,7 +21,7 @@ object NfcPayloadFactory {
             includePhoto = false,
             vizitProfileUrl = fallbackUrl,
         )
-        val noPhotoPayload = NdefVCardEncoder.encode(noPhotoCard, fallbackUrl)
+        val noPhotoPayload = NdefVCardEncoder.encodeVCard(noPhotoCard)
         require(noPhotoPayload.size <= HARD_MAX_NDEF_BYTES) {
             "A névjegy szöveges NFC payloadja túl nagy."
         }
@@ -69,6 +69,6 @@ object NfcPayloadFactory {
             includePhoto = true,
             vizitProfileUrl = fallbackUrl,
         )
-        return NdefVCardEncoder.encode(vCard, fallbackUrl)
+        return NdefVCardEncoder.encodeVCard(vCard)
     }
 }

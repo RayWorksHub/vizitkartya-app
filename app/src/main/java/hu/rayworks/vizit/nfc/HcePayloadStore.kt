@@ -1,51 +1,77 @@
 package hu.rayworks.vizit.nfc
 
-import android.content.Context
-import android.util.Base64
-import androidx.core.content.edit
+import android.os.SystemClock
+import java.util.concurrent.atomic.AtomicLong
 
-class HcePayloadStore(context: Context) {
-    private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+data class ActiveHcePayload(
+    val sessionId: Long,
+    val bytes: ByteArray,
+    val expiresAtElapsedRealtime: Long,
+)
 
-    fun activate(payload: ByteArray, ttlMillis: Long = DEFAULT_TTL_MILLIS) {
-        require(ttlMillis in 1..MAX_TTL_MILLIS)
-        preferences.edit {
-            putString(KEY_PAYLOAD, Base64.encodeToString(payload, Base64.NO_WRAP))
-            putLong(KEY_EXPIRES_AT, System.currentTimeMillis() + ttlMillis)
-            putBoolean(KEY_ENABLED, true)
+/**
+ * Process-local, one-shot payload store.
+ *
+ * Contact PII is deliberately not persisted. If Android kills the process, the share is cancelled
+ * instead of silently surviving in SharedPreferences or on disk.
+ */
+class HcePayloadStore(
+    private val clock: () -> Long = SystemClock::elapsedRealtime,
+) {
+    fun activate(
+        payload: ByteArray,
+        ttlMillis: Long = DEFAULT_TTL_MILLIS,
+    ): Long {
+        require(payload.isNotEmpty()) { "The HCE payload must not be empty." }
+        require(ttlMillis in 1..MAX_TTL_MILLIS) { "The HCE payload TTL is invalid." }
+
+        val sessionId = sessionIds.incrementAndGet()
+        synchronized(lock) {
+            activePayload = ActiveHcePayload(
+                sessionId = sessionId,
+                bytes = payload.copyOf(),
+                expiresAtElapsedRealtime = clock() + ttlMillis,
+            )
+        }
+        return sessionId
+    }
+
+    fun activePayload(): ActiveHcePayload? = synchronized(lock) {
+        currentPayloadLocked()?.let { current ->
+            current.copy(bytes = current.bytes.copyOf())
         }
     }
 
-    fun deactivate() {
-        preferences.edit {
-            putBoolean(KEY_ENABLED, false)
-            remove(KEY_PAYLOAD)
-            remove(KEY_EXPIRES_AT)
-        }
+    fun activeSessionId(): Long? = synchronized(lock) {
+        currentPayloadLocked()?.sessionId
     }
 
-    fun isActive(nowMillis: Long = System.currentTimeMillis()): Boolean {
-        if (!preferences.getBoolean(KEY_ENABLED, false)) return false
-        val expiresAt = preferences.getLong(KEY_EXPIRES_AT, 0L)
-        if (expiresAt <= nowMillis) {
-            deactivate()
-            return false
-        }
-        return true
+    fun isActive(): Boolean = activeSessionId() != null
+
+    fun deactivate(sessionId: Long? = null): Boolean = synchronized(lock) {
+        val current = activePayload ?: return@synchronized false
+        if (sessionId != null && current.sessionId != sessionId) return@synchronized false
+        activePayload = null
+        true
     }
 
-    fun payload(): ByteArray? {
-        if (!isActive()) return null
-        return preferences.getString(KEY_PAYLOAD, null)
-            ?.let { runCatching { Base64.decode(it, Base64.NO_WRAP) }.getOrNull() }
+    private fun currentPayloadLocked(): ActiveHcePayload? {
+        val current = activePayload ?: return null
+        if (clock() >= current.expiresAtElapsedRealtime) {
+            activePayload = null
+            return null
+        }
+        return current
     }
 
     companion object {
         const val DEFAULT_TTL_MILLIS = 60_000L
-        private const val MAX_TTL_MILLIS = 5 * 60_000L
-        private const val PREFERENCES_NAME = "vizit_hce_payload"
-        private const val KEY_ENABLED = "enabled"
-        private const val KEY_PAYLOAD = "ndef_payload"
-        private const val KEY_EXPIRES_AT = "expires_at"
+        const val MAX_TTL_MILLIS = 120_000L
+
+        private val lock = Any()
+        private val sessionIds = AtomicLong(0)
+
+        @Volatile
+        private var activePayload: ActiveHcePayload? = null
     }
 }

@@ -67,15 +67,18 @@ fun ShareScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var qrMode by rememberSaveable { mutableStateOf(QrMode.PROFILE) }
+    var qrMode by rememberSaveable { mutableStateOf(QrMode.CONTACT) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var showFullScreenQr by rememberSaveable { mutableStateOf(false) }
 
     val publicProfileUrl = remember(profile) { QrPayloadFactory.profileUrl(profile) }
-    val qrPayload = remember(profile, qrMode, publicProfileUrl) {
+    val contactPayload = remember(profile, publicProfileUrl) {
+        QrPayloadFactory.contact(profile, publicProfileUrl)
+    }
+    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload) {
         when (qrMode) {
             QrMode.PROFILE -> publicProfileUrl
-            QrMode.CONTACT -> QrPayloadFactory.contact(profile, publicProfileUrl)
+            QrMode.CONTACT -> contactPayload.getOrNull()
         }
     }
     val qrBitmap = remember(qrPayload) {
@@ -144,14 +147,14 @@ fun ShareScreen(
                 Text("QR", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FilterChip(
-                        selected = qrMode == QrMode.PROFILE,
-                        onClick = { qrMode = QrMode.PROFILE },
-                        label = { Text("VIZIT profil") },
-                    )
-                    FilterChip(
                         selected = qrMode == QrMode.CONTACT,
                         onClick = { qrMode = QrMode.CONTACT },
-                        label = { Text("Kontakt") },
+                        label = { Text("Kontakt QR") },
+                    )
+                    FilterChip(
+                        selected = qrMode == QrMode.PROFILE,
+                        onClick = { qrMode = QrMode.PROFILE },
+                        label = { Text("VIZIT profil QR") },
                     )
                 }
 
@@ -224,11 +227,19 @@ fun ShareScreen(
                     }
                 } else {
                     Text(
-                        text = "A VIZIT profil QR-hez előbb publikus profilt és egyedi slugot kell létrehozni. A Kontakt QR addig is használható offline.",
+                        text = when (qrMode) {
+                            QrMode.PROFILE ->
+                                "A VIZIT profil QR-hez előbb publikus profilt és érvényes profilazonosítót kell létrehozni. A Kontakt QR addig is használható offline."
+
+                            QrMode.CONTACT -> contactPayload.exceptionOrNull()?.message
+                                ?: "A Kontakt QR most nem állítható elő."
+                        },
                         textAlign = TextAlign.Center,
                     )
-                    OutlinedButton(onClick = { qrMode = QrMode.CONTACT }) {
-                        Text("Kontakt QR megnyitása")
+                    if (qrMode == QrMode.PROFILE) {
+                        OutlinedButton(onClick = { qrMode = QrMode.CONTACT }) {
+                            Text("Kontakt QR megnyitása")
+                        }
                     }
                 }
             }

@@ -1,7 +1,17 @@
+import java.net.URI
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 fun String.asBuildConfigString(): String =
     "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+fun String.isHttpsDocumentUrl(): Boolean = runCatching {
+    URI(trim()).let { uri ->
+        uri.scheme.equals("https", ignoreCase = true) &&
+            !uri.host.isNullOrBlank() &&
+            uri.userInfo == null &&
+            uri.fragment == null
+    }
+}.getOrDefault(false)
 
 plugins {
     id("com.android.application")
@@ -19,6 +29,15 @@ val betaSupabaseKey = providers.gradleProperty("VIZIT_BETA_SUPABASE_KEY").orElse
 val prodSupabaseUrl = providers.gradleProperty("VIZIT_PROD_SUPABASE_URL").orElse("").get()
 val prodSupabaseKey = providers.gradleProperty("VIZIT_PROD_SUPABASE_KEY").orElse("").get()
 val googleWebClientId = providers.gradleProperty("VIZIT_GOOGLE_WEB_CLIENT_ID").orElse("").get()
+val privacyPolicyUrl = providers.gradleProperty("VIZIT_PRIVACY_POLICY_URL").orElse("").get()
+val privacyPolicyVersion = providers.gradleProperty("VIZIT_PRIVACY_POLICY_VERSION").orElse("").get()
+val termsUrl = providers.gradleProperty("VIZIT_TERMS_URL").orElse("").get()
+val termsVersion = providers.gradleProperty("VIZIT_TERMS_VERSION").orElse("").get()
+val legalDocumentsReady =
+    privacyPolicyUrl.isHttpsDocumentUrl() &&
+        privacyPolicyVersion.isNotBlank() &&
+        termsUrl.isHttpsDocumentUrl() &&
+        termsVersion.isNotBlank()
 
 android {
     namespace = "hu.rayworks.vizit"
@@ -29,11 +48,20 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 2
-        versionName = "0.2.0"
+        versionName = "0.2.0-alpha.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders["profileHost"] = profileHost
+        buildConfigField("String", "PRIVACY_POLICY_URL", privacyPolicyUrl.asBuildConfigString())
+        buildConfigField("String", "PRIVACY_POLICY_VERSION", privacyPolicyVersion.asBuildConfigString())
+        buildConfigField("String", "TERMS_URL", termsUrl.asBuildConfigString())
+        buildConfigField("String", "TERMS_VERSION", termsVersion.asBuildConfigString())
+        buildConfigField(
+            "boolean",
+            "LEGAL_DOCUMENTS_READY",
+            legalDocumentsReady.toString(),
+        )
     }
 
     flavorDimensions += "environment"

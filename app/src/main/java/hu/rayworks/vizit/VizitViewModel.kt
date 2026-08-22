@@ -25,8 +25,9 @@ import kotlinx.coroutines.launch
 
 class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ContactProfileRepository(application)
-    private val hcePayloadStore = HcePayloadStore(application)
+    private val hcePayloadStore = HcePayloadStore()
     private var nfcTimeoutJob: Job? = null
+    private var activeNfcSessionId: Long? = null
 
     var profile by mutableStateOf(repository.load())
         private set
@@ -46,9 +47,13 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             NfcShareEvents.events.collect { event ->
-                if (event is NfcShareEvent.PayloadRead && nfcSharePhase == NfcSharePhase.WAITING) {
+                if (
+                    event is NfcShareEvent.PayloadRead &&
+                    event.sessionId == activeNfcSessionId &&
+                    nfcSharePhase == NfcSharePhase.WAITING
+                ) {
                     nfcTimeoutJob?.cancel()
-                    hcePayloadStore.deactivate()
+                    activeNfcSessionId = null
                     nfcSharePhase = NfcSharePhase.PAYLOAD_READ
                 }
             }
@@ -81,15 +86,20 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         val prepared = runCatching { NfcPayloadFactory.create(profile, fallbackUrl) }
             .getOrElse { return "A névjegy NFC-adatcsomagja túl nagy. Rövidíts néhány mezőt, majd próbáld újra." }
 
-        hcePayloadStore.activate(prepared.bytes, NFC_SHARE_TIMEOUT_MILLIS)
+        val sessionId = hcePayloadStore.activate(prepared.bytes, NFC_SHARE_TIMEOUT_MILLIS)
+        activeNfcSessionId = sessionId
         nfcPhotoIncluded = prepared.photoIncluded
         nfcSharePhase = NfcSharePhase.WAITING
 
         nfcTimeoutJob?.cancel()
         nfcTimeoutJob = viewModelScope.launch {
             delay(NFC_SHARE_TIMEOUT_MILLIS)
-            if (nfcSharePhase == NfcSharePhase.WAITING) {
-                hcePayloadStore.deactivate()
+            if (
+                nfcSharePhase == NfcSharePhase.WAITING &&
+                activeNfcSessionId == sessionId
+            ) {
+                hcePayloadStore.deactivate(sessionId)
+                activeNfcSessionId = null
                 nfcSharePhase = NfcSharePhase.TIMED_OUT
             }
         }
@@ -99,7 +109,8 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     fun stopNfcShare() {
         nfcTimeoutJob?.cancel()
         nfcTimeoutJob = null
-        hcePayloadStore.deactivate()
+        activeNfcSessionId?.let(hcePayloadStore::deactivate)
+        activeNfcSessionId = null
         nfcSharePhase = NfcSharePhase.IDLE
         nfcPhotoIncluded = false
     }
@@ -110,7 +121,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
 
     fun shareAsText(context: Context) {
         val contactText = buildString {
-            appendLine(profile.fullName)
+            appendLine(profile.resolvedDisplayName)
             if (profile.jobTitle.isNotBlank()) appendLine(profile.jobTitle)
             if (profile.company.isNotBlank()) appendLine(profile.company)
             if (profile.phone.isNotBlank()) appendLine(profile.phone)
@@ -121,7 +132,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         val intent = Intent.createChooser(
             Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "${profile.fullName} – VIZIT")
+                putExtra(Intent.EXTRA_SUBJECT, "${profile.resolvedDisplayName} – VIZIT")
                 putExtra(Intent.EXTRA_TEXT, contactText)
             },
             "Névjegy megosztása",

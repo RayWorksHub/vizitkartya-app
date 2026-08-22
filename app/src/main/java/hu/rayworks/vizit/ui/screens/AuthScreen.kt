@@ -3,8 +3,11 @@ package hu.rayworks.vizit.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -26,15 +30,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.auth.AuthActionState
 import hu.rayworks.vizit.auth.AuthScreenMode
 import hu.rayworks.vizit.auth.AuthViewModel
+import hu.rayworks.vizit.ui.components.VizitBrandLockup
 
 @Composable
 fun AuthScreen(viewModel: AuthViewModel, forceNewPassword: Boolean = false) {
@@ -45,6 +50,7 @@ fun AuthScreen(viewModel: AuthViewModel, forceNewPassword: Boolean = false) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmation by rememberSaveable { mutableStateOf("") }
+    var legalAccepted by rememberSaveable { mutableStateOf(false) }
     val action = viewModel.actionState
     val loading = action is AuthActionState.Loading
 
@@ -52,7 +58,8 @@ fun AuthScreen(viewModel: AuthViewModel, forceNewPassword: Boolean = false) {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("VIZIT", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+        VizitBrandLockup(modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(18.dp))
         Text(
             when (mode) {
                 AuthScreenMode.LOGIN -> "Bejelentkezés"
@@ -104,18 +111,57 @@ fun AuthScreen(viewModel: AuthViewModel, forceNewPassword: Boolean = false) {
             )
         }
 
+        if (mode == AuthScreenMode.REGISTER) {
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = legalAccepted,
+                    onCheckedChange = {
+                        legalAccepted = it
+                        viewModel.clearActionState()
+                    },
+                    enabled = !loading && viewModel.legalDocumentsReady,
+                )
+                Text("Elolvastam és elfogadom az adatkezelési tájékoztatót és az ÁSZF-et.")
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TextButton(
+                    onClick = { context.openWebUrl(viewModel.privacyPolicyUrl) },
+                    enabled = viewModel.legalDocumentsReady,
+                ) {
+                    Text("Adatkezelési tájékoztató")
+                }
+                TextButton(
+                    onClick = { context.openWebUrl(viewModel.termsUrl) },
+                    enabled = viewModel.legalDocumentsReady,
+                ) {
+                    Text("ÁSZF")
+                }
+            }
+            if (!viewModel.legalDocumentsReady) {
+                Text(
+                    text = "A regisztráció a végleges jogi dokumentumok beállításáig nem aktiválható.",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
         Spacer(Modifier.height(20.dp))
         Button(
             onClick = {
                 viewModel.clearActionState()
                 when (mode) {
                     AuthScreenMode.LOGIN -> viewModel.login(email, password)
-                    AuthScreenMode.REGISTER -> viewModel.register(email, password, confirmation)
+                    AuthScreenMode.REGISTER ->
+                        viewModel.register(email, password, confirmation, legalAccepted)
                     AuthScreenMode.FORGOT_PASSWORD -> viewModel.requestPasswordReset(email)
                     AuthScreenMode.NEW_PASSWORD -> viewModel.updatePassword(password, confirmation)
                 }
             },
-            enabled = !loading,
+            enabled = !loading && (mode != AuthScreenMode.REGISTER || viewModel.legalDocumentsReady),
             modifier = Modifier.fillMaxWidth(),
         ) {
             if (loading) CircularProgressIndicator()
@@ -164,4 +210,11 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+private fun Context.openWebUrl(url: String) {
+    if (url.isBlank()) return
+    runCatching {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
 }

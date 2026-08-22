@@ -16,6 +16,16 @@ object AuthValidator {
         else -> null
     }
 
-    fun registration(email: String, password: String, confirmation: String): String? =
-        email(email) ?: password(password) ?: if (password != confirmation) "A két jelszó nem egyezik." else null
+    fun registration(
+        email: String,
+        password: String,
+        confirmation: String,
+        legalAccepted: Boolean,
+    ): String? = email(email) ?: password(password) ?: when {
+        password != confirmation -> "A két jelszó nem egyezik."
+        !legalAccepted ->
+            "A regisztrációhoz fogadd el az adatkezelési tájékoztatót és az ÁSZF-et."
+
+        else -> null
+    }
 }

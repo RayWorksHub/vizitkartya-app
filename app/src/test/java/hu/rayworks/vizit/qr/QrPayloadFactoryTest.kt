@@ -15,10 +15,11 @@ class QrPayloadFactoryTest {
                 photoBase64 = "very-large-photo-data",
             ),
             profileUrl = null,
-        )
+        ).getOrThrow()
 
         assertTrue(payload.startsWith("BEGIN:VCARD\r\n"))
         assertTrue(payload.contains("FN:Őrült Árvíztűrő"))
         assertFalse(payload.contains("PHOTO"))
+        assertTrue(payload.toByteArray(Charsets.UTF_8).size <= QrPayloadFactory.MAX_CONTACT_QR_BYTES)
     }
 }
