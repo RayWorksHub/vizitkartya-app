@@ -6,10 +6,13 @@ Az alábbi értékek Gradle propertyként vagy környezeti változóként adhat�
 
 - `VIZIT_DEV_SUPABASE_URL`
 - `VIZIT_DEV_SUPABASE_PUBLISHABLE_KEY`
+- `VIZIT_DEV_PUBLIC_PROFILE_BASE_URL`
 - `VIZIT_BETA_SUPABASE_URL`
 - `VIZIT_BETA_SUPABASE_PUBLISHABLE_KEY`
+- `VIZIT_BETA_PUBLIC_PROFILE_BASE_URL`
 - `VIZIT_PROD_SUPABASE_URL`
 - `VIZIT_PROD_SUPABASE_PUBLISHABLE_KEY`
+- `VIZIT_PROD_PUBLIC_PROFILE_BASE_URL`
 
 Google Auth feature flagek:
 
@@ -22,6 +25,8 @@ Service-role key mobil buildben és GitHub Actions kliens-build lépésben sem h
 ## Adatmodell
 
 A migrationök a `supabase/migrations` alatt találhatók. A többértékű profiladatok külön táblákban vannak; a publikus olvasás nem közvetlen tábla-SELECT, hanem szűkített `get_public_profile(slug)` RPC.
+
+Az első migration kódja `IMPLEMENTED`. Távoli DEV/BETA/PROD projektre még nincs alkalmazva, ezért ez még nem `INTEGRATION TESTED`.
 
 ## Storage
 
@@ -36,6 +41,11 @@ A publikus bucketbe csak a felhasználó saját UUID mappájába lehet írni. A 
 - `anon`: nincs közvetlen profil-tábla olvasás;
 - publikus adat: csak a whitelistes RPC eredménye;
 - analitika: kliens csak minimális eseményt írhat, más felhasználó eseményét nem olvashatja.
+- analitikai `properties` csak JSON objektum lehet, legfeljebb 4096 bájtos reprezentációval.
+
+## Android konfigurációs kapu
+
+A `BackendConfiguration` kizárólag publikus klienskonfigurációt fogad el. Üres URL/kulcs esetén a távoli adapter nem indul el; hibás HTTPS-cím vagy `sb_secret_` kulcs esetén a konfiguráció érvénytelen. Kivételként DEV buildben a `localhost`, `127.0.0.1` és Android-emulátoros `10.0.2.2` HTTP-végpont engedélyezett. A kulcs értéke nem jelenik meg a UI-ban vagy logban.
 
 ## Aktiválás
 

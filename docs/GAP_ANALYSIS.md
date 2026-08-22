@@ -68,5 +68,7 @@ Auditált kiinduló commit: `cde0286` (`main`, korábbi `0.1.0` proof-of-concept
 | Teljes NDEF-kiolvasás APDU coverage alapján | `IMPLEMENTED`, `TESTED` |
 | Semleges `NFC-adat kiolvasva` állapot + haptic | `IMPLEMENTED`, fizikai teszt szükséges |
 | Android foreground preferred HCE service | `IMPLEMENTED`, fizikai teszt szükséges |
+| Normalizált Supabase schema, RLS, Storage és publikus RPC migration | `IMPLEMENTED`, távoli projekten még nem alkalmazott |
+| Fail-closed Android backend konfiguráció és secret-key guard | `IMPLEMENTED`, `TESTED` |
 
 Ezek egyike sem jelent még `DEVICE TESTED` vagy `SUPPORTED` NFC státuszt.
