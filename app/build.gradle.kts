@@ -93,9 +93,6 @@ android {
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", devGoogleWebClientId.asBuildConfigString())
             buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", devGoogleWebClientId.isNotBlank().toString())
             buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", "https://$profileHost/p".asBuildConfigString())
-            if (devSigningStoreFile.isNotBlank() && devSigningPassword.isNotBlank()) {
-                signingConfig = signingConfigs.getByName("devStable")
-            }
         }
 
         create("beta") {
@@ -130,7 +127,12 @@ android {
     }
 
     buildTypes {
-        debug { isDebuggable = true }
+        debug {
+            isDebuggable = true
+            if (devSigningStoreFile.isNotBlank() && devSigningPassword.isNotBlank()) {
+                signingConfig = signingConfigs.getByName("devStable")
+            }
+        }
         release {
             isDebuggable = false
             isMinifyEnabled = true
