@@ -2,7 +2,7 @@
 
 ## BLOCKED BY EXTERNAL ACCESS
 
-- Google Auth végleges developer/credential jóváhagyás: a Credential Manager + Supabase ID-token adapter kész; aktiváláshoz `VIZIT_GOOGLE_WEB_CLIENT_ID` és Supabase Google provider konfiguráció kell.
+- Google Auth DEV eszközteszt: a Credential Manager + Supabase ID-token adapter és a külső provider-konfiguráció kész; stabil DEV APK-aláírás és fizikai első/visszatérő belépési próba kell.
 - Xiaomi developer hozzáférések egy része: store/gyártói teszt és esetleges Xiaomi szolgáltatások aktiválását érinti, az alap Android fejlesztést nem.
 - Apple Developer hozzáférés: külön iOS kliens jelenleg nem cél; iOS-specifikus app/entitlement teszthez később kellhet.
 - A `delete-account` Edge Function DEV deployja: a Beta-core útvonalat nem blokkolja, de a teljes fióktörlési E2E csak deploy után futtatható.
