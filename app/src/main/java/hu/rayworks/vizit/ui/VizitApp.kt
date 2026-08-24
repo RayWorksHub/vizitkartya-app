@@ -48,6 +48,7 @@ fun VizitApp(
             profile = viewModel.profile,
             phase = viewModel.nfcSharePhase,
             photoIncluded = viewModel.nfcPhotoIncluded,
+            onRoutingFailed = viewModel::reportNfcRoutingFailure,
             onStop = viewModel::stopNfcShare,
         )
         return

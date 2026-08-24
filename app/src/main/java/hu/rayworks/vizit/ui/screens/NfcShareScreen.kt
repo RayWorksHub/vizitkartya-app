@@ -57,10 +57,14 @@ fun NfcShareScreen(
     profile: ContactProfile,
     phase: NfcSharePhase,
     photoIncluded: Boolean,
+    onRoutingFailed: () -> Unit,
     onStop: () -> Unit,
 ) {
     BackHandler(onBack = onStop)
-    NfcPreferredServiceEffect(enabled = phase == NfcSharePhase.WAITING)
+    NfcPreferredServiceEffect(
+        enabled = phase == NfcSharePhase.WAITING,
+        onRoutingFailed = onRoutingFailed,
+    )
     val haptics = LocalHapticFeedback.current
     LaunchedEffect(phase) {
         if (phase == NfcSharePhase.PAYLOAD_READ) {
@@ -83,6 +87,7 @@ fun NfcShareScreen(
         NfcSharePhase.WAITING -> "NFC-küldés aktív"
         NfcSharePhase.PAYLOAD_READ -> "NFC adat kiolvasva"
         NfcSharePhase.TIMED_OUT -> "Az NFC-megosztás lejárt"
+        NfcSharePhase.ROUTING_FAILED -> "Az NFC-küldés nem indítható"
         NfcSharePhase.IDLE -> "NFC"
     }
     val description = when (phase) {
@@ -92,6 +97,8 @@ fun NfcShareScreen(
             "A fogadó készülék kiolvasta az NFC-adatcsomagot. Ez nem jelenti automatikusan azt, hogy a névjegyet már el is mentették."
         NfcSharePhase.TIMED_OUT ->
             "A névjegy már nem olvasható NFC-n. Indíts új átadást, vagy válaszd a QR-megosztást."
+        NfcSharePhase.ROUTING_FAILED ->
+            "A telefon nem tudta a VIZIT-et előtérbeli NFC-szolgáltatásként aktiválni. Használd a Contact QR-t."
         NfcSharePhase.IDLE -> ""
     }
 
@@ -128,6 +135,7 @@ fun NfcShareScreen(
                     imageVector = when (phase) {
                         NfcSharePhase.PAYLOAD_READ -> Icons.Outlined.CheckCircle
                         NfcSharePhase.TIMED_OUT -> Icons.Outlined.TimerOff
+                        NfcSharePhase.ROUTING_FAILED -> Icons.Outlined.TimerOff
                         else -> Icons.Outlined.Nfc
                     },
                     contentDescription = null,

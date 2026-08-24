@@ -150,7 +150,9 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
             .takeIf { profile.isPublic && it.isNotBlank() }
             ?.let { "${BuildConfig.PUBLIC_PROFILE_BASE_URL}/${Uri.encode(it)}" }
 
-        val prepared = runCatching { NfcPayloadFactory.create(profile, fallbackUrl) }
+        val prepared = runCatching {
+            NfcPayloadFactory.create(profile.copy(photoBase64 = ""), fallbackUrl)
+        }
             .getOrElse { return "A névjegy NFC-adatcsomagja túl nagy. Rövidíts néhány mezőt, majd próbáld újra." }
 
         val sessionId = hcePayloadStore.activate(prepared.bytes, NFC_SHARE_TIMEOUT_MILLIS)
@@ -180,6 +182,14 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         activeNfcSessionId = null
         nfcSharePhase = NfcSharePhase.IDLE
         nfcPhotoIncluded = false
+    }
+
+    fun reportNfcRoutingFailure() {
+        nfcTimeoutJob?.cancel()
+        nfcTimeoutJob = null
+        activeNfcSessionId?.let(hcePayloadStore::deactivate)
+        activeNfcSessionId = null
+        nfcSharePhase = NfcSharePhase.ROUTING_FAILED
     }
 
     fun refreshNfcStatus() {

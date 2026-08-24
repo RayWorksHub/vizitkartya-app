@@ -50,6 +50,7 @@ jobs:
         run: |
           node --check scripts/supabase-auth-e2e.mjs
           node scripts/check-supabase-source.mjs
+          node scripts/check-supabase-auth-config.mjs
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

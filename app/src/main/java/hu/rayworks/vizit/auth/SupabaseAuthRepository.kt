@@ -41,18 +41,25 @@ class SupabaseAuthRepository(
     }
 
     suspend fun register(
+        name: String,
         email: String,
         password: String,
+        redirectUrl: String,
         privacyPolicyVersion: String,
         termsVersion: String,
     ) {
-        client.auth.signUpWith(Email) {
+        client.auth.signUpWith(Email, redirectUrl = redirectUrl) {
             this.email = email.trim()
             this.password = password
             data = buildJsonObject {
+                put("display_name", name.trim())
                 put("privacy_policy_version", privacyPolicyVersion)
                 put("terms_version", termsVersion)
             }
+        }
+        if (client.auth.currentSessionOrNull() != null) {
+            client.auth.signOut()
+            throw EmailConfirmationNotEnforcedException()
         }
     }
 
@@ -157,3 +164,5 @@ class SupabaseAuthRepository(
         put("p_terms_version", JsonPrimitive(termsVersion))
     }
 }
+
+internal class EmailConfirmationNotEnforcedException : IllegalStateException()

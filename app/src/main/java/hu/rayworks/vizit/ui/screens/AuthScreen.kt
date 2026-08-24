@@ -66,6 +66,7 @@ fun AuthScreen(
             },
         )
     }
+    var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmation by rememberSaveable { mutableStateOf("") }
@@ -104,6 +105,22 @@ fun AuthScreen(
             )
         }
         Spacer(Modifier.height(24.dp))
+
+        if (mode == AuthScreenMode.REGISTER) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = {
+                    name = it
+                    if (action is AuthActionState.Error) viewModel.clearActionState()
+                },
+                label = { Text("Név") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                singleLine = true,
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+        }
 
         if (mode.requiresEmail()) {
             OutlinedTextField(
@@ -176,7 +193,7 @@ fun AuthScreen(
                     when (mode) {
                         AuthScreenMode.LOGIN -> viewModel.login(email, password)
                         AuthScreenMode.REGISTER ->
-                            viewModel.register(email, password, confirmation, legalAccepted)
+                            viewModel.register(name, email, password, confirmation, legalAccepted)
 
                         AuthScreenMode.FORGOT_PASSWORD -> viewModel.requestPasswordReset(email)
                         AuthScreenMode.NEW_PASSWORD -> viewModel.updatePassword(password, confirmation)
@@ -378,7 +395,7 @@ private fun AuthScreenMode.title(): String = when (this) {
 
 private fun AuthScreenMode.description(): String? = when (this) {
     AuthScreenMode.EMAIL_VERIFICATION_SENT ->
-        "A megerősítő link megnyitása után visszatérhetsz a VIZIT alkalmazásba."
+        "Megerősítő e-mailt küldtünk. Ellenőrizd a postafiókodat, majd nyisd meg a levélben kapott linket."
 
     AuthScreenMode.PASSWORD_RESET_SENT ->
         "A helyreállító linkkel biztonságosan beállíthatod az új jelszavadat."

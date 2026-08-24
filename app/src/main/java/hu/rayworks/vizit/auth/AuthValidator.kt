@@ -5,6 +5,13 @@ import java.util.Locale
 object AuthValidator {
     private val emailRegex = Regex("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", RegexOption.IGNORE_CASE)
 
+    fun name(name: String): String? = when {
+        name.isBlank() -> "Add meg a nevedet."
+        name.trim().length < 2 -> "A név legalább 2 karakter hosszú legyen."
+        name.trim().length > 100 -> "A név legfeljebb 100 karakter hosszú lehet."
+        else -> null
+    }
+
     fun email(email: String): String? = when {
         email.isBlank() -> "Add meg az e-mail-címedet."
         !emailRegex.matches(email.trim()) -> "Az e-mail-cím formátuma nem megfelelő."
@@ -30,11 +37,12 @@ object AuthValidator {
         }
 
     fun registration(
+        name: String,
         email: String,
         password: String,
         confirmation: String,
         legalAccepted: Boolean,
-    ): String? = email(email) ?: password(password) ?: when {
+    ): String? = name(name) ?: email(email) ?: password(password) ?: when {
         confirmation.isBlank() -> "Ismételd meg a jelszavadat."
         password != confirmation -> "A két jelszó nem egyezik."
         !legalAccepted ->

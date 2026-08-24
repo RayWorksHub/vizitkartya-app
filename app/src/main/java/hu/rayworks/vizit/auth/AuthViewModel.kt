@@ -64,6 +64,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun register(
+        name: String,
         email: String,
         password: String,
         confirmation: String,
@@ -72,15 +73,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         if (!legalDocumentsReady) {
             return setError("A regisztráció jogi dokumentumai még nincsenek konfigurálva.")
         }
-        val validation = AuthValidator.registration(email, password, confirmation, legalAccepted)
+        val validation = AuthValidator.registration(name, email, password, confirmation, legalAccepted)
         if (validation != null) return setError(validation)
         runAction(
             operation = AuthOperation.REGISTER,
-            successMessage = "Megerősítő e-mail elküldve. A belépéshez erősítsd meg az e-mail-címedet.",
+            successMessage = "Megerősítő e-mailt küldtünk. Ellenőrizd a postafiókodat.",
         ) {
             repositoryOrThrow().register(
+                name = name,
                 email = email,
                 password = password,
+                redirectUrl = "${BuildConfig.AUTH_SCHEME}://auth-callback",
                 privacyPolicyVersion = BuildConfig.PRIVACY_POLICY_VERSION,
                 termsVersion = BuildConfig.TERMS_VERSION,
             )
