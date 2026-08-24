@@ -10,6 +10,7 @@ import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.data.settings.AppSettingsStore
 import hu.rayworks.vizit.data.sync.ProfileSyncEngine
 import hu.rayworks.vizit.data.sync.WorkManagerProfileSyncScheduler
+import hu.rayworks.vizit.nfc.NfcRouting
 
 class VizitApplication : Application() {
     lateinit var container: VizitAppContainer
@@ -17,6 +18,7 @@ class VizitApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        NfcRouting.reset(this)
         container = VizitAppContainer(this)
     }
 }

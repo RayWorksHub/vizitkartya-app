@@ -28,7 +28,9 @@ val betaSupabaseUrl = providers.gradleProperty("VIZIT_BETA_SUPABASE_URL").orElse
 val betaSupabaseKey = providers.gradleProperty("VIZIT_BETA_SUPABASE_KEY").orElse("").get()
 val prodSupabaseUrl = providers.gradleProperty("VIZIT_PROD_SUPABASE_URL").orElse("").get()
 val prodSupabaseKey = providers.gradleProperty("VIZIT_PROD_SUPABASE_KEY").orElse("").get()
-val googleWebClientId = providers.gradleProperty("VIZIT_GOOGLE_WEB_CLIENT_ID").orElse("").get()
+val devGoogleWebClientId = providers.gradleProperty("VIZIT_DEV_GOOGLE_WEB_CLIENT_ID").orElse("").get()
+val devSigningStoreFile = providers.gradleProperty("VIZIT_DEV_SIGNING_STORE_FILE").orElse("").get()
+val devSigningPassword = providers.gradleProperty("VIZIT_DEV_SIGNING_PASSWORD").orElse("").get()
 val privacyPolicyUrl = providers.gradleProperty("VIZIT_PRIVACY_POLICY_URL").orElse("").get()
 val privacyPolicyVersion = providers.gradleProperty("VIZIT_PRIVACY_POLICY_VERSION").orElse("").get()
 val termsUrl = providers.gradleProperty("VIZIT_TERMS_URL").orElse("").get()
@@ -64,6 +66,17 @@ android {
         )
     }
 
+    signingConfigs {
+        if (devSigningStoreFile.isNotBlank() && devSigningPassword.isNotBlank()) {
+            create("devStable") {
+                storeFile = file(devSigningStoreFile)
+                storePassword = devSigningPassword
+                keyAlias = "vizit-dev"
+                keyPassword = devSigningPassword
+            }
+        }
+    }
+
     flavorDimensions += "environment"
     productFlavors {
         create("dev") {
@@ -77,8 +90,8 @@ android {
             buildConfigField("String", "SUPABASE_URL", devSupabaseUrl.asBuildConfigString())
             buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", devSupabaseKey.asBuildConfigString())
             buildConfigField("boolean", "SUPABASE_ENABLED", (devSupabaseUrl.isNotBlank() && devSupabaseKey.isNotBlank()).toString())
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId.asBuildConfigString())
-            buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", googleWebClientId.isNotBlank().toString())
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", devGoogleWebClientId.asBuildConfigString())
+            buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", devGoogleWebClientId.isNotBlank().toString())
             buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", "https://$profileHost/p".asBuildConfigString())
         }
 
@@ -93,8 +106,8 @@ android {
             buildConfigField("String", "SUPABASE_URL", betaSupabaseUrl.asBuildConfigString())
             buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", betaSupabaseKey.asBuildConfigString())
             buildConfigField("boolean", "SUPABASE_ENABLED", (betaSupabaseUrl.isNotBlank() && betaSupabaseKey.isNotBlank()).toString())
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId.asBuildConfigString())
-            buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", googleWebClientId.isNotBlank().toString())
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "".asBuildConfigString())
+            buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", "false")
             buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", "https://$profileHost/p".asBuildConfigString())
         }
 
@@ -107,14 +120,19 @@ android {
             buildConfigField("String", "SUPABASE_URL", prodSupabaseUrl.asBuildConfigString())
             buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", prodSupabaseKey.asBuildConfigString())
             buildConfigField("boolean", "SUPABASE_ENABLED", (prodSupabaseUrl.isNotBlank() && prodSupabaseKey.isNotBlank()).toString())
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId.asBuildConfigString())
-            buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", googleWebClientId.isNotBlank().toString())
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "".asBuildConfigString())
+            buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", "false")
             buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", "https://$profileHost/p".asBuildConfigString())
         }
     }
 
     buildTypes {
-        debug { isDebuggable = true }
+        debug {
+            isDebuggable = true
+            if (devSigningStoreFile.isNotBlank() && devSigningPassword.isNotBlank()) {
+                signingConfig = signingConfigs.getByName("devStable")
+            }
+        }
         release {
             isDebuggable = false
             isMinifyEnabled = true
@@ -143,6 +161,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")

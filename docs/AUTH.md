@@ -44,7 +44,9 @@ Az aktív-user storage policy miatt egy törölt user még le nem járt JWT-je s
 
 ## Külső konfiguráció
 
-A Google gomb bármely flavorban csak akkor jelenik meg, ha a jogi dokumentumok és a `VIZIT_GOOGLE_WEB_CLIENT_ID` is konfigurált. OAuth credential vagy provider nélkül a funkció `BLOCKED BY EXTERNAL ACCESS`; hamis credential nincs a repóban.
+A Google gomb a DEV flavorban akkor jelenik meg, ha a jogi dokumentumok és a `VIZIT_DEV_GOOGLE_WEB_CLIENT_ID` is konfigurált. A BETA/PROD flavorban ez a DEV credential nem aktiválja a Google-belépést; Client Secret nem kerül az appba.
+
+A CI-ben készülő DEV APK tartós aláírói SHA-1 fingerprintje: `42:97:D6:00:58:C2:7A:BB:5E:6F:87:BB:70:1A:73:47:99:BD:87:E1`. A `hu.rayworks.vizit.dev` Android OAuth kliensnek ezt a fingerprintet kell használnia.
 
 A Supabase Auth működéséhez flavoronként URL/publishable key, engedélyezett redirect URL, migráció és Edge Function deploy szükséges. A service-role kulcs kizárólag a Supabase Edge Function környezetében vagy külön engedélyezett DEV E2E folyamatban használható; mobilbuildbe és Gitbe nem kerülhet.
 

@@ -6,7 +6,14 @@ import org.junit.Test
 
 class AuthValidatorTest {
     @Test fun `valid registration passes`() {
-        assertNull(AuthValidator.registration("teszt@vizit.hu", "Titkos123", "Titkos123", true))
+        assertNull(AuthValidator.registration("Teszt Elek", "teszt@vizit.hu", "Titkos123", "Titkos123", true))
+    }
+
+    @Test fun `registration requires a name`() {
+        assertEquals(
+            "Add meg a nevedet.",
+            AuthValidator.registration("", "teszt@vizit.hu", "Titkos123", "Titkos123", true),
+        )
     }
 
     @Test fun `invalid email is rejected`() {
@@ -31,14 +38,14 @@ class AuthValidatorTest {
     @Test fun `different confirmation is rejected`() {
         assertEquals(
             "A két jelszó nem egyezik.",
-            AuthValidator.registration("teszt@vizit.hu", "Titkos123", "Titkos124", true),
+            AuthValidator.registration("Teszt Elek", "teszt@vizit.hu", "Titkos123", "Titkos124", true),
         )
     }
 
     @Test fun `missing legal acceptance is rejected with visible message`() {
         assertEquals(
             "A regisztrációhoz fogadd el az adatkezelési tájékoztatót és az ÁSZF-et.",
-            AuthValidator.registration("teszt@vizit.hu", "Titkos123", "Titkos123", false),
+            AuthValidator.registration("Teszt Elek", "teszt@vizit.hu", "Titkos123", "Titkos123", false),
         )
     }
 

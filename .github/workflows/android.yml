@@ -9,10 +9,30 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL: ${{ secrets.VIZIT_DEV_SUPABASE_URL }}
+      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY: ${{ secrets.VIZIT_DEV_SUPABASE_KEY }}
+      ORG_GRADLE_PROJECT_VIZIT_DEV_GOOGLE_WEB_CLIENT_ID: ${{ secrets.VIZIT_DEV_GOOGLE_WEB_CLIENT_ID }}
+      VIZIT_DEV_SIGNING_KEYSTORE_BASE64: ${{ secrets.VIZIT_DEV_SIGNING_KEYSTORE_BASE64 }}
+      ORG_GRADLE_PROJECT_VIZIT_DEV_SIGNING_PASSWORD: ${{ secrets.VIZIT_DEV_SIGNING_PASSWORD }}
+      ORG_GRADLE_PROJECT_VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
+      ORG_GRADLE_PROJECT_VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
+      ORG_GRADLE_PROJECT_VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
+      ORG_GRADLE_PROJECT_VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure DEV signing
+        run: |
+          test -n "$VIZIT_DEV_SIGNING_KEYSTORE_BASE64"
+          test -n "$ORG_GRADLE_PROJECT_VIZIT_DEV_SIGNING_PASSWORD"
+          test -n "$ORG_GRADLE_PROJECT_VIZIT_DEV_GOOGLE_WEB_CLIENT_ID"
+          mkdir -p "$RUNNER_TEMP/vizit-signing"
+          printf '%s' "$VIZIT_DEV_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vizit-signing/vizit-dev.jks"
+          chmod 600 "$RUNNER_TEMP/vizit-signing/vizit-dev.jks"
+          echo "ORG_GRADLE_PROJECT_VIZIT_DEV_SIGNING_STORE_FILE=$RUNNER_TEMP/vizit-signing/vizit-dev.jks" >> "$GITHUB_ENV"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -30,6 +50,7 @@ jobs:
         run: |
           node --check scripts/supabase-auth-e2e.mjs
           node scripts/check-supabase-source.mjs
+          node scripts/check-supabase-auth-config.mjs
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -42,6 +63,14 @@ jobs:
 
       - name: Build development APK
         run: ./gradlew assembleDevDebug
+
+      - name: Upload development APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vizit-dev-debug
+          path: app/build/outputs/apk/dev/debug/app-dev-debug.apk
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build beta APK
         run: ./gradlew assembleBetaDebug

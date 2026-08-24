@@ -13,6 +13,10 @@ if (environment !== 'DEV') throw new Error('The E2E suite is restricted to a DEV
 if (required('VIZIT_E2E_CONFIRM_MUTATION') !== 'CREATE_AND_DELETE_TEMP_USERS') {
   throw new Error('The DEV mutation confirmation is missing')
 }
+const scope = (process.env.VIZIT_E2E_SCOPE ?? 'FULL').trim().toUpperCase()
+if (scope !== 'CORE' && scope !== 'FULL') {
+  throw new Error('VIZIT_E2E_SCOPE must be CORE or FULL')
+}
 
 const supabaseUrl = new URL(required('VIZIT_DEV_SUPABASE_URL'))
 const projectRef = required('VIZIT_DEV_SUPABASE_PROJECT_REF')
@@ -72,7 +76,7 @@ async function request(
 
 function expectOk(result, label) {
   if (result.response.ok) return result.data
-  const code = result.data?.code ?? result.data?.error_code ?? result.data?.error
+  const code = result.data?.error_code ?? result.data?.code ?? result.data?.error
   throw new Error(`${label} failed (HTTP ${result.response.status}, code ${safeCode(code)})`)
 }
 
@@ -96,6 +100,35 @@ async function createConfirmedUser(label, userMetadata) {
   assert(typeof user?.id === 'string', `${label} user has an id`)
   createdUserIds.add(user.id)
   return user
+}
+
+async function registerConfirmedUser(label, userMetadata) {
+  const email = `vizit-e2e-${label}-${runId}@vizit.hu`
+  const result = await request('/auth/v1/signup', {
+    method: 'POST',
+    json: {
+      email,
+      password,
+      data: userMetadata,
+    },
+  })
+  const registration = expectOk(result, `register ${label} user`)
+  const user = registration?.user
+  assert(typeof user?.id === 'string', `${label} registration returns a user id`)
+  createdUserIds.add(user.id)
+
+  if (!user.email_confirmed_at) {
+    expectOk(
+      await request(`/auth/v1/admin/users/${user.id}`, {
+        method: 'PUT',
+        apiKey: serviceRoleKey,
+        token: serviceRoleKey,
+        json: { email_confirm: true },
+      }),
+      `confirm ${label} user`,
+    )
+  }
+  return { ...user, email }
 }
 
 async function signIn(email) {
@@ -186,7 +219,7 @@ const emptySnapshot = (displayName) => ({
 })
 
 try {
-  const acceptedUser = await createConfirmedUser('accepted', {
+  const acceptedUser = await registerConfirmedUser('accepted', {
     privacy_policy_version: privacyPolicyVersion,
     terms_version: termsVersion,
   })
@@ -253,35 +286,47 @@ try {
   )
   assert(Array.isArray(foreignRows) && foreignRows.length === 0, 'RLS hides another user profile')
 
+  const restoredToken = await signIn(gatedUser.email)
+  const restoredProfile = expectOk(
+    await rpc('get_my_profile_snapshot', restoredToken),
+    'profile restore after a new login',
+  )
+  assert(
+    restoredProfile?.serverVersion === 1 && restoredProfile?.snapshot?.displayName === 'VIZIT E2E',
+    'a new login restores the synced profile',
+  )
+
   await upload('profile-private', `${acceptedUser.id}/e2e/nested/private.txt`, acceptedToken)
   await upload('profile-public', `${acceptedUser.id}/e2e/nested/public.txt`, acceptedToken)
 
-  const deletion = await request('/functions/v1/delete-account', {
-    method: 'POST',
-    token: acceptedToken,
-    json: {},
-  })
-  assert(deletion.response.status === 204, 'delete-account returns 204')
-  createdUserIds.delete(acceptedUser.id)
+  if (scope === 'FULL') {
+    const deletion = await request('/functions/v1/delete-account', {
+      method: 'POST',
+      token: acceptedToken,
+      json: {},
+    })
+    assert(deletion.response.status === 204, 'delete-account returns 204')
+    createdUserIds.delete(acceptedUser.id)
 
-  const deletedUser = await request(`/auth/v1/admin/users/${acceptedUser.id}`, {
-    apiKey: serviceRoleKey,
-    token: serviceRoleKey,
-  })
-  assert(deletedUser.response.status === 404, 'the Auth user is deleted')
-
-  const remainingProfiles = expectOk(
-    await request(`/rest/v1/profiles?select=user_id&user_id=eq.${acceptedUser.id}`, {
+    const deletedUser = await request(`/auth/v1/admin/users/${acceptedUser.id}`, {
       apiKey: serviceRoleKey,
       token: serviceRoleKey,
-    }),
-    'deleted profile lookup',
-  )
-  assert(Array.isArray(remainingProfiles) && remainingProfiles.length === 0, 'profile rows cascade on deletion')
-  assert((await listStorage('profile-private', acceptedUser.id)).length === 0, 'private media is deleted')
-  assert((await listStorage('profile-public', acceptedUser.id)).length === 0, 'public media is deleted')
+    })
+    assert(deletedUser.response.status === 404, 'the Auth user is deleted')
 
-  console.log('VIZIT Supabase DEV Auth/Profile/RLS/Storage/Delete E2E: PASS')
+    const remainingProfiles = expectOk(
+      await request(`/rest/v1/profiles?select=user_id&user_id=eq.${acceptedUser.id}`, {
+        apiKey: serviceRoleKey,
+        token: serviceRoleKey,
+      }),
+      'deleted profile lookup',
+    )
+    assert(Array.isArray(remainingProfiles) && remainingProfiles.length === 0, 'profile rows cascade on deletion')
+    assert((await listStorage('profile-private', acceptedUser.id)).length === 0, 'private media is deleted')
+    assert((await listStorage('profile-public', acceptedUser.id)).length === 0, 'public media is deleted')
+  }
+
+  console.log(`VIZIT Supabase DEV ${scope} E2E: PASS`)
 } finally {
   await removeStorageFixtures().catch(() => undefined)
   for (const userId of createdUserIds) {

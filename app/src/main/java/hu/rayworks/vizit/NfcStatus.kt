@@ -14,4 +14,5 @@ enum class NfcSharePhase {
     WAITING,
     PAYLOAD_READ,
     TIMED_OUT,
+    ROUTING_FAILED,
 }
