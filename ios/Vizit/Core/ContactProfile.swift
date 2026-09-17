@@ -137,6 +137,35 @@ public enum PublicProfileLink {
     }
 }
 
+public enum ProfileSlug {
+    /// Ordered candidates for first profile creation. The first value preserves
+    /// the requested public URL. Later values are stable per account and stay
+    /// inside the 50-character public-slug contract.
+    public static func creationCandidates(requested: String, ownerID: UUID) -> [String] {
+        let ownerToken = ownerID.uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+        let requested = requested.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let primary = requested.isEmpty ? "vizit-\(ownerToken.prefix(12))" : requested
+        let readableFallback = requested.isEmpty
+            ? "vizit-\(ownerToken)"
+            : "\(requested.prefix(40))-\(ownerToken.prefix(8))"
+        let ownerFallback = "vizit-\(ownerToken)"
+
+        var seen = Set<String>()
+        return [primary, readableFallback, ownerFallback].filter { seen.insert($0).inserted }
+    }
+}
+
+public enum ProfileSyncPolicy {
+    /// A locally reserved profile ID with no timestamp is a recoverable first
+    /// upload (the insert may have succeeded before the connection dropped).
+    /// A new device with no matching ID cannot overwrite an existing profile.
+    public static func mayUploadPending(localProfileID: UUID?, localUpdatedAt: String?,
+                                        remoteProfileID: UUID, remoteUpdatedAt: String) -> Bool {
+        guard localProfileID == remoteProfileID else { return false }
+        return localUpdatedAt == nil || localUpdatedAt == remoteUpdatedAt
+    }
+}
+
 public enum SafeLink {
     /// Scanned links are never opened automatically. The UI asks first.
     public static func https(_ text: String) -> URL? {

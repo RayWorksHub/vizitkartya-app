@@ -66,4 +66,10 @@ final class NativeIntegrationTests: XCTestCase {
         try store.reset()
         XCTAssertEqual(try store.load(), ProfileSyncMetadata())
     }
+
+    func testOnlyDatabaseUniqueViolationIsRetryableAsSlugCollision() {
+        XCTAssertTrue(CloudError.server(status: 409, code: "23505").isUniqueConstraintViolation)
+        XCTAssertFalse(CloudError.server(status: 409, code: "PGRST116").isUniqueConstraintViolation)
+        XCTAssertFalse(CloudError.server(status: 500, code: "23505").isUniqueConstraintViolation)
+    }
 }

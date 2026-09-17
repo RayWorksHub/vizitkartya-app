@@ -34,6 +34,7 @@ private struct RemoteLink: Decodable {
 }
 
 private struct ProfileWrite: Encodable {
+    let id: UUID?
     let ownerID: UUID?
     let slug: String
     let displayName: String
@@ -46,7 +47,7 @@ private struct ProfileWrite: Encodable {
     let isPublic: Bool
 
     enum CodingKeys: String, CodingKey {
-        case slug, phone, website, address, company
+        case id, slug, phone, website, address, company
         case ownerID = "owner_id"
         case displayName = "display_name"
         case jobTitle = "job_title"
@@ -68,6 +69,10 @@ private struct LinkWrite: Encodable {
         case profileID = "profile_id"
         case sortOrder = "sort_order"
     }
+}
+
+private struct PostgRESTErrorPayload: Decodable {
+    let code: String?
 }
 
 final class CloudService: @unchecked Sendable {
@@ -234,20 +239,32 @@ final class CloudService: @unchecked Sendable {
         return (remote, profile)
     }
 
-    func createProfile(ownerID: UUID, profile: ContactProfile) async throws -> RemoteProfile {
-        let slug = profile.publicSlug.isEmpty ? "vizit-\(ownerID.uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(12))" : profile.publicSlug
-        let payload = write(profile, ownerID: ownerID, slug: String(slug))
+    func createProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile) async throws -> RemoteProfile {
+        let candidates = ProfileSlug.creationCandidates(requested: profile.publicSlug, ownerID: ownerID)
+        for (index, slug) in candidates.enumerated() {
+            do {
+                return try await insertProfile(ownerID: ownerID, profileID: profileID,
+                                               profile: profile, slug: slug)
+            } catch let error as CloudError {
+                guard error.isUniqueConstraintViolation, index < candidates.count - 1 else { throw error }
+            }
+        }
+        throw CloudError.emptyResponse
+    }
+
+    private func insertProfile(ownerID: UUID, profileID: UUID,
+                               profile: ContactProfile, slug: String) async throws -> RemoteProfile {
+        let payload = write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
             query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at")],
             body: payload, prefer: "return=representation")
         guard let remote = rows.first else { throw CloudError.emptyResponse }
-        try await updateLinkedIn(profileID: remote.id, value: profile.linkedIn)
         return remote
     }
 
     func updateProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile,
                        expectedUpdatedAt: String) async throws -> RemoteProfile? {
-        let payload = write(profile, ownerID: nil, slug: profile.publicSlug)
+        let payload = write(profile, profileID: nil, ownerID: nil, slug: profile.publicSlug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "PATCH", query: [
             URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
@@ -255,19 +272,18 @@ final class CloudService: @unchecked Sendable {
             URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at")
         ], body: payload, prefer: "return=representation")
         guard let remote = rows.first else { return nil }
-        try await updateLinkedIn(profileID: profileID, value: profile.linkedIn)
         return remote
     }
 
-    private func write(_ profile: ContactProfile, ownerID: UUID?, slug: String) -> ProfileWrite {
+    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String) -> ProfileWrite {
         let p = profile.normalized
-        return ProfileWrite(ownerID: ownerID, slug: slug, displayName: p.displayName,
+        return ProfileWrite(id: profileID, ownerID: ownerID, slug: slug, displayName: p.displayName,
                             jobTitle: p.jobTitle, company: p.company, publicEmail: p.email,
                             phone: p.phone, website: p.website, address: p.address,
                             isPublic: p.isPublic)
     }
 
-    private func updateLinkedIn(profileID: UUID, value: String) async throws {
+    func syncLinkedIn(profileID: UUID, value: String) async throws {
         let baseQuery = [
             URLQueryItem(name: "profile_id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "platform", value: "eq.linkedin")
@@ -311,7 +327,9 @@ final class CloudService: @unchecked Sendable {
         let (data, response) = try await http.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
               (200..<300).contains(httpResponse.statusCode) else {
-            throw CloudError.server((response as? HTTPURLResponse)?.statusCode ?? 0)
+            let payload = try? JSONDecoder().decode(PostgRESTErrorPayload.self, from: data)
+            throw CloudError.server(status: (response as? HTTPURLResponse)?.statusCode ?? 0,
+                                    code: payload?.code)
         }
         if Response.self == EmptyResponse.self, data.isEmpty {
             return EmptyResponse() as! Response
@@ -331,7 +349,12 @@ private struct AnyEncodable: Encodable {
 enum CloudError: LocalizedError {
     case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled, providerUnavailable
     case passwordResetCooldown(Int)
-    case server(Int)
+    case server(status: Int, code: String?)
+
+    var isUniqueConstraintViolation: Bool {
+        guard case .server(let status, let code) = self else { return false }
+        return status == 409 && code == "23505"
+    }
 
     var errorDescription: String? {
         switch self {
@@ -342,7 +365,11 @@ enum CloudError: LocalizedError {
         case .providerUnavailable: return "A Google-bejelentkezés ezen a biztonságos builden nincs engedélyezve."
         case .passwordResetCooldown(let seconds):
             return "Már kértél visszaállító levelet. Várj még \(seconds) másodpercet, vagy nyisd meg a legutóbbi levelet."
-        case .server(let status): return "A VIZIT kiszolgáló elutasította a kérést (HTTP \(status))."
+        case .server(let status, let code):
+            if status == 409, code == "23505" {
+                return "A választott nyilvános profilazonosító már foglalt. Válassz másikat."
+            }
+            return "A VIZIT kiszolgáló elutasította a kérést (HTTP \(status))."
         }
     }
 }

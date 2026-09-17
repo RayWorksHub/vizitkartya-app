@@ -171,6 +171,38 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertNil(PublicProfileLink.make(baseURL: URL(string: "http://vizit.hu/p")!, slug: "anna-01"))
     }
 
+    func testProfileCreationHasStableValidCollisionFallbacks() {
+        let owner = UUID(uuidString: "E4B43DA4-4717-4E69-B945-7BF454CA9E34")!
+        let values = ProfileSlug.creationCandidates(requested: "csukardi-rajmund", ownerID: owner)
+        XCTAssertEqual(values, [
+            "csukardi-rajmund",
+            "csukardi-rajmund-e4b43da4",
+            "vizit-e4b43da447174e69b9457bf454ca9e34"
+        ])
+        XCTAssertTrue(values.allSatisfy { PublicProfileLink.isValidSlug($0) })
+        XCTAssertTrue(values.allSatisfy { $0.count <= 50 })
+    }
+
+    func testInterruptedFirstUploadCanRecoverWithoutWeakeningEstablishedConflictCheck() {
+        let remoteID = UUID()
+        XCTAssertFalse(ProfileSyncPolicy.mayUploadPending(
+            localProfileID: nil, localUpdatedAt: nil,
+            remoteProfileID: remoteID, remoteUpdatedAt: "2026-09-17T17:00:00Z"
+        ))
+        XCTAssertTrue(ProfileSyncPolicy.mayUploadPending(
+            localProfileID: remoteID, localUpdatedAt: nil,
+            remoteProfileID: remoteID, remoteUpdatedAt: "2026-09-17T17:00:00Z"
+        ))
+        XCTAssertTrue(ProfileSyncPolicy.mayUploadPending(
+            localProfileID: remoteID, localUpdatedAt: "2026-09-17T17:00:00Z",
+            remoteProfileID: remoteID, remoteUpdatedAt: "2026-09-17T17:00:00Z"
+        ))
+        XCTAssertFalse(ProfileSyncPolicy.mayUploadPending(
+            localProfileID: remoteID, localUpdatedAt: "2026-09-17T16:00:00Z",
+            remoteProfileID: remoteID, remoteUpdatedAt: "2026-09-17T17:00:00Z"
+        ))
+    }
+
     func testAuthValidationMatchesMobilePolicy() {
         XCTAssertNil(AuthValidation.registration(name: "Teszt Elek", email: "teszt@vizit.hu",
                                                   password: "Titkos123", confirmation: "Titkos123",
