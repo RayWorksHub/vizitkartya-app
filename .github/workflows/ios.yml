@@ -1,0 +1,86 @@
+name: iOS native preview
+on:
+  push:
+    branches: [feature/ios-native-preview]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    branches: [develop]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain and portable core tests
+        run: |
+          xcodebuild -version
+          swift test --package-path ios
+      - name: Select available iPhone simulator
+        run: |
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/simulators.json"
+          python3 - <<'PY'
+          import json, os
+          with open(os.environ['RUNNER_TEMP'] + '/simulators.json') as f:
+              runtimes = json.load(f)['devices']
+          devices = [d for r, ds in sorted(runtimes.items(), reverse=True) if '.iOS-' in r for d in ds if d.get('isAvailable')]
+          match = next((d for d in devices if d['name'].startswith('iPhone')), None)
+          if match is None:
+              raise SystemExit('No available iPhone simulator')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('IPHONE_ID=' + match['udid'] + '\n')
+          print('iPhone: ' + match['name'])
+          PY
+      - name: iPhone UI and native tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Debug \
+            -destination "platform=iOS Simulator,id=$IPHONE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/vizit" \
+            -resultBundlePath "$RUNNER_TEMP/VIZIT-iPhone.xcresult" \
+            -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test \
+            | tee "$RUNNER_TEMP/VIZIT-tests.log"
+      - name: Build unsigned iPhone app
+        run: |
+          set -o pipefail
+          rm -rf "$RUNNER_TEMP/vizit-device"
+          xcodebuild -project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/vizit-device" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
+            build | tee "$RUNNER_TEMP/VIZIT-device-build.log"
+      - name: Package unsigned IPA for Sideloadly
+        run: |
+          APP="$RUNNER_TEMP/vizit-device/Build/Products/Release-iphoneos/VIZIT.app"
+          test -d "$APP"
+          rm -rf "$RUNNER_TEMP/ipa"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/VIZIT.app"
+          cd "$RUNNER_TEMP/ipa"
+          /usr/bin/zip -qry "$RUNNER_TEMP/VIZIT-unsigned.ipa" Payload
+          /usr/bin/unzip -l "$RUNNER_TEMP/VIZIT-unsigned.ipa" | grep -F 'Payload/VIZIT.app/VIZIT'
+          file Payload/VIZIT.app/VIZIT | tee "$RUNNER_TEMP/VIZIT-ipa-info.log"
+      - name: Upload VIZIT unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: VIZIT-unsigned-IPA
+          retention-days: 30
+          if-no-files-found: error
+          path: ${{ runner.temp }}/VIZIT-unsigned.ipa
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VIZIT-iOS-test-evidence
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/VIZIT-*.log
+            ${{ runner.temp }}/VIZIT-*.xcresult
