@@ -143,50 +143,27 @@ jobs:
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
           PY
 
-      - name: Capture iPhone visual evidence
+      - name: Export tested iPhone visual evidence
         run: |
           set -euo pipefail
-          app="$RUNNER_TEMP/vizit/Build/Products/Debug-iphonesimulator/VIZIT.app"
-          test -d "$app"
-          xcrun simctl shutdown "$IPHONE_ID" 2>/dev/null || true
-          xcrun simctl boot "$IPHONE_ID"
-          python3 - "$IPHONE_ID" <<'PY'
-          import json, subprocess, sys, time
+          result="$RUNNER_TEMP/VIZIT-iPhone.xcresult"
+          attachments="$RUNNER_TEMP/VIZIT-iPhone-attachments"
+          test -d "$result"
+          mkdir -p "$attachments"
+          xcrun xcresulttool export attachments --path "$result" --output-path "$attachments"
+          python3 - "$attachments" "$RUNNER_TEMP" <<'PY'
+          from pathlib import Path
+          import shutil, sys
 
-          device_id = sys.argv[1]
-          for _ in range(90):
-              try:
-                  result = subprocess.run(
-                      ['xcrun', 'simctl', 'list', 'devices', '--json'],
-                      check=True, capture_output=True, text=True, timeout=10,
-                  )
-                  devices = json.loads(result.stdout)['devices']
-                  device = next((item for items in devices.values() for item in items
-                                 if item.get('udid') == device_id), None)
-                  if device and device.get('state') == 'Booted':
-                      print('iPhone simulator reached Booted state')
-                      break
-              except (subprocess.SubprocessError, json.JSONDecodeError):
-                  pass
-              time.sleep(1)
-          else:
-              raise SystemExit('iPhone simulator did not boot within 90 seconds')
+          screenshots = sorted(Path(sys.argv[1]).rglob('*.png'))
+          if len(screenshots) < 2:
+              raise SystemExit(f'Expected at least 2 tested UI screenshots, found {len(screenshots)}')
+          for index, source in enumerate(screenshots, start=1):
+              target = Path(sys.argv[2]) / f'VIZIT-tested-iPhone-{index:02d}.png'
+              shutil.copy2(source, target)
+              print(target.name)
           PY
-          xcrun simctl terminate "$IPHONE_ID" hu.rayworks.vizit.ios.dev 2>/dev/null || true
-          xcrun simctl ui "$IPHONE_ID" appearance dark
-          launched=0
-          for _ in {1..30}; do
-            if xcrun simctl launch "$IPHONE_ID" hu.rayworks.vizit.ios.dev; then launched=1; break; fi
-            sleep 2
-          done
-          test "$launched" = 1
-          sleep 3
-          xcrun simctl io "$IPHONE_ID" screenshot "$RUNNER_TEMP/VIZIT-iPhone-auth-dark.png"
-          xcrun simctl terminate "$IPHONE_ID" hu.rayworks.vizit.ios.dev
-          xcrun simctl launch "$IPHONE_ID" hu.rayworks.vizit.ios.dev --ui-testing --reset-test-profile
-          sleep 3
-          xcrun simctl io "$IPHONE_ID" screenshot "$RUNNER_TEMP/VIZIT-iPhone-home-dark.png"
-          echo 'iPhone visual evidence: PASS'
+          echo 'Tested iPhone visual evidence: PASS'
 
       - name: iPad launch smoke check
         run: |
