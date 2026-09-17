@@ -148,11 +148,38 @@ jobs:
           set -euo pipefail
           app="$RUNNER_TEMP/vizit/Build/Products/Debug-iphonesimulator/VIZIT.app"
           test -d "$app"
-          xcrun simctl boot "$IPHONE_ID" 2>/dev/null || true
-          xcrun simctl bootstatus "$IPHONE_ID" -b
+          xcrun simctl shutdown "$IPHONE_ID" 2>/dev/null || true
+          xcrun simctl boot "$IPHONE_ID"
+          python3 - "$IPHONE_ID" <<'PY'
+          import json, subprocess, sys, time
+
+          device_id = sys.argv[1]
+          for _ in range(90):
+              try:
+                  result = subprocess.run(
+                      ['xcrun', 'simctl', 'list', 'devices', '--json'],
+                      check=True, capture_output=True, text=True, timeout=10,
+                  )
+                  devices = json.loads(result.stdout)['devices']
+                  device = next((item for items in devices.values() for item in items
+                                 if item.get('udid') == device_id), None)
+                  if device and device.get('state') == 'Booted':
+                      print('iPhone simulator reached Booted state')
+                      break
+              except (subprocess.SubprocessError, json.JSONDecodeError):
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit('iPhone simulator did not boot within 90 seconds')
+          PY
           xcrun simctl terminate "$IPHONE_ID" hu.rayworks.vizit.ios.dev 2>/dev/null || true
           xcrun simctl ui "$IPHONE_ID" appearance dark
-          xcrun simctl launch "$IPHONE_ID" hu.rayworks.vizit.ios.dev
+          launched=0
+          for _ in {1..30}; do
+            if xcrun simctl launch "$IPHONE_ID" hu.rayworks.vizit.ios.dev; then launched=1; break; fi
+            sleep 2
+          done
+          test "$launched" = 1
           sleep 3
           xcrun simctl io "$IPHONE_ID" screenshot "$RUNNER_TEMP/VIZIT-iPhone-auth-dark.png"
           xcrun simctl terminate "$IPHONE_ID" hu.rayworks.vizit.ios.dev
