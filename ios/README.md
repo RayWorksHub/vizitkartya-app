@@ -1,4 +1,4 @@
-# VIZIT iOS DEV 0.2
+# VIZIT iOS DEV 0.3
 
 Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az aktív VIZIT Supabase-projekthez csatlakozik, az Androidon elérhető névjegyfolyamatokat az iOS platformbiztonsági korlátai között valósítja meg.
 
