@@ -104,7 +104,7 @@ public enum AuthFailureMessage {
         case "email_not_confirmed":
             return "Az e-mail-cím még nincs megerősítve. Nyisd meg a legutóbbi megerősítő levelet."
         case "over_email_send_rate_limit", "over_request_rate_limit":
-            return "Túl gyorsan kértél új levelet. Várj legalább 15 másodpercet, majd próbáld újra."
+            return "Túl gyorsan kértél új levelet. Várj legalább 60 másodpercet, majd próbáld újra."
         case "flow_state_not_found", "flow_state_expired", "otp_expired":
             return "A hivatkozás lejárt vagy már felhasználták. Kérj új jelszó-visszaállító levelet."
         case "weak_password":
@@ -120,7 +120,7 @@ public enum AuthFailureMessage {
         }
 
         if operation == .passwordResetRequest, httpStatus == 429 {
-            return "Túl gyorsan kértél új levelet. Várj legalább 15 másodpercet, majd próbáld újra."
+            return "Túl gyorsan kértél új levelet. Várj legalább 60 másodpercet, majd próbáld újra."
         }
         if operation == .callback,
            detail.contains("expired") || detail.contains("invalid") || detail.contains("no code") {
@@ -131,7 +131,7 @@ public enum AuthFailureMessage {
 }
 
 public enum PasswordResetPolicy {
-    public static let cooldown: TimeInterval = 15
+    public static let cooldown: TimeInterval = 60
 
     public static func remainingSeconds(
         since lastRequest: Date?,

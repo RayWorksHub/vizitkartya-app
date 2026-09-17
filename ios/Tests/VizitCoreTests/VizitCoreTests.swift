@@ -196,7 +196,7 @@ final class VizitCoreTests: XCTestCase {
         )
         XCTAssertTrue(
             AuthFailureMessage.text(operation: .passwordResetRequest, errorCode: nil,
-                                    httpStatus: 429, diagnostic: nil)?.contains("15 másodpercet") == true
+                                    httpStatus: 429, diagnostic: nil)?.contains("60 másodpercet") == true
         )
         XCTAssertNil(AuthFailureMessage.text(operation: .login, errorCode: "unexpected_failure",
                                               httpStatus: 500, diagnostic: "server error"))
@@ -205,9 +205,9 @@ final class VizitCoreTests: XCTestCase {
     func testPasswordResetCooldownCannotGoNegative() {
         let request = Date(timeIntervalSince1970: 100)
         XCTAssertEqual(PasswordResetPolicy.remainingSeconds(since: request,
-                                                             now: Date(timeIntervalSince1970: 110)), 5)
+                                                             now: Date(timeIntervalSince1970: 110)), 50)
         XCTAssertEqual(PasswordResetPolicy.remainingSeconds(since: request,
-                                                             now: Date(timeIntervalSince1970: 116)), 0)
+                                                             now: Date(timeIntervalSince1970: 161)), 0)
         XCTAssertEqual(PasswordResetPolicy.remainingSeconds(since: nil,
                                                              now: Date(timeIntervalSince1970: 110)), 0)
     }
