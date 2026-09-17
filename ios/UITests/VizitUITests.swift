@@ -3,6 +3,19 @@ import XCTest
 final class VizitUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        if app.keyboards.firstMatch.exists {
+            app.swipeDown(velocity: .slow)
+        }
+        for _ in 0..<6 where !element.isHittable {
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(element.waitForExistence(timeout: 2))
+        XCTAssertTrue(element.isHittable)
+    }
+
     private func launchClean() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--reset-test-profile"]
@@ -45,7 +58,7 @@ final class VizitUITests: XCTestCase {
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap(); name.typeText("Teszt Elek")
         let phone = app.textFields["profile.phone"]
-        if !phone.isHittable { app.swipeUp() }
+        reveal(phone, in: app)
         phone.tap(); phone.typeText("06201234567")
         app.buttons["profile.save"].tap()
         XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 5))
