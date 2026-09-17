@@ -148,6 +148,8 @@ jobs:
           set -euo pipefail
           app="$RUNNER_TEMP/vizit/Build/Products/Debug-iphonesimulator/VIZIT.app"
           test -d "$app"
+          xcrun simctl boot "$IPHONE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$IPHONE_ID" -b
           xcrun simctl terminate "$IPHONE_ID" hu.rayworks.vizit.ios.dev 2>/dev/null || true
           xcrun simctl ui "$IPHONE_ID" appearance dark
           xcrun simctl launch "$IPHONE_ID" hu.rayworks.vizit.ios.dev
