@@ -319,6 +319,16 @@ final class AppStore: ObservableObject {
                 return
             }
 
+            // Upgrade the previous local-only photo only when the exact same
+            // cloud revision is still current. Existing conflict protection stays.
+            if !metadata.pendingUpload, let (remote, _) = remoteBundle,
+               remote.avatarURL == nil, !localProfile.photoSyncInitialized,
+               !localProfile.photoBase64.isEmpty,
+               metadata.profileID == remote.id, metadata.remoteUpdatedAt == remote.updatedAt {
+                metadata.pendingUpload = true
+                try metadataStore.save(metadata)
+            }
+
             if metadata.pendingUpload {
                 if let remoteBundle {
                     guard ProfileSyncPolicy.mayUploadPending(
@@ -388,6 +398,10 @@ final class AppStore: ObservableObject {
                     syncStatus = .pending
                     return
                 }
+                var photoSynced = profile
+                photoSynced.photoSyncInitialized = true
+                try storage.save(photoSynced)
+                profile = photoSynced
                 metadata.pendingUpload = false
                 metadata.conflict = false
                 try metadataStore.save(metadata)

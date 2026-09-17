@@ -1,5 +1,6 @@
 import XCTest
 import Contacts
+import UIKit
 import CoreImage
 @testable import VIZIT
 
@@ -65,6 +66,21 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(try store.load(), expected)
         try store.reset()
         XCTAssertEqual(try store.load(), ProfileSyncMetadata())
+    }
+
+    func testAppleContactsImportsEmbeddedProfilePhoto() throws {
+        var p = profile()
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 24)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 32, height: 24))
+        }
+        let jpeg = try XCTUnwrap(image.jpegData(compressionQuality: 0.8))
+        p.photoBase64 = jpeg.base64EncodedString()
+        let contacts = try CNContactVCardSerialization.contacts(with: Data(VCard.encode(p, includePhoto: true).utf8))
+        XCTAssertEqual(contacts.count, 1)
+        let imported = try XCTUnwrap(contacts.first?.imageData)
+        XCTAssertNotNil(UIImage(data: imported))
+        XCTAssertEqual(contacts.first?.givenName, "Elek")
     }
 
     func testOnlyDatabaseUniqueViolationIsRetryableAsSlugCollision() {
