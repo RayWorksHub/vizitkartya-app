@@ -36,6 +36,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select App Store-compatible Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode_app=/Applications/Xcode_26.3.app
+          test -d "$xcode_app" || { echo "Required Xcode 26.3 is not installed"; exit 1; }
+          sudo xcode-select -s "$xcode_app/Contents/Developer"
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
+          test "${sdk_version%%.*}" -ge 26 || { echo "iOS 26 SDK or later is required"; exit 1; }
+          echo "iPhoneOS SDK $sdk_version: PASS"
+
       - name: Validate build configuration and live Auth policy
         shell: bash
         run: |
@@ -282,6 +294,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select App Store-compatible Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode_app=/Applications/Xcode_26.3.app
+          test -d "$xcode_app" || { echo "Required Xcode 26.3 is not installed"; exit 1; }
+          sudo xcode-select -s "$xcode_app/Contents/Developer"
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
+          test "${sdk_version%%.*}" -ge 26 || { echo "iOS 26 SDK or later is required"; exit 1; }
+          echo "iPhoneOS SDK $sdk_version: PASS"
 
       - name: Validate TestFlight secrets
         shell: bash
