@@ -143,7 +143,8 @@ final class AppStore: ObservableObject {
 
     func login(email: String, password: String) async {
         if let issue = AuthValidation.login(email: email, password: password) { message = issue; return }
-        await performAuth(defaultError: "A bejelentkezés nem sikerült. Ellenőrizd az adatokat és a kapcsolatot.") {
+        await performAuth(operation: .login,
+                          defaultError: "A bejelentkezés nem sikerült. Ellenőrizd a kapcsolatot, majd próbáld újra.") {
             guard let cloud = self.cloud else { return }
             let session = try await cloud.login(email: email, password: password)
             try self.configureStorage(for: session.user.id)
@@ -160,16 +161,18 @@ final class AppStore: ObservableObject {
             message = issue
             return
         }
-        await performAuth(defaultError: "A regisztráció nem sikerült. Próbáld újra később.") {
+        await performAuth(operation: .registration,
+                          defaultError: "A regisztráció nem sikerült. Próbáld újra később.") {
             guard let cloud = self.cloud else { return }
             try await cloud.register(name: name, email: email, password: password)
             self.authStatus = .verificationSent(email.trimmingCharacters(in: .whitespacesAndNewlines))
-            self.message = "Megerősítő e-mailt küldtünk. Bejelentkezés előtt nyisd meg a benne lévő hivatkozást."
+            self.message = "Ha ez új e-mail-cím, elküldtük a megerősítő levelet. Ha már van fiókod, lépj be vagy kérj új jelszót."
         }
     }
 
     func googleLogin() async {
-        await performAuth(defaultError: "A Google-bejelentkezés megszakadt vagy nem sikerült.") {
+        await performAuth(operation: .login,
+                          defaultError: "A Google-bejelentkezés megszakadt vagy nem sikerült.") {
             guard let cloud = self.cloud else { return }
             let session = try await cloud.googleLogin()
             try self.configureStorage(for: session.user.id)
@@ -179,16 +182,18 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func requestPasswordReset(email: String) async {
-        if let issue = AuthValidation.email(email) { message = issue; return }
-        await performAuth(defaultError: "A jelszó-visszaállító e-mail küldése nem sikerült.") {
+    @discardableResult
+    func requestPasswordReset(email: String) async -> Bool {
+        if let issue = AuthValidation.email(email) { message = issue; return false }
+        return await performAuth(operation: .passwordResetRequest,
+                                 defaultError: "A jelszó-visszaállító e-mail küldése nem sikerült. Ellenőrizd a kapcsolatot.") {
             try await self.cloud?.requestPasswordReset(email: email)
-            self.message = "Ha a címhez tartozik fiók, elküldtük a jelszó-visszaállító e-mailt."
         }
     }
 
     func handleCallback(_ url: URL) async {
-        await performAuth(defaultError: "A bejelentkezési hivatkozás lejárt vagy érvénytelen.") {
+        await performAuth(operation: .callback,
+                          defaultError: "A bejelentkezési hivatkozás lejárt vagy érvénytelen. Kérj új hivatkozást.") {
             guard let cloud = self.cloud else { return }
             let recovery = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
                 .contains(where: { $0.name == "flow" && $0.value == "recovery" }) == true
@@ -202,7 +207,8 @@ final class AppStore: ObservableObject {
 
     func changePassword(_ password: String, confirmation: String) async {
         if let issue = AuthValidation.passwordChange(password, confirmation: confirmation) { message = issue; return }
-        await performAuth(defaultError: "A jelszó módosítása nem sikerült.") {
+        await performAuth(operation: .passwordChange,
+                          defaultError: "A jelszó módosítása nem sikerült.") {
             try await self.cloud?.changePassword(password)
             self.authStatus = .authenticated
             self.message = "A jelszavadat biztonságosan módosítottuk."
@@ -347,15 +353,40 @@ final class AppStore: ObservableObject {
         syncStatus = .localOnly
     }
 
-    private func performAuth(defaultError: String, operation: () async throws -> Void) async {
-        guard !busy else { return }
+    @discardableResult
+    private func performAuth(
+        operation authOperation: AuthOperation? = nil,
+        defaultError: String,
+        work: () async throws -> Void
+    ) async -> Bool {
+        guard !busy else { return false }
         busy = true
         message = nil
         defer { busy = false }
-        do { try await operation() }
-        catch let error as CloudError { message = error.localizedDescription }
-        catch let error as ConfigurationError { message = error.localizedDescription }
-        catch { message = defaultError }
+        do {
+            try await work()
+            return true
+        } catch let error as CloudError {
+            message = error.localizedDescription
+        } catch let error as ConfigurationError {
+            message = error.localizedDescription
+        } catch let error as AuthError {
+            let status: Int?
+            if case .api(_, _, _, let response) = error {
+                status = response.statusCode
+            } else {
+                status = nil
+            }
+            message = authOperation.flatMap {
+                AuthFailureMessage.text(operation: $0,
+                                        errorCode: error.errorCode.rawValue,
+                                        httpStatus: status,
+                                        diagnostic: error.message)
+            } ?? defaultError
+        } catch {
+            message = defaultError
+        }
+        return false
     }
 }
 

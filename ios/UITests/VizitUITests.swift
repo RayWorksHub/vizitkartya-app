@@ -51,6 +51,17 @@ final class VizitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["auth.submit"].exists)
     }
 
+    func testPasswordRecoveryIsVisibleAndKeepsTheCurrentBuildIdentifiable() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["auth.forgotPassword"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["auth.version"].exists)
+        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("DEV 0.4.0"))
+        app.buttons["auth.forgotPassword"].tap()
+        XCTAssertTrue(app.textFields["auth.reset.email"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
+    }
+
     func testCreatePersistAndShowQR() {
         let app = launchClean()
         let edit = app.buttons["card.edit"]

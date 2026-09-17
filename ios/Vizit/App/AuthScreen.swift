@@ -15,6 +15,7 @@ struct AuthScreen: View {
     @State private var confirmation = ""
     @State private var legalAccepted = false
     @State private var forgotPassword = false
+    @State private var passwordResetSent = false
     @State private var showPassword = false
     @State private var showConfirmation = false
 
@@ -58,6 +59,10 @@ struct AuthScreen: View {
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.white.opacity(0.66))
                             .multilineTextAlignment(.center)
+                        Text(buildVersionLabel)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.46))
+                            .accessibilityIdentifier("auth.version")
                             .padding(.bottom, 24)
                     }
                     .padding(.horizontal, 20)
@@ -82,10 +87,10 @@ struct AuthScreen: View {
                         .font(.title3)
                         .foregroundStyle(Brand.cyan)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Nézd meg az e-mailjeidet")
+                        Text("Ellenőrizd az e-mailjeidet")
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.white)
-                        Text("Megerősítő linket küldtünk ide: \(address)")
+                        Text("Ha ez új cím, megerősítő linket küldtünk ide: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót.")
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.72))
                     }
@@ -182,10 +187,14 @@ struct AuthScreen: View {
                     .disabled(store.busy)
                 }
 
-                Button("Elfelejtettem a jelszavam") { forgotPassword = true }
+                Button("Elfelejtettem a jelszavam") {
+                    passwordResetSent = false
+                    forgotPassword = true
+                }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Brand.cyanLight)
                     .disabled(store.busy)
+                    .accessibilityIdentifier("auth.forgotPassword")
             }
         }
         .padding(20)
@@ -327,6 +336,12 @@ struct AuthScreen: View {
         return nil
     }
 
+    private var buildVersionLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "DEV \(version) (\(build))"
+    }
+
     private func submit() {
         Task {
             if mode == .login {
@@ -354,19 +369,46 @@ struct AuthScreen: View {
                     Text("Add meg az e-mail-címed, és elküldjük a biztonságos jelszó-visszaállító hivatkozást.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    TextField("E-mail-cím", text: $email)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textFieldStyle(.roundedBorder)
-                        .frame(minHeight: 52)
-                    Button {
-                        forgotPassword = false
-                        Task { await store.requestPasswordReset(email: email) }
-                    } label: {
-                        VizitPrimaryButtonLabel(title: "E-mail küldése", systemImage: "paperplane.fill")
+                    if passwordResetSent {
+                        VStack(spacing: 10) {
+                            Label("A kérés sikeresen elment", systemImage: "checkmark.circle.fill")
+                                .font(.headline)
+                                .foregroundStyle(.green)
+                            Text("Ha a címhez tartozik fiók, hamarosan megérkezik a levél. Mindig csak a legutóbb kért hivatkozást nyisd meg.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .accessibilityIdentifier("auth.reset.sent")
+                        Button("Kész") { forgotPassword = false }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("auth.reset.done")
+                    } else {
+                        TextField("E-mail-cím", text: $email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.send)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minHeight: 52)
+                            .accessibilityIdentifier("auth.reset.email")
+                        Button {
+                            Task {
+                                if await store.requestPasswordReset(email: email) {
+                                    passwordResetSent = true
+                                }
+                            }
+                        } label: {
+                            VizitPrimaryButtonLabel(title: "E-mail küldése",
+                                                    systemImage: "paperplane.fill",
+                                                    busy: store.busy)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(store.busy)
+                        .opacity(store.busy ? 0.72 : 1)
+                        .accessibilityIdentifier("auth.reset.submit")
                     }
-                    .buttonStyle(.plain)
                     Spacer()
                 }
                 .padding(24)

@@ -71,9 +71,14 @@ private struct LinkWrite: Encodable {
 }
 
 final class CloudService: @unchecked Sendable {
+    private static let authStorageService = "hu.rayworks.vizit.ios.session"
+    private static let authStorageKey = "vizit-auth-session"
+    private static let passwordResetRequestedAtKey = "vizit-password-reset-requested-at"
+
     let configuration: AppConfiguration
     let client: SupabaseClient
     private let http: URLSession
+    private let authStorage: SecureSessionStorage
 
     init(configuration: AppConfiguration) {
         self.configuration = configuration
@@ -82,18 +87,20 @@ final class CloudService: @unchecked Sendable {
         sessionConfiguration.timeoutIntervalForRequest = 30
         sessionConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
         http = URLSession(configuration: sessionConfiguration)
-        let storage = SecureSessionStorage(service: "hu.rayworks.vizit.ios.session")
+        let storage = SecureSessionStorage(service: Self.authStorageService)
+        authStorage = storage
         let auth = SupabaseClientOptions.AuthOptions(
             storage: storage,
             redirectToURL: configuration.callbackURL,
-            storageKey: "vizit-auth-session",
+            storageKey: Self.authStorageKey,
             flowType: .pkce,
             autoRefreshToken: true,
             emitLocalSessionAsInitialSession: true
         )
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let options = SupabaseClientOptions(
             auth: auth,
-            global: .init(headers: ["X-Client-Info": "vizit-ios/0.2.0"], session: http)
+            global: .init(headers: ["X-Client-Info": "vizit-ios/\(version)"], session: http)
         )
         client = SupabaseClient(supabaseURL: configuration.supabaseURL,
                                 supabaseKey: configuration.publishableKey,
@@ -138,19 +145,59 @@ final class CloudService: @unchecked Sendable {
     func handleCallback(_ url: URL) async throws -> Session {
         guard AuthCallback.accepts(url, expected: configuration.callbackURL), url.absoluteString.utf8.count <= 8_192
         else { throw CloudError.invalidCallback }
-        return try await client.auth.session(from: url)
+        let session = try await client.auth.session(from: url)
+        if isPasswordRecovery(url) {
+            try? authStorage.remove(key: Self.passwordResetRequestedAtKey)
+        }
+        return session
     }
 
     func requestPasswordReset(email: String) async throws {
+        let remaining = PasswordResetPolicy.remainingSeconds(since: lastPasswordResetRequest())
+        guard remaining == 0 else { throw CloudError.passwordResetCooldown(remaining) }
+
         var parts = URLComponents(url: configuration.callbackURL, resolvingAgainstBaseURL: false)
         parts?.queryItems = [URLQueryItem(name: "flow", value: "recovery")]
         guard let redirect = parts?.url else { throw CloudError.invalidCallback }
-        try await client.auth.resetPasswordForEmail(email.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                    redirectTo: redirect)
+        let verifierKey = "\(Self.authStorageKey)-code-verifier"
+        let previousVerifier = try? authStorage.retrieve(key: verifierKey)
+        do {
+            try await client.auth.resetPasswordForEmail(email.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                        redirectTo: redirect)
+            recordPasswordResetRequest()
+        } catch {
+            // Supabase prepares a new PKCE verifier before the network request.
+            // Restore the previous verifier if the request itself was rejected,
+            // otherwise an already-delivered recovery link would be invalidated.
+            if let previousVerifier {
+                try? authStorage.store(key: verifierKey, value: previousVerifier)
+            } else {
+                try? authStorage.remove(key: verifierKey)
+            }
+            throw error
+        }
     }
 
     func changePassword(_ password: String) async throws {
         _ = try await client.auth.update(user: UserAttributes(password: password))
+        try? authStorage.remove(key: Self.passwordResetRequestedAtKey)
+    }
+
+    private func isPasswordRecovery(_ url: URL) -> Bool {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+            .contains(where: { $0.name == "flow" && $0.value == "recovery" }) == true
+    }
+
+    private func lastPasswordResetRequest() -> Date? {
+        guard let data = try? authStorage.retrieve(key: Self.passwordResetRequestedAtKey),
+              let value = String(data: data, encoding: .utf8),
+              let timestamp = TimeInterval(value) else { return nil }
+        return Date(timeIntervalSince1970: timestamp)
+    }
+
+    private func recordPasswordResetRequest() {
+        let value = Data(String(Date().timeIntervalSince1970).utf8)
+        try? authStorage.store(key: Self.passwordResetRequestedAtKey, value: value)
     }
 
     func logout() async throws { try await client.auth.signOut() }
@@ -283,6 +330,7 @@ private struct AnyEncodable: Encodable {
 
 enum CloudError: LocalizedError {
     case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled, providerUnavailable
+    case passwordResetCooldown(Int)
     case server(Int)
 
     var errorDescription: String? {
@@ -292,6 +340,8 @@ enum CloudError: LocalizedError {
         case .emptyResponse: return "A kiszolgáló nem adott vissza mentett profilt."
         case .emailConfirmationDisabled: return "A kiszolgálón nincs kötelező e-mail-megerősítés. A munkamenetet biztonsági okból megszakítottuk."
         case .providerUnavailable: return "A Google-bejelentkezés ezen a biztonságos builden nincs engedélyezve."
+        case .passwordResetCooldown(let seconds):
+            return "Már kértél visszaállító levelet. Várj még \(seconds) másodpercet, vagy nyisd meg a legutóbbi levelet."
         case .server(let status): return "A VIZIT kiszolgáló elutasította a kérést (HTTP \(status))."
         }
     }

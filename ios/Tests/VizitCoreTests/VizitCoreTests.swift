@@ -177,16 +177,47 @@ final class VizitCoreTests: XCTestCase {
                                                   legalAccepted: true))
         XCTAssertNotNil(AuthValidation.registration(name: "T", email: "rossz", password: "12345678",
                                                      confirmation: "12345678", legalAccepted: false))
+        XCTAssertNotNil(AuthValidation.password("csakkisbetu1"))
+        XCTAssertNotNil(AuthValidation.password("CSAKNAGYBETU1"))
         XCTAssertNil(AuthValidation.deletionPhrase(" törlés "))
         XCTAssertNotNil(AuthValidation.deletionPhrase("delete"))
     }
 
+    func testAuthFailuresProduceActionableMessages() {
+        XCTAssertEqual(
+            AuthFailureMessage.text(operation: .login, errorCode: "invalid_credentials",
+                                    httpStatus: 400, diagnostic: "Invalid login credentials"),
+            "Hibás e-mail-cím vagy jelszó. Ha nem emlékszel a jelszóra, kérj újat."
+        )
+        XCTAssertTrue(
+            AuthFailureMessage.text(operation: .callback, errorCode: "unknown", httpStatus: 400,
+                                    diagnostic: "both auth code and code verifier should be non-empty")?
+                .contains("régebbi VIZIT-verzió") == true
+        )
+        XCTAssertTrue(
+            AuthFailureMessage.text(operation: .passwordResetRequest, errorCode: nil,
+                                    httpStatus: 429, diagnostic: nil)?.contains("15 másodpercet") == true
+        )
+        XCTAssertNil(AuthFailureMessage.text(operation: .login, errorCode: "unexpected_failure",
+                                              httpStatus: 500, diagnostic: "server error"))
+    }
+
+    func testPasswordResetCooldownCannotGoNegative() {
+        let request = Date(timeIntervalSince1970: 100)
+        XCTAssertEqual(PasswordResetPolicy.remainingSeconds(since: request,
+                                                             now: Date(timeIntervalSince1970: 110)), 5)
+        XCTAssertEqual(PasswordResetPolicy.remainingSeconds(since: request,
+                                                             now: Date(timeIntervalSince1970: 116)), 0)
+        XCTAssertEqual(PasswordResetPolicy.remainingSeconds(since: nil,
+                                                             now: Date(timeIntervalSince1970: 110)), 0)
+    }
+
     func testCallbackMustMatchExactRoute() {
-        let expected = URL(string: "vizit-dev://auth-callback")!
-        XCTAssertTrue(AuthCallback.accepts(URL(string: "vizit-dev://auth-callback?code=abc")!, expected: expected))
-        XCTAssertFalse(AuthCallback.accepts(URL(string: "vizit-dev://evil?code=abc")!, expected: expected))
-        XCTAssertFalse(AuthCallback.accepts(URL(string: "vizit-dev://auth-callback:443?code=abc")!, expected: expected))
-        XCTAssertFalse(AuthCallback.accepts(URL(string: "vizit-dev://auth-callback/other?code=abc")!, expected: expected))
+        let expected = URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback")!
+        XCTAssertTrue(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback?code=abc")!, expected: expected))
+        XCTAssertFalse(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://evil?code=abc")!, expected: expected))
+        XCTAssertFalse(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback:443?code=abc")!, expected: expected))
+        XCTAssertFalse(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback/other?code=abc")!, expected: expected))
         XCTAssertFalse(AuthCallback.accepts(URL(string: "https://auth-callback?code=abc")!, expected: expected))
     }
 }

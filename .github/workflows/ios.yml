@@ -29,7 +29,7 @@ jobs:
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
-      VIZIT_AUTH_SCHEME: vizit-dev
+      VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://vizit.hu/p
 
@@ -52,9 +52,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in VIZIT_SUPABASE_URL VIZIT_SUPABASE_KEY VIZIT_PRIVACY_POLICY_URL VIZIT_PRIVACY_POLICY_VERSION VIZIT_TERMS_URL VIZIT_TERMS_VERSION; do
+          for name in VIZIT_SUPABASE_URL VIZIT_SUPABASE_KEY VIZIT_AUTH_SCHEME VIZIT_PRIVACY_POLICY_URL VIZIT_PRIVACY_POLICY_VERSION VIZIT_TERMS_URL VIZIT_TERMS_VERSION; do
             test -n "${!name}" || { echo "Missing required configuration: $name"; exit 1; }
           done
+          test "$VIZIT_AUTH_SCHEME" = 'hu.rayworks.vizit.ios.dev.auth' || { echo 'Unsafe or stale auth callback scheme'; exit 1; }
           node - <<'NODE'
           const values = [
             process.env.VIZIT_SUPABASE_URL,
@@ -150,7 +151,7 @@ jobs:
           failed = result.get('failedTests')
           passed = result.get('passedTests')
           skipped = result.get('skippedTests', 0)
-          expected = 10
+          expected = 11
           if failed != 0 or passed != expected or skipped != 0:
               raise SystemExit(f'Invalid test summary: passed={passed}, failed={failed}, skipped={skipped}')
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
@@ -227,6 +228,7 @@ jobs:
           ! grep -R -Fq '$(' "$app/Info.plist"
           test "$(plutil -extract VIZITSupabaseURL raw "$app/Info.plist")" = "$VIZIT_SUPABASE_URL"
           test "$(plutil -extract VIZITAuthScheme raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
+          test "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
           test "$(plutil -extract VIZITGoogleSignInEnabled raw "$app/Info.plist")" = "$VIZIT_GOOGLE_SIGN_IN_ENABLED"
           package="$RUNNER_TEMP/ipa"
           mkdir -p "$package/Payload"
@@ -280,7 +282,7 @@ jobs:
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
-      VIZIT_AUTH_SCHEME: vizit-dev
+      VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://vizit.hu/p
       APPLE_TEAM_ID: K7BC6R47KA
@@ -413,6 +415,8 @@ jobs:
           test -d "$app"
           codesign --verify --deep --strict "$app"
           test "$(plutil -extract CFBundleIdentifier raw "$app/Info.plist")" = "$APPLE_BUNDLE_ID"
+          test "$(plutil -extract VIZITAuthScheme raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
+          test "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
           security cms -D -i "$app/embedded.mobileprovision" > "$RUNNER_TEMP/VIZIT-embedded-profile.plist"
           test "$(plutil -extract TeamIdentifier.0 raw "$RUNNER_TEMP/VIZIT-embedded-profile.plist")" = "$APPLE_TEAM_ID"
           test "$(plutil -extract Entitlements.application-identifier raw "$RUNNER_TEMP/VIZIT-embedded-profile.plist")" = "$APPLE_TEAM_ID.$APPLE_BUNDLE_ID"

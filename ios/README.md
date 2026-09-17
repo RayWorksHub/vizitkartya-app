@@ -21,13 +21,13 @@ Az Xcode buildbe a következő build settingeknek kell bekerülniük; értékük
 
 - VIZIT_SUPABASE_URL
 - VIZIT_SUPABASE_KEY (kliensoldali publishable/anon kulcs, service-role kulcs soha)
-- VIZIT_AUTH_SCHEME (vizit-dev)
+- VIZIT_AUTH_SCHEME (hu.rayworks.vizit.ios.dev.auth)
 - VIZIT_GOOGLE_SIGN_IN_ENABLED (csak ténylegesen konfigurált provider esetén YES)
 - VIZIT_PRIVACY_POLICY_URL, VIZIT_PRIVACY_POLICY_VERSION
 - VIZIT_TERMS_URL, VIZIT_TERMS_VERSION
 - VIZIT_PUBLIC_PROFILE_BASE_URL
 
-A Supabase Swift SDK pontosan a 2.55.2 verzióra van rögzítve. Az OAuth és helyreállítási redirect: vizit-dev://auth-callback.
+A Supabase Swift SDK pontosan a 2.55.2 verzióra van rögzítve. Az OAuth és helyreállítási redirect: hu.rayworks.vizit.ios.dev.auth://auth-callback.
 
 ## Teszt és IPA
 
