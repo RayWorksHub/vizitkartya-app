@@ -130,7 +130,7 @@ final class CloudService: @unchecked Sendable {
     @MainActor
     func googleLogin() async throws -> Session {
         guard configuration.googleSignInEnabled else { throw CloudError.providerUnavailable }
-        try await client.auth.signInWithOAuth(provider: .google, redirectTo: configuration.callbackURL) {
+        return try await client.auth.signInWithOAuth(provider: .google, redirectTo: configuration.callbackURL) {
             $0.prefersEphemeralWebBrowserSession = true
         }
     }
