@@ -1,0 +1,30 @@
+name: Apply scoped VIZIT photo patch
+on:
+  push:
+    branches: [feature/vizit-public-profile-photo]
+    paths: ['scripts/apply-profile-photo.py', '.github/workflows/apply-profile-photo.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/feature/vizit-public-profile-photo'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/vizit-public-profile-photo
+      - run: python3 scripts/apply-profile-photo.py
+      - run: swift test --package-path ios
+      - name: Commit the tested source changes on the feature branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ios/Vizit/Core/ContactProfile.swift ios/Vizit/App/CloudService.swift ios/Vizit/App/VizitApp.swift ios/Vizit/App/Screens.swift ios/Tests/VizitCoreTests/ProfilePhotoTests.swift .github/workflows/ios.yml
+          git diff --cached --check
+          git commit -m 'feat(ios): sync profile photos and share photo contacts on the corrected domain'
+          git push origin HEAD:feature/vizit-public-profile-photo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vizit-ios-photo-source
+          path: ios
+          retention-days: 3
