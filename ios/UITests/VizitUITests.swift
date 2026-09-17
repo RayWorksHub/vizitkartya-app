@@ -5,7 +5,9 @@ final class VizitUITests: XCTestCase {
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         if app.keyboards.firstMatch.exists {
-            app.swipeDown(velocity: .slow)
+            let done = app.buttons["profile.keyboardDone"]
+            XCTAssertTrue(done.waitForExistence(timeout: 2))
+            done.tap()
         }
         for _ in 0..<6 where !element.isHittable {
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
