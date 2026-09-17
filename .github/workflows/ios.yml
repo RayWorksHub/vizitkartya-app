@@ -143,6 +143,22 @@ jobs:
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
           PY
 
+      - name: Capture iPhone visual evidence
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/vizit/Build/Products/Debug-iphonesimulator/VIZIT.app"
+          test -d "$app"
+          xcrun simctl terminate "$IPHONE_ID" hu.rayworks.vizit.ios.dev 2>/dev/null || true
+          xcrun simctl ui "$IPHONE_ID" appearance dark
+          xcrun simctl launch "$IPHONE_ID" hu.rayworks.vizit.ios.dev
+          sleep 3
+          xcrun simctl io "$IPHONE_ID" screenshot "$RUNNER_TEMP/VIZIT-iPhone-auth-dark.png"
+          xcrun simctl terminate "$IPHONE_ID" hu.rayworks.vizit.ios.dev
+          xcrun simctl launch "$IPHONE_ID" hu.rayworks.vizit.ios.dev --ui-testing --reset-test-profile
+          sleep 3
+          xcrun simctl io "$IPHONE_ID" screenshot "$RUNNER_TEMP/VIZIT-iPhone-home-dark.png"
+          echo 'iPhone visual evidence: PASS'
+
       - name: iPad launch smoke check
         run: |
           set -euo pipefail

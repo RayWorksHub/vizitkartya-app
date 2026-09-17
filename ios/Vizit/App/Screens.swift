@@ -8,67 +8,183 @@ struct HomeScreen: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    HStack {
-                        Image("VizitLogo").resizable().scaledToFit().frame(width: 145, height: 48)
-                            .padding(8).background(.white).clipShape(RoundedRectangle(cornerRadius: 12))
-                            .accessibilityLabel("VIZIT")
-                        Spacer()
-                        Text("iOS DEV").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    PreviewNotice()
-                    if let error = store.storageError {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                        Text("A Beállításokban tudod törölni a hibás helyi mentést. Az alkalmazás nem írja felül automatikusan.")
-                            .font(.footnote)
-                    }
-                    if store.hasProfile {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ProfileAvatar(profile: store.profile, size: 84)
-                            Text(store.profile.displayName).font(.title.bold())
-                                .accessibilityIdentifier("card.name")
-                            if !store.profile.jobTitle.isEmpty { Text(store.profile.jobTitle).font(.headline) }
-                            if !store.profile.company.isEmpty { Text(store.profile.company) }
-                            Divider().overlay(.white.opacity(0.25))
-                            contactLine("phone", store.profile.phone)
-                            contactLine("envelope", store.profile.email)
-                            contactLine("globe", store.profile.website)
-                            contactLine("mappin", store.profile.address)
-                            contactLine("link", store.profile.linkedIn)
+            ZStack {
+                VizitScreenBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        hero
+                        PreviewNotice()
+
+                        if let error = store.storageError {
+                            VizitCard {
+                                Label(error, systemImage: "exclamationmark.triangle.fill")
+                                    .font(.headline)
+                                    .foregroundStyle(.red)
+                                Text("A hibás mentést nem írjuk felül. A Beállításokban biztonságosan törölheted a helyi gyorsítótárat.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, 5)
+                            }
                         }
-                        .foregroundStyle(.white).padding(28).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(LinearGradient(colors: [Brand.navy, Brand.blue], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
-                    } else {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Image(systemName: "person.crop.rectangle.badge.plus")
-                                .font(.system(size: 42)).foregroundStyle(Brand.blue)
-                            Text("A névjegyed, nálad.").font(.title.bold())
-                            Text("Add meg az elérhetőségeidet, majd mutasd meg a QR-kódodat. A mentés a bejelentkezett VIZIT-fiókodhoz tartozik.")
-                                .foregroundStyle(.secondary)
+
+                        profileCard
+
+                        Button { editing = true } label: {
+                            VizitPrimaryButtonLabel(
+                                title: store.hasProfile ? "Névjegy szerkesztése" : "Névjegy létrehozása",
+                                systemImage: store.hasProfile ? "pencil" : "person.badge.plus"
+                            )
                         }
-                        .padding(24).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(.secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
-                    }
-                    Button(store.hasProfile ? "Névjegy szerkesztése" : "Névjegy létrehozása") { editing = true }
-                        .buttonStyle(.borderedProminent).controlSize(.large)
-                        .frame(maxWidth: .infinity).disabled(store.storageError != nil)
+                        .buttonStyle(.plain)
+                        .disabled(store.storageError != nil)
+                        .opacity(store.storageError == nil ? 1 : 0.55)
                         .accessibilityIdentifier("card.edit")
+
+                        capabilityCard
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: 640)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(20).frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Saját névjegy").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Saját névjegy")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
         }
     }
 
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VizitBrandLockup(height: 54, padded: false)
+                    .frame(width: 170)
+                Spacer()
+                Text("BÉTA")
+                    .font(.caption2.weight(.black))
+                    .tracking(1.5)
+                    .foregroundStyle(Brand.navy)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(Brand.cyan)
+                    .clipShape(Capsule())
+            }
+            Text("Egy érintés.\nEgy kapcsolat.")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            Text("A névjegyedet te kezeled, és akkor osztod meg, amikor szeretnéd.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.74))
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.heroGradient)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(alignment: .bottomTrailing) {
+            Image(systemName: "wave.3.right")
+                .font(.system(size: 74, weight: .thin))
+                .foregroundStyle(.white.opacity(0.08))
+                .padding(18)
+                .accessibilityHidden(true)
+        }
+        .shadow(color: Brand.blue.opacity(0.2), radius: 18, y: 9)
+    }
+
+    private var profileCard: some View {
+        VizitCard {
+            if store.hasProfile {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .center, spacing: 16) {
+                        ProfileAvatar(profile: store.profile, size: 86)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(store.profile.displayName)
+                                .font(.title2.weight(.bold))
+                                .accessibilityIdentifier("card.name")
+                            let subtitle = [store.profile.jobTitle, store.profile.company]
+                                .filter { !$0.isEmpty }.joined(separator: " · ")
+                            if !subtitle.isEmpty {
+                                Text(subtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        Button { editing = true } label: {
+                            Image(systemName: "pencil")
+                                .font(.headline)
+                                .foregroundStyle(Brand.blue)
+                                .frame(width: 42, height: 42)
+                                .background(Brand.blue.opacity(0.1))
+                                .clipShape(Circle())
+                        }
+                        .accessibilityLabel("Névjegy szerkesztése")
+                    }
+
+                    if hasContactDetails {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 12) {
+                            contactLine("phone.fill", store.profile.phone)
+                            contactLine("envelope.fill", store.profile.email)
+                            contactLine("globe", store.profile.website)
+                            contactLine("mappin.and.ellipse", store.profile.address)
+                            contactLine("link", store.profile.linkedIn)
+                        }
+                    }
+                }
+            } else {
+                HStack(alignment: .top, spacing: 16) {
+                    Image(systemName: "person.crop.rectangle.badge.plus")
+                        .font(.system(size: 34, weight: .medium))
+                        .foregroundStyle(Brand.blue)
+                        .frame(width: 64, height: 64)
+                        .background(Brand.blue.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Állítsd össze a névjegyed")
+                            .font(.title3.weight(.bold))
+                        Text("Add meg az elérhetőségeidet és a profilképedet. A mentés a saját VIZIT-fiókodhoz tartozik.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var capabilityCard: some View {
+        VizitCard {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "qrcode")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(Brand.navy)
+                    .frame(width: 48, height: 48)
+                    .background(Brand.cyan)
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Megosztás iPhone-on")
+                        .font(.headline)
+                    Text("Kontakt QR, AirDrop és nyilvános profil – a fogadó félnek nem kell telepítenie a VIZIT-et.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var hasContactDetails: Bool {
+        ![store.profile.phone, store.profile.email, store.profile.website,
+          store.profile.address, store.profile.linkedIn].allSatisfy(\.isEmpty)
+    }
+
     @ViewBuilder private func contactLine(_ icon: String, _ value: String) -> some View {
-        if !value.isEmpty { Label(value, systemImage: icon).textSelection(.enabled) }
+        if !value.isEmpty {
+            Label {
+                Text(value).textSelection(.enabled)
+            } icon: {
+                Image(systemName: icon).foregroundStyle(Brand.blue)
+            }
+            .font(.subheadline)
+        }
     }
 }
 
@@ -77,97 +193,241 @@ struct ShareScreen: View {
     @State private var shareFile: ShareFile?
     @State private var temporaryURL: URL?
     @State private var showContact = false
+    @State private var showFullScreenQR = false
     @State private var error: String?
     @State private var usePublicProfile = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 22) {
-                    if store.hasProfile {
-                        Text(store.profile.displayName).font(.title2.bold())
-                        if store.profile.isPublic, publicURL != nil {
-                            Picker("QR típusa", selection: $usePublicProfile) {
-                                Text("Kontakt").tag(false)
-                                Text("Nyilvános profil").tag(true)
-                            }.pickerStyle(.segmented)
+            ZStack {
+                VizitScreenBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Átadás")
+                                .font(.largeTitle.bold())
+                            Text("Oszd meg a névjegyedet bármely kompatibilis telefonnal.")
+                                .foregroundStyle(.secondary)
                         }
-                        qrContent
-                        Text(usePublicProfile ? "Nyilvános VIZIT-profil" : "Kontakt QR – fénykép nélkül").font(.headline)
-                        Text(usePublicProfile
-                             ? "A kód a nyilvános profil HTTPS-címét adja át. Csak akkor használd, ha valóban nyilvánossá tetted a profilt."
-                             : "A fogadó telefon kamerájával olvasd be. A felkínált névjegyet a fogadó hagyja jóvá; a pontos működés a kameraalkalmazástól függ.")
-                            .multilineTextAlignment(.center).foregroundStyle(.secondary)
-                        DisclosureGroup("Milyen adatokat ad át a QR-kód?") {
-                            Text("A mentett nevet, telefonszámot, e-mail-címet, céget, beosztást, címet és hivatkozásokat. A profilkép nincs a kódban; ez segíti a beolvashatóságot.")
-                                .font(.footnote).padding(.top, 8)
+
+                        if store.hasProfile {
+                            VizitCard {
+                                VStack(spacing: 18) {
+                                    HStack(spacing: 12) {
+                                        ProfileAvatar(profile: store.profile, size: 54)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(store.profile.displayName).font(.headline)
+                                            Text("Megosztásra kész")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Brand.cyan)
+                                    }
+
+                                    if store.profile.isPublic, publicURL != nil {
+                                        Picker("QR típusa", selection: $usePublicProfile) {
+                                            Text("Kontakt QR").tag(false)
+                                            Text("Profil QR").tag(true)
+                                        }
+                                        .pickerStyle(.segmented)
+                                    }
+
+                                    qrContent
+
+                                    VStack(spacing: 5) {
+                                        Text(usePublicProfile ? "Nyilvános VIZIT-profil" : "Kontakt QR")
+                                            .font(.headline)
+                                        Text(usePublicProfile
+                                             ? "A QR-kód a nyilvános profil biztonságos webcímét adja át."
+                                             : "A fogadó telefon kamerája közvetlenül névjegyként tudja felismerni.")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .multilineTextAlignment(.center)
+                                    }
+
+                                    Button { showFullScreenQR = true } label: {
+                                        Label("QR teljes képernyőn", systemImage: "arrow.up.left.and.arrow.down.right")
+                                            .font(.subheadline.weight(.semibold))
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 48)
+                                            .background(Brand.blue.opacity(0.1))
+                                            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(Brand.blue)
+                                }
+                            }
+
+                            HStack(spacing: 12) {
+                                secondaryAction(title: "Kontaktokba", icon: "person.crop.circle.badge.plus") {
+                                    showContact = true
+                                }
+                                secondaryAction(title: "AirDrop / küldés", icon: "square.and.arrow.up") {
+                                    shareVCard()
+                                }
+                            }
+
+                            VizitCard {
+                                DisclosureGroup("Milyen adatokat ad át?") {
+                                    Text("A nevet, telefonszámot, e-mail-címet, céget, beosztást, címet és hivatkozásokat. A profilkép a QR-ban nincs benne, az AirDroppal küldött névjegyben viszont igen.")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, 10)
+                                }
+                                .font(.subheadline.weight(.semibold))
+                            }
+                        } else {
+                            VizitCard {
+                                VStack(spacing: 16) {
+                                    Image(systemName: "qrcode")
+                                        .font(.system(size: 52, weight: .medium))
+                                        .foregroundStyle(Brand.blue)
+                                    Text("Még nincs megosztható névjegyed")
+                                        .font(.title3.bold())
+                                    Text("Először készítsd el a névjegyedet a Névjegy fülön.")
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
                         }
-                        Divider()
-                        Button { showContact = true } label: {
-                            Label("Mentés a Kontaktokba", systemImage: "person.crop.circle.badge.plus")
-                        }
-                        .buttonStyle(.bordered).controlSize(.large)
-                        Button {
-                            do {
-                                let file = try ContactBridge.shareFile(store.profile)
-                                temporaryURL = file.url
-                                shareFile = file
-                            } catch { self.error = error.localizedDescription }
-                        } label: {
-                            Label("Névjegy küldése képpel", systemImage: "square.and.arrow.up")
-                        }
-                        .buttonStyle(.borderedProminent).controlSize(.large)
-                        Text("A képes küldés külön .vcf fájlt oszt meg, például AirDroppal. A Kontakt QR nem használ fájlletöltést.")
-                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        Label("Az iPhone nem képes Android HCE-névjegyként NFC-jelet sugározni. iPhone-on QR-t, AirDropot vagy HTTPS-profilt használj.",
-                              systemImage: "wave.3.right.circle")
-                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    } else {
-                        Image(systemName: "qrcode").font(.system(size: 54)).foregroundStyle(Brand.blue)
-                        Text("Először készítsd el a névjegyedet a Névjegy fülön.")
-                            .font(.headline).multilineTextAlignment(.center)
                     }
+                    .padding(16)
+                    .frame(maxWidth: 600)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(24).frame(maxWidth: 560).frame(maxWidth: .infinity)
             }
-            .navigationTitle("Megosztás")
-            .sheet(item: $shareFile, onDismiss: {
-                if let url = temporaryURL { ContactBridge.removeShareFile(url) }
-                temporaryURL = nil
-            }) { file in ActivitySheet(url: file.url) }
+            .navigationBarHidden(true)
+            .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
+                ActivitySheet(url: file.url)
+            }
             .sheet(isPresented: $showContact) {
                 ContactEditor(contact: ContactBridge.contact(store.profile)) { _ in showContact = false }
             }
-            .alert("A megosztás nem sikerült", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            .fullScreenCover(isPresented: $showFullScreenQR) {
+                FullScreenQRView(image: currentQRImage, title: store.profile.displayName) {
+                    showFullScreenQR = false
+                }
+            }
+            .alert("A megosztás nem sikerült", isPresented: Binding(
+                get: { error != nil }, set: { if !$0 { error = nil } }
+            )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
         }
     }
 
     @ViewBuilder private var qrContent: some View {
-        switch Result(catching: {
-            if usePublicProfile, let url = publicURL { return url.absoluteString }
-            return try VCard.qrPayload(store.profile)
-        }) {
-        case .success(let payload):
-            if let image = QRImage.make(payload) {
-                Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
-                    .frame(maxWidth: 320).padding(24).background(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .accessibilityLabel("A névjegy Kontakt QR-kódja")
-                    .accessibilityIdentifier("share.qr")
-            } else {
-                Label("A QR-kód nem készíthető el.", systemImage: "exclamationmark.triangle")
-            }
-        case .failure(let error):
-            Label(error.localizedDescription, systemImage: "exclamationmark.triangle")
+        if let image = currentQRImage {
+            Image(uiImage: image)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 276)
+                .padding(16)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Brand.navy.opacity(0.08), lineWidth: 1)
+                }
+                .accessibilityLabel("A névjegy Kontakt QR-kódja")
+                .accessibilityIdentifier("share.qr")
+        } else {
+            Label("A QR-kód nem készíthető el.", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
         }
+    }
+
+    private var currentQRImage: UIImage? {
+        guard let payload = qrPayload else { return nil }
+        return QRImage.make(payload)
+    }
+
+    private var qrPayload: String? {
+        if usePublicProfile, let url = publicURL { return url.absoluteString }
+        return try? VCard.qrPayload(store.profile)
     }
 
     private var publicURL: URL? {
         guard let base = store.configuration?.publicProfileBaseURL else { return nil }
         return PublicProfileLink.make(baseURL: base, slug: store.profile.publicSlug)
+    }
+
+    private func secondaryAction(title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon).font(.title3.weight(.semibold))
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(Brand.blue)
+            .frame(maxWidth: .infinity)
+            .frame(height: 76)
+            .background(Brand.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Brand.border, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func shareVCard() {
+        do {
+            let file = try ContactBridge.shareFile(store.profile)
+            temporaryURL = file.url
+            shareFile = file
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func cleanupShareFile() {
+        if let url = temporaryURL { ContactBridge.removeShareFile(url) }
+        temporaryURL = nil
+    }
+}
+
+private struct FullScreenQRView: View {
+    let image: UIImage?
+    let title: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            VStack(spacing: 24) {
+                Spacer()
+                Text(title)
+                    .font(.title2.bold())
+                    .foregroundStyle(Brand.navy)
+                if let image {
+                    Image(uiImage: image)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(18)
+                }
+                Text("Olvasd be a telefon kamerájával")
+                    .foregroundStyle(Brand.navy.opacity(0.66))
+                Button("Bezárás", action: dismiss)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 34)
+                    .frame(height: 50)
+                    .background(Brand.blue)
+                    .clipShape(Capsule())
+                    .padding(.bottom, 24)
+            }
+        }
     }
 }
 
@@ -198,25 +458,60 @@ struct ScanScreen: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 22) {
-                Image(systemName: "qrcode.viewfinder").font(.system(size: 72)).foregroundStyle(Brand.blue)
-                Text("Új kapcsolat, egy beolvasással.").font(.title2.bold()).multilineTextAlignment(.center)
-                Text("Olvass be egy névjegy-QR-kódot. A Kontaktokba mentés előtt ellenőrizheted és módosíthatod az adatokat.")
-                    .foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button("QR-kód beolvasása") { scanning = true }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-                Text("A kamera csak a beolvasó megnyitásakor kér engedélyt. Webcímet az alkalmazás nem nyit meg automatikusan.")
-                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            ZStack {
+                VizitScreenBackground()
+                ScrollView {
+                    VStack(spacing: 22) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .fill(Brand.heroGradient)
+                                .frame(height: 230)
+                            Circle()
+                                .stroke(Brand.cyan.opacity(0.45), lineWidth: 2)
+                                .frame(width: 132, height: 132)
+                            Image(systemName: "qrcode.viewfinder")
+                                .font(.system(size: 72, weight: .medium))
+                                .foregroundStyle(.white)
+                        }
+                        Text("Új kapcsolat, egy beolvasással.")
+                            .font(.title2.bold())
+                            .multilineTextAlignment(.center)
+                        Text("Olvass be egy névjegy-QR-kódot. Mentés előtt minden adatot ellenőrizhetsz.")
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button { scanning = true } label: {
+                            VizitPrimaryButtonLabel(title: "QR-kód beolvasása", systemImage: "camera.viewfinder")
+                        }
+                        .buttonStyle(.plain)
+                        VizitCard {
+                            Label {
+                                Text("A kamera csak a beolvasó megnyitásakor aktív. Webcímet az alkalmazás soha nem nyit meg automatikusan.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            } icon: {
+                                Image(systemName: "hand.raised.fill").foregroundStyle(Brand.blue)
+                            }
+                        }
+                    }
+                    .padding(20)
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
+                }
             }
-            .padding(24).frame(maxWidth: 560).frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Beolvasás")
+            .navigationBarTitleDisplayMode(.inline)
             .fullScreenCover(isPresented: $scanning, onDismiss: processScan) {
                 NavigationStack {
                     QRScanner(onResult: { text in pendingText = text; scanning = false },
                               onError: { text in message = text; scanning = false })
                         .ignoresSafeArea(edges: .bottom)
-                        .navigationTitle("Névjegy beolvasása").navigationBarTitleDisplayMode(.inline)
-                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Bezárás") { scanning = false } } }
+                        .navigationTitle("Névjegy beolvasása")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Bezárás") { scanning = false }
+                            }
+                        }
                 }
             }
             .sheet(item: $incoming) { item in
@@ -225,11 +520,19 @@ struct ScanScreen: View {
                     if saved { message = "A névjegyet elmentetted a Kontaktokba." }
                 }
             }
-            .alert("Webcím a QR-kódban", isPresented: Binding(get: { link != nil }, set: { if !$0 { link = nil } })) {
+            .alert("Webcím a QR-kódban", isPresented: Binding(
+                get: { link != nil }, set: { if !$0 { link = nil } }
+            )) {
                 Button("Mégse", role: .cancel) { link = nil }
-                Button("Megnyitás") { if let url = link { openURL(url) }; link = nil }
+                Button("Megnyitás") {
+                    if let url = link { openURL(url) }
+                    link = nil
+                }
             } message: { Text(link?.absoluteString ?? "") }
-            .alert("Beolvasás", isPresented: Binding(get: { message != nil && !scanning && incoming == nil }, set: { if !$0 { message = nil } })) {
+            .alert("Beolvasás", isPresented: Binding(
+                get: { message != nil && !scanning && incoming == nil },
+                set: { if !$0 { message = nil } }
+            )) {
                 Button("Rendben", role: .cancel) { message = nil }
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     Button("Rendszerbeállítások") { openURL(url); message = nil }
@@ -242,12 +545,17 @@ struct ScanScreen: View {
         guard let text = pendingText else { return }
         pendingText = nil
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.utf8.count <= 16_384 else { message = "A QR-kód túl sok adatot tartalmaz."; return }
+        guard value.utf8.count <= 16_384 else {
+            message = "A QR-kód túl sok adatot tartalmaz."
+            return
+        }
         if let url = SafeLink.https(value) { link = url; return }
-        guard value.uppercased().hasPrefix("BEGIN:VCARD"), value.uppercased().hasSuffix("END:VCARD"),
-              let contacts = try? CNContactVCardSerialization.contacts(with: Data(value.utf8)), contacts.count == 1,
+        guard value.uppercased().hasPrefix("BEGIN:VCARD"),
+              value.uppercased().hasSuffix("END:VCARD"),
+              let contacts = try? CNContactVCardSerialization.contacts(with: Data(value.utf8)),
+              contacts.count == 1,
               let clean = contacts[0].mutableCopy() as? CNMutableContact else {
-            message = "Ez nem támogatott névjegy-QR vagy HTTPS-webcím. Az alkalmazás nem hajtott végre semmilyen műveletet."
+            message = "Ez nem támogatott névjegy-QR vagy HTTPS-webcím. Az alkalmazás nem végzett műveletet."
             return
         }
         clean.urlAddresses = clean.urlAddresses.filter { SafeLink.https($0.value as String) != nil }
@@ -265,61 +573,146 @@ struct SettingsScreen: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Alkalmazás") {
-                    Label("VIZIT iOS DEV 0.2", systemImage: "iphone")
-                    Text("Natív iPhone- és iPad-felület, iOS/iPadOS 16-tól.")
-                    Text("E-mailes belépés, helyi-first profil, felhőszinkron, profilkép, Kontakt- és profil-QR, kamerás beolvasás és rendszermegosztás. A Google-belépés csak külön szolgáltatói engedélyezés után jelenik meg.")
-                }
-                Section("iPhone-korlát") {
-                    Text("Az iOS nem enged Android HCE-szerű NFC-névjegyküldést. Ez nem emuláció: iPhone-on QR, AirDrop és a nyilvános HTTPS-profil használható.")
-                }
-                Section("Adatok") {
-                    Text("A helyi névjegy teljes fájlvédelemmel, mentésből kizárva tárolódik. A munkamenet csak feloldott készüléken elérhető kulcstár-elemként marad meg.")
-                    Text("A megosztott másolatokat és a Kontaktokba mentett névjegyeket a helyi törlés nem vonja vissza.")
-                    if let issue = store.storageError { Text(issue).foregroundStyle(.red) }
-                    Button("Helyi gyorsítótár törlése", role: .destructive) { confirmReset = true }
-                        .accessibilityIdentifier("settings.reset")
-                }
-                Section("Fiók") {
-                    if !store.accountEmail.isEmpty { LabeledContent("Belépve", value: store.accountEmail) }
-                    Button("Kijelentkezés") { confirmLogout = true }
-                    Button("Fiók és szerveradatok végleges törlése", role: .destructive) { confirmDelete = true }
+            ZStack {
+                VizitScreenBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Beállítások").font(.largeTitle.bold())
+                            Text("Fiók, adatvédelem és alkalmazásállapot.")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        settingCard(icon: "person.crop.circle.fill", title: "Fiók", color: Brand.blue) {
+                            if !store.accountEmail.isEmpty {
+                                LabeledContent("Belépve", value: store.accountEmail)
+                                    .font(.subheadline)
+                            }
+                            Button("Kijelentkezés") { confirmLogout = true }
+                                .font(.subheadline.weight(.semibold))
+                            Button("Fiók végleges törlése", role: .destructive) { confirmDelete = true }
+                                .font(.subheadline.weight(.semibold))
+                        }
+
+                        settingCard(icon: "arrow.triangle.2.circlepath", title: "Profil szinkron", color: Brand.cyan) {
+                            Text(store.syncStatus.label)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            if [.pending, .conflict, .failed].contains(store.syncStatus), store.isOnline {
+                                Button("Szinkron újrapróbálása") { store.retrySync() }
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                        }
+
+                        settingCard(icon: "lock.shield.fill", title: "Adatvédelem", color: .green) {
+                            Text("A helyi névjegy teljes fájlvédelemmel, a munkamenet pedig az iPhone kulcstárában tárolódik.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("A megosztott vagy Kontaktokba mentett példányokat a helyi törlés nem vonja vissza.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            if let issue = store.storageError {
+                                Text(issue).font(.footnote).foregroundStyle(.red)
+                            }
+                            Button("Helyi gyorsítótár törlése", role: .destructive) { confirmReset = true }
+                                .font(.subheadline.weight(.semibold))
+                                .accessibilityIdentifier("settings.reset")
+                        }
+
+                        settingCard(icon: "iphone", title: "iPhone-megosztás", color: .orange) {
+                            Text("Az iOS nem enged Android HCE-szerű NFC-kártyaemulációt. iPhone-on Kontakt QR, AirDrop és HTTPS-profil használható.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Text("VIZIT \(versionText) · Biztonságos fejlesztői béta")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: 620)
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .navigationTitle("Beállítások")
-            .confirmationDialog("Törlöd a helyi gyorsítótárat és a profilképet erről az iPhone-ról?", isPresented: $confirmReset, titleVisibility: .visible) {
+            .navigationBarHidden(true)
+            .confirmationDialog(
+                "Törlöd a helyi gyorsítótárat és a profilképet erről az iPhone-ról?",
+                isPresented: $confirmReset,
+                titleVisibility: .visible
+            ) {
                 Button("Helyi adatok törlése", role: .destructive) {
                     do { try store.reset() } catch { self.error = error.localizedDescription }
                 }
                 Button("Mégse", role: .cancel) {}
             }
-            .confirmationDialog("Biztosan kijelentkezel? A helyi gyorsítótár is törlődik.", isPresented: $confirmLogout, titleVisibility: .visible) {
+            .confirmationDialog(
+                "Biztosan kijelentkezel? A helyi gyorsítótár is törlődik.",
+                isPresented: $confirmLogout,
+                titleVisibility: .visible
+            ) {
                 Button("Kijelentkezés", role: .destructive) { Task { await store.logout() } }
                 Button("Mégse", role: .cancel) {}
             }
-            .sheet(isPresented: $confirmDelete) {
-                NavigationStack {
-                    Form {
-                        Section("Végleges fióktörlés") {
-                            Text("Ez törli a VIZIT-fiókot és a hozzá tartozó szerveradatokat. A művelet nem vonható vissza.")
-                            TextField("Írd be: TÖRLÉS", text: $deletionPhrase)
-                                .textInputAutocapitalization(.characters)
-                        }
-                        Section {
-                            Button("Fiók végleges törlése", role: .destructive) {
-                                confirmDelete = false
-                                Task { await store.deleteAccount(confirmation: deletionPhrase) }
-                            }
-                        }
-                    }
-                    .navigationTitle("Fiók törlése")
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Mégse") { confirmDelete = false } } }
-                }
-            }
-            .alert("A törlés nem sikerült", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            .sheet(isPresented: $confirmDelete) { deleteAccountSheet }
+            .alert("A művelet nem sikerült", isPresented: Binding(
+                get: { error != nil }, set: { if !$0 { error = nil } }
+            )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
         }
+    }
+
+    private func settingCard<Content: View>(
+        icon: String,
+        title: String,
+        color: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VizitCard {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.headline)
+                        .foregroundStyle(color)
+                        .frame(width: 40, height: 40)
+                        .background(color.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Text(title).font(.headline)
+                }
+                content()
+            }
+        }
+    }
+
+    private var deleteAccountSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Végleges fióktörlés") {
+                    Text("Ez törli a VIZIT-fiókot és a hozzá tartozó szerveradatokat. A művelet nem vonható vissza.")
+                    TextField("Írd be: TÖRLÉS", text: $deletionPhrase)
+                        .textInputAutocapitalization(.characters)
+                }
+                Section {
+                    Button("Fiók végleges törlése", role: .destructive) {
+                        confirmDelete = false
+                        Task { await store.deleteAccount(confirmation: deletionPhrase) }
+                    }
+                }
+            }
+            .navigationTitle("Fiók törlése")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Mégse") { confirmDelete = false }
+                }
+            }
+        }
+    }
+
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(version) (\(build))"
     }
 }

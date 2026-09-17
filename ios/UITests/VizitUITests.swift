@@ -14,6 +14,26 @@ final class VizitUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.buttons["auth.submit"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Üdv újra!"].exists)
+        XCTAssertTrue(app.textFields["auth.email"].exists)
+        XCTAssertTrue(app.secureTextFields["auth.password"].exists)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "VIZIT-auth-redesign"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    func testRegistrationFlowShowsRequiredFieldsAndLegalConsent() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["Regisztráció"].waitForExistence(timeout: 10))
+        app.buttons["Regisztráció"].tap()
+        XCTAssertTrue(app.textFields["auth.name"].exists)
+        XCTAssertTrue(app.textFields["auth.email"].exists)
+        XCTAssertTrue(app.secureTextFields["auth.password"].exists)
+        XCTAssertTrue(app.secureTextFields["auth.confirmation"].exists)
+        XCTAssertTrue(app.buttons["auth.submit"].exists)
     }
 
     func testCreatePersistAndShowQR() {
