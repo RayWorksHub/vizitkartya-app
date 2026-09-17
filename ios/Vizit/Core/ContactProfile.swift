@@ -1,8 +1,8 @@
 import Foundation
 
-/// The editable contact fields mirror the Android ContactProfile. This preview
-/// deliberately does not publish profiles or modify the existing cloud account.
-public struct ContactProfile: Codable, Equatable {
+/// The editable contact fields mirror the currently supported Android profile
+/// fields and the live Supabase profile schema.
+public struct ContactProfile: Codable, Equatable, Sendable {
     public var fullName = ""
     public var firstName = ""
     public var lastName = ""

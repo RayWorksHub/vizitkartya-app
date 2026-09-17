@@ -46,7 +46,7 @@ struct HomeScreen: View {
                             Image(systemName: "person.crop.rectangle.badge.plus")
                                 .font(.system(size: 42)).foregroundStyle(Brand.blue)
                             Text("A névjegyed, nálad.").font(.title.bold())
-                            Text("Add meg az elérhetőségeidet, majd mutasd meg a QR-kódodat. Az első kipróbáláshoz nem kell fiókot létrehoznod.")
+                            Text("Add meg az elérhetőségeidet, majd mutasd meg a QR-kódodat. A mentés a bejelentkezett VIZIT-fiókodhoz tartozik.")
                                 .foregroundStyle(.secondary)
                         }
                         .padding(24).frame(maxWidth: .infinity, alignment: .leading)
@@ -269,7 +269,7 @@ struct SettingsScreen: View {
                 Section("Alkalmazás") {
                     Label("VIZIT iOS DEV 0.2", systemImage: "iphone")
                     Text("Natív iPhone- és iPad-felület, iOS/iPadOS 16-tól.")
-                    Text("E-mailes és Google-belépés, helyi-first profil, felhőszinkron, profilkép, Kontakt- és profil-QR, kamerás beolvasás és rendszermegosztás.")
+                    Text("E-mailes belépés, helyi-first profil, felhőszinkron, profilkép, Kontakt- és profil-QR, kamerás beolvasás és rendszermegosztás. A Google-belépés csak külön szolgáltatói engedélyezés után jelenik meg.")
                 }
                 Section("iPhone-korlát") {
                     Text("Az iOS nem enged Android HCE-szerű NFC-névjegyküldést. Ez nem emuláció: iPhone-on QR, AirDrop és a nyilvános HTTPS-profil használható.")

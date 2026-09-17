@@ -146,6 +146,7 @@ jobs:
       - name: iPad launch smoke check
         run: |
           set -euo pipefail
+          xcrun simctl shutdown all
           xcrun simctl boot "$IPAD_ID"
           xcrun simctl bootstatus "$IPAD_ID" -b
           app="$RUNNER_TEMP/vizit/Build/Products/Debug-iphonesimulator/VIZIT.app"
