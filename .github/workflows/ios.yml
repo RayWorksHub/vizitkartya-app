@@ -357,8 +357,9 @@ jobs:
           args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Release)
           args+=(-destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/VIZIT.xcarchive")
           args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
-          args+=(DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='Apple Distribution')
-          args+=(PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROFILE_NAME" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
+          # Signing settings live on the VIZIT Release target so they are not
+          # inherited by Swift package targets that cannot use provisioning profiles.
+          args+=(CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
           args+=(VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
           args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED")
           args+=(VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
