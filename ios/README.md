@@ -4,7 +4,8 @@ Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az a
 
 ## Funkciók
 
-- E-mail/jelszó regisztráció kötelező e-mail-megerősítéssel, belépés, PKCE jelszó-visszaállítás és Google OAuth.
+- E-mail/jelszó regisztráció kötelező e-mail-megerősítéssel, belépés és PKCE jelszó-visszaállítás.
+- Google OAuth feature-gate mögött elérhető, de a jelenlegi aktív DEV Supabase-projektben a provider ki van kapcsolva, ezért a build nem mutat hozzá működést ígérő gombot.
 - A Supabase-munkamenet kSecAttrAccessibleWhenUnlockedThisDeviceOnly kulcstár-elemként tárolódik.
 - Felhasználónként elkülönített, atomi és teljes fájlvédelemmel mentett helyi profil; a könyvtár ki van zárva az eszközmentésből.
 - Helyi-first profilmentés és optimista konkurenciavezérlés az adatbázis updated_at értékével. Ütközéskor a helyi példány nem íródik felül.
@@ -21,6 +22,7 @@ Az Xcode buildbe a következő build settingeknek kell bekerülniük; értékük
 - VIZIT_SUPABASE_URL
 - VIZIT_SUPABASE_KEY (kliensoldali publishable/anon kulcs, service-role kulcs soha)
 - VIZIT_AUTH_SCHEME (vizit-dev)
+- VIZIT_GOOGLE_SIGN_IN_ENABLED (csak ténylegesen konfigurált provider esetén YES)
 - VIZIT_PRIVACY_POLICY_URL, VIZIT_PRIVACY_POLICY_VERSION
 - VIZIT_TERMS_URL, VIZIT_TERMS_VERSION
 - VIZIT_PUBLIC_PROFILE_BASE_URL

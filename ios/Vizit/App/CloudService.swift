@@ -129,6 +129,7 @@ final class CloudService: @unchecked Sendable {
 
     @MainActor
     func googleLogin() async throws -> Session {
+        guard configuration.googleSignInEnabled else { throw CloudError.providerUnavailable }
         try await client.auth.signInWithOAuth(provider: .google, redirectTo: configuration.callbackURL) {
             $0.prefersEphemeralWebBrowserSession = true
         }
@@ -281,7 +282,7 @@ private struct AnyEncodable: Encodable {
 }
 
 enum CloudError: LocalizedError {
-    case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled
+    case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled, providerUnavailable
     case server(Int)
 
     var errorDescription: String? {
@@ -290,6 +291,7 @@ enum CloudError: LocalizedError {
         case .invalidRequest: return "A kiszolgáló kérése nem állítható össze biztonságosan."
         case .emptyResponse: return "A kiszolgáló nem adott vissza mentett profilt."
         case .emailConfirmationDisabled: return "A kiszolgálón nincs kötelező e-mail-megerősítés. A munkamenetet biztonsági okból megszakítottuk."
+        case .providerUnavailable: return "A Google-bejelentkezés ezen a biztonságos builden nincs engedélyezve."
         case .server(let status): return "A VIZIT kiszolgáló elutasította a kérést (HTTP \(status))."
         }
     }

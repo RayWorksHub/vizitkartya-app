@@ -21,13 +21,16 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 40
     env:
-      VIZIT_SUPABASE_URL: ${{ secrets.VIZIT_DEV_SUPABASE_URL }}
-      VIZIT_SUPABASE_KEY: ${{ secrets.VIZIT_DEV_SUPABASE_KEY }}
+      # Supabase publishable keys are designed to ship in clients. Authorization
+      # is enforced by RLS; service-role credentials must never appear here.
+      VIZIT_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
+      VIZIT_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
       VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: vizit-dev
+      VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://vizit.hu/p
 
     steps:
@@ -63,7 +66,9 @@ jobs:
           if (settings.disable_signup !== false) throw new Error('User signup is disabled')
           if (settings.mailer_autoconfirm !== false) throw new Error('Email confirmation is disabled')
           if (settings.external?.email !== true) throw new Error('Email/password provider is disabled')
-          if (settings.external?.google !== true) throw new Error('Google provider is disabled')
+          const googleExpected = process.env.VIZIT_GOOGLE_SIGN_IN_ENABLED === 'YES'
+          if (googleExpected && settings.external?.google !== true) throw new Error('Google provider is disabled')
+          if (!googleExpected && settings.external?.google === true) throw new Error('Google provider is live but hidden by this build')
           console.log('Live Supabase Auth policy: PASS')
           NODE
 
@@ -119,7 +124,8 @@ jobs:
           args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
           args+=(-resultBundlePath "$RUNNER_TEMP/VIZIT-iPhone.xcresult" -parallel-testing-enabled NO)
           args+=(CODE_SIGNING_ALLOWED=NO VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
-          args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
+          args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED")
+          args+=(VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
           args+=(VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION" VIZIT_TERMS_URL="$VIZIT_TERMS_URL")
           args+=(VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION" VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL")
           xcodebuild "${args[@]}" test | tee "$RUNNER_TEMP/VIZIT-tests.log"
@@ -160,7 +166,8 @@ jobs:
           args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
           args+=(CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
           args+=(VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
-          args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
+          args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED")
+          args+=(VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
           args+=(VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION" VIZIT_TERMS_URL="$VIZIT_TERMS_URL")
           args+=(VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION" VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL")
           xcodebuild "${args[@]}" build | tee "$RUNNER_TEMP/VIZIT-device-build.log"
@@ -183,6 +190,7 @@ jobs:
           ! grep -R -Fq '$(' "$app/Info.plist"
           test "$(plutil -extract VIZITSupabaseURL raw "$app/Info.plist")" = "$VIZIT_SUPABASE_URL"
           test "$(plutil -extract VIZITAuthScheme raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
+          test "$(plutil -extract VIZITGoogleSignInEnabled raw "$app/Info.plist")" = "$VIZIT_GOOGLE_SIGN_IN_ENABLED"
           package="$RUNNER_TEMP/ipa"
           mkdir -p "$package/Payload"
           ditto "$app" "$package/Payload/VIZIT.app"

@@ -71,8 +71,10 @@ struct AuthScreen: View {
                     .accessibilityIdentifier("auth.submit")
 
                     if mode == .login {
-                        Button("Folytatás Google-fiókkal") { Task { await store.googleLogin() } }
-                            .buttonStyle(.bordered).controlSize(.large).disabled(store.busy)
+                        if store.configuration?.googleSignInEnabled == true {
+                            Button("Folytatás Google-fiókkal") { Task { await store.googleLogin() } }
+                                .buttonStyle(.bordered).controlSize(.large).disabled(store.busy)
+                        }
                         Button("Elfelejtettem a jelszavam") { forgotPassword = true }
                     }
                     if store.busy { ProgressView() }

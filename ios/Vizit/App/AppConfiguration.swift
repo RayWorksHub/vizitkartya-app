@@ -4,6 +4,7 @@ struct AppConfiguration: Sendable {
     let supabaseURL: URL
     let publishableKey: String
     let callbackURL: URL
+    let googleSignInEnabled: Bool
     let privacyPolicyURL: URL
     let privacyPolicyVersion: String
     let termsURL: URL
@@ -40,11 +41,16 @@ struct AppConfiguration: Sendable {
               let callback = URL(string: "\(scheme)://auth-callback") else {
             throw ConfigurationError.invalid("VIZITAuthScheme")
         }
+        let googleSetting = try value("VIZITGoogleSignInEnabled").uppercased()
+        guard googleSetting == "YES" || googleSetting == "NO" else {
+            throw ConfigurationError.invalid("VIZITGoogleSignInEnabled")
+        }
 
         return AppConfiguration(
             supabaseURL: supabaseURL,
             publishableKey: key,
             callbackURL: callback,
+            googleSignInEnabled: googleSetting == "YES",
             privacyPolicyURL: try httpsURL("VIZITPrivacyPolicyURL"),
             privacyPolicyVersion: try value("VIZITPrivacyPolicyVersion"),
             termsURL: try httpsURL("VIZITTermsURL"),

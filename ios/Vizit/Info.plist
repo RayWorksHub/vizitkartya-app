@@ -43,6 +43,8 @@
 	<string>Az általad jóváhagyott névjegy Kontaktokba mentéséhez szükséges.</string>
 	<key>VIZITAuthScheme</key>
 	<string>$(VIZIT_AUTH_SCHEME)</string>
+	<key>VIZITGoogleSignInEnabled</key>
+	<string>$(VIZIT_GOOGLE_SIGN_IN_ENABLED)</string>
 	<key>VIZITPrivacyPolicyURL</key>
 	<string>$(VIZIT_PRIVACY_POLICY_URL)</string>
 	<key>VIZITPrivacyPolicyVersion</key>
