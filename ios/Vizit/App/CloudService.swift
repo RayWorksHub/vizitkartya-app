@@ -1,6 +1,8 @@
 import AuthenticationServices
 import Foundation
 import Supabase
+import UIKit
+import ImageIO
 
 struct RemoteProfile: Decodable, Sendable {
     let id: UUID
@@ -15,6 +17,7 @@ struct RemoteProfile: Decodable, Sendable {
     let address: String
     let isPublic: Bool
     let updatedAt: String
+    let avatarURL: String?
 
     enum CodingKeys: String, CodingKey {
         case id, slug, phone, website, address
@@ -24,6 +27,7 @@ struct RemoteProfile: Decodable, Sendable {
         case company
         case publicEmail = "public_email"
         case isPublic = "is_public"
+        case avatarURL = "avatar_url"
         case updatedAt = "updated_at"
     }
 }
@@ -45,6 +49,7 @@ private struct ProfileWrite: Encodable {
     let website: String
     let address: String
     let isPublic: Bool
+    let avatarURL: String
 
     enum CodingKeys: String, CodingKey {
         case id, slug, phone, website, address, company
@@ -53,6 +58,7 @@ private struct ProfileWrite: Encodable {
         case jobTitle = "job_title"
         case publicEmail = "public_email"
         case isPublic = "is_public"
+        case avatarURL = "avatar_url"
     }
 }
 
@@ -214,7 +220,7 @@ final class CloudService: @unchecked Sendable {
     func fetchProfile(ownerID: UUID, preserving local: ContactProfile) async throws -> (RemoteProfile, ContactProfile)? {
         let query = [
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at"),
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at,avatar_url"),
             URLQueryItem(name: "limit", value: "1")
         ]
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
@@ -236,6 +242,13 @@ final class CloudService: @unchecked Sendable {
         profile.linkedIn = links.first?.url ?? ""
         profile.publicSlug = remote.slug
         profile.isPublic = remote.isPublic
+        if let avatar = remote.avatarURL {
+            profile.photoBase64 = try await readProfilePhoto(avatar)
+            profile.photoSyncInitialized = true
+        } else if local.photoSyncInitialized {
+            // A later deletion from the web must not resurrect an old local image.
+            profile.photoBase64 = ""
+        }
         return (remote, profile)
     }
 
@@ -254,9 +267,9 @@ final class CloudService: @unchecked Sendable {
 
     private func insertProfile(ownerID: UUID, profileID: UUID,
                                profile: ContactProfile, slug: String) async throws -> RemoteProfile {
-        let payload = write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
+        let payload = try write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
-            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at")],
+            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at,avatar_url")],
             body: payload, prefer: "return=representation")
         guard let remote = rows.first else { throw CloudError.emptyResponse }
         return remote
@@ -264,23 +277,23 @@ final class CloudService: @unchecked Sendable {
 
     func updateProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile,
                        expectedUpdatedAt: String) async throws -> RemoteProfile? {
-        let payload = write(profile, profileID: nil, ownerID: nil, slug: profile.publicSlug)
+        let payload = try write(profile, profileID: nil, ownerID: nil, slug: profile.publicSlug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "PATCH", query: [
             URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
             URLQueryItem(name: "updated_at", value: "eq.\(expectedUpdatedAt)"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at")
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at,avatar_url")
         ], body: payload, prefer: "return=representation")
         guard let remote = rows.first else { return nil }
         return remote
     }
 
-    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String) -> ProfileWrite {
+    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String) throws -> ProfileWrite {
         let p = profile.normalized
         return ProfileWrite(id: profileID, ownerID: ownerID, slug: slug, displayName: p.displayName,
                             jobTitle: p.jobTitle, company: p.company, publicEmail: p.email,
                             phone: p.phone, website: p.website, address: p.address,
-                            isPublic: p.isPublic)
+                            isPublic: p.isPublic, avatarURL: try ProfilePhoto.inlineURL(p.photoBase64))
     }
 
     func syncLinkedIn(profileID: UUID, value: String) async throws {
@@ -303,6 +316,42 @@ final class CloudService: @unchecked Sendable {
             let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "POST",
                 body: LinkWrite(profileID: profileID, url: value), prefer: "return=minimal")
         }
+    }
+
+    private func readProfilePhoto(_ avatar: String) async throws -> String {
+        if avatar.isEmpty { return "" }
+        if avatar.hasPrefix("data:image/jpeg;base64,") {
+            let base64 = String(avatar.dropFirst("data:image/jpeg;base64,".count))
+            _ = try ProfilePhoto.inlineURL(base64)
+            return base64
+        }
+        guard let url = ProfilePhoto.trustedStorageURL(avatar, origin: configuration.supabaseURL)
+        else { throw ProfileError.invalidPhoto }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+        request.setValue("image/jpeg,image/png,image/webp", forHTTPHeaderField: "Accept")
+        let (stream, response) = try await http.bytes(for: request, delegate: PhotoRedirectBlocker())
+        guard let response = response as? HTTPURLResponse, response.statusCode == 200,
+              response.expectedContentLength <= 3 * 1024 * 1024 else { throw ProfileError.invalidPhoto }
+        var bytes = Data()
+        for try await byte in stream {
+            if bytes.count >= 3 * 1024 * 1024 { throw ProfileError.invalidPhoto }
+            bytes.append(byte)
+        }
+        try Task.checkCancellation()
+        guard let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+              CGImageSourceGetCount(source) == 1,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+              let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
+              width.doubleValue * height.doubleValue <= 16_000_000,
+              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 512
+              ] as CFDictionary),
+              let jpeg = UIImage(cgImage: thumbnail).jpegData(compressionQuality: 0.8),
+              jpeg.count <= 256 * 1024 else { throw ProfileError.invalidPhoto }
+        return jpeg.base64EncodedString()
     }
 
     private func request<Response: Decodable>(path: [String], method: String = "GET",
@@ -371,5 +420,15 @@ enum CloudError: LocalizedError {
             }
             return "A VIZIT kiszolgáló elutasította a kérést (HTTP \(status))."
         }
+    }
+}
+
+
+private final class PhotoRedirectBlocker: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }
