@@ -104,7 +104,7 @@ struct AuthScreen: View {
                 if mode == .register {
                     authField(title: "Név", icon: "person.fill") {
                         TextField("Teljes név", text: $name,
-                                  prompt: Text("Teljes név").foregroundStyle(.white.opacity(0.42)))
+                                  prompt: Text("Teljes név").foregroundColor(.white.opacity(0.42)))
                             .textContentType(.name)
                             .submitLabel(.next)
                             .accessibilityIdentifier("auth.name")
@@ -113,7 +113,7 @@ struct AuthScreen: View {
 
                 authField(title: "E-mail-cím", icon: "envelope.fill") {
                     TextField("E-mail-cím", text: $email,
-                              prompt: Text("nev@pelda.hu").foregroundStyle(.white.opacity(0.42)))
+                              prompt: Text("nev@pelda.hu").foregroundColor(.white.opacity(0.42)))
                         .textContentType(.username)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -271,11 +271,11 @@ struct AuthScreen: View {
                 Group {
                     if revealed.wrappedValue {
                         TextField(title, text: text,
-                                  prompt: Text("••••••••").foregroundStyle(.white.opacity(0.42)))
+                                  prompt: Text("••••••••").foregroundColor(.white.opacity(0.42)))
                             .accessibilityIdentifier(identifier)
                     } else {
                         SecureField(title, text: text,
-                                    prompt: Text("••••••••").foregroundStyle(.white.opacity(0.42)))
+                                    prompt: Text("••••••••").foregroundColor(.white.opacity(0.42)))
                             .accessibilityIdentifier(identifier)
                     }
                 }
