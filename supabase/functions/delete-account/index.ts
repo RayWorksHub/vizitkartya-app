@@ -1,6 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const STORAGE_BUCKETS = ['profile-private', 'profile-public']
+// The currently deployed VIZIT project stores avatars under <user-id>/… .
+// Keep this list aligned with the live bucket inventory so a missing bucket
+// cannot make an otherwise valid account deletion fail.
+const STORAGE_BUCKETS = ['avatars']
 const STORAGE_PAGE_SIZE = 100
 const STORAGE_REMOVE_BATCH_SIZE = 100
 const MAX_STORAGE_ENTRIES = 10_000
@@ -104,14 +107,6 @@ Deno.serve(async (req) => {
   const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
   if (deleteError) {
     console.error('delete-account auth deletion failed', deleteError.code ?? deleteError.status)
-    return new Response('Account deletion failed', { status: 500 })
-  }
-
-  try {
-    await deleteAllUserFiles(admin, userId)
-  } catch (error) {
-    const failure = error instanceof Error ? error.message : 'post-delete-storage-cleanup-failed'
-    console.error('delete-account post-delete storage cleanup failed', failure)
     return new Response('Account deletion failed', { status: 500 })
   }
   return new Response(null, { status: 204 })
