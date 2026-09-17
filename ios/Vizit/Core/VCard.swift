@@ -27,7 +27,9 @@ public enum VCard {
 
     public static func qrPayload(_ profile: ContactProfile) throws -> String {
         let payload = try encode(profile)
-        guard payload.utf8.count <= 1800 else { throw ProfileError.oversizedQR }
+        // Keep enough module headroom for reliable camera decoding on a
+        // handheld screen; the .vcf share route remains available for denser data.
+        guard payload.utf8.count <= 1400 else { throw ProfileError.oversizedQR }
         return payload
     }
 

@@ -80,10 +80,19 @@ final class VizitCoreTests: XCTestCase {
     }
     func testOversizedQRIsNotSilentlyTruncated() {
         var p = sample()
-        p.company = String(repeating: "a", count: 480)
-        p.jobTitle = String(repeating: "b", count: 480)
-        p.address = String(repeating: "c", count: 480)
-        p.fullName = String(repeating: "d", count: 480)
+        p.fullName = String(repeating: "d", count: 80)
+        p.firstName = String(repeating: "f", count: 100)
+        p.lastName = String(repeating: "l", count: 100)
+        p.company = String(repeating: "a", count: 100)
+        p.jobTitle = String(repeating: "b", count: 100)
+        p.address = String(repeating: "c", count: 180)
+        p.phone = "+" + String(repeating: "1", count: 39)
+        p.email = String(repeating: "e", count: 64) + "@"
+            + String(repeating: "m", count: 63) + "."
+            + String(repeating: "n", count: 63) + ".hu"
+        p.website = "https://example.com/" + String(repeating: "w", count: 280)
+        p.linkedIn = "https://linkedin.com/in/" + String(repeating: "x", count: 276)
+        XCTAssertNoThrow(try p.validate(), "The profile itself must stay inside every database field limit")
         XCTAssertThrowsError(try VCard.qrPayload(p)) { XCTAssertEqual($0 as? ProfileError, .oversizedQR) }
     }
     func testUTF8FoldingPreservesEveryScalar() {
