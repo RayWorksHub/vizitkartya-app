@@ -10,8 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL: ${{ secrets.VIZIT_DEV_SUPABASE_URL }}
-      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY: ${{ secrets.VIZIT_DEV_SUPABASE_KEY }}
+      # Supabase publishable keys are safe to ship in clients; RLS enforces access.
+      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
+      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
       # The current DEV Supabase project intentionally has Google disabled.
       ORG_GRADLE_PROJECT_VIZIT_DEV_GOOGLE_WEB_CLIENT_ID: ''
       VIZIT_DEV_SIGNING_KEYSTORE_BASE64: ${{ secrets.VIZIT_DEV_SIGNING_KEYSTORE_BASE64 }}
