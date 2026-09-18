@@ -10,6 +10,7 @@ import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.data.settings.AppSettingsStore
 import hu.rayworks.vizit.data.sync.ProfileSyncEngine
 import hu.rayworks.vizit.data.sync.WorkManagerProfileSyncScheduler
+import hu.rayworks.vizit.nfc.NfcRouting
 
 class VizitApplication : Application() {
     lateinit var container: VizitAppContainer
@@ -17,6 +18,7 @@ class VizitApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        NfcRouting.reset(this)
         container = VizitAppContainer(this)
     }
 }
@@ -26,7 +28,9 @@ class VizitAppContainer(application: Application) {
     private val database = VizitDatabase.get(application)
     private val localStore = RoomProfileStore(database.profileDao())
     private val syncScheduler = WorkManagerProfileSyncScheduler(application)
-    private val remoteDataSource = SupabaseProfileRemoteDataSource(SupabaseProvider.getOrNull())
+    private val remoteDataSource: hu.rayworks.vizit.data.sync.ProfileRemoteDataSource =
+        if (BuildConfig.PROFILE_BACKEND == "legacy") hu.rayworks.vizit.data.remote.LegacyProfileRemoteDataSource(SupabaseProvider.getOrNull())
+        else SupabaseProfileRemoteDataSource(SupabaseProvider.getOrNull())
 
     val profileRepository = ContactProfileRepository(
         localStore = localStore,

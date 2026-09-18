@@ -26,12 +26,12 @@ Az `Android CI` 10. futása sikeresen teljesítette a unit test, lint, DEV/BETA 
 | CI | `TESTED` | Unit test, lint és mindhárom környezet buildje sikeres. |
 | Projektstruktúra | `REQUIRES REFACTOR` | Még gyökérszintű `app/`; a master szerinti `apps/android`, `shared` és teljes docs struktúra nincs kész. |
 | Hivatalos branding | `TESTED` | A jóváhagyott master asset, adaptive/round/themed launcher ikon és kontrollált brandfelületek buildelnek. |
-| Auth | `IMPLEMENTED`, élő E2E blokkolt | Teljes email/jelszó UX, session/reset, validált callback, post-auth jogi gate, Google adapter, explicit fióktörlés és lokális purge kész; élő DEV bizonyíték hiányzik. |
-| Supabase kliens | `IMPLEMENTED` | Auth/PostgREST/Storage/Functions kliens és flavor config kész, de távoli projekten nincs ellenőrizve. |
-| Supabase schema/RLS | `IMPLEMENTED` | Forward-only privacy/auth/storage hardening, jogi RPC és verzióellenőrzött profil-sync kész; távoli DEV projekten még nincs alkalmazva vagy E2E tesztelve. |
+| Auth | `TESTED` élő DEV CORE E2E | A publikus email/jelszó signup, login, új belépés utáni session/profil restore és jogi gate élő DEV projekten bizonyított; a fióktörlő Edge Function deployja külön, nem Beta-core blocker. |
+| Supabase kliens | `TESTED` élő DEV CORE E2E | Auth/PostgREST/Storage kliens és flavor config élő DEV backenddel ellenőrizve; a Functions kliens buildel, a törlőfunkció deployja még hiányzik. |
+| Supabase schema/RLS | `TESTED` élő DEV CORE E2E | A négy forward-only migráció külön DEV projekten alkalmazva; profil-sync, idempotencia, konfliktus és cross-user RLS ténylegesen bizonyított. |
 | Room | `IMPLEMENTED` | A futó profilrepository Room source of truth; v1→v2 migráció és a korábbi SharedPreferences adat egyszeri átemelése elkészült. |
 | DataStore | `IMPLEMENTED` | Az automatikus szinkron, az aktív profiltulajdonos és a legacy migráció állapota futásidőben be van kötve. |
-| Offline sync | `IMPLEMENTED` | Atomi, összevont outbox, WorkManager hálózati constraint, exponenciális retry, sync lease, idempotens Supabase RPC és verziókonfliktus-blokkolás készült. Élő Supabase E2E még szükséges. |
+| Offline sync | `TESTED` szerver- és JVM-szinten | Atomi, összevont outbox, WorkManager constraint/retry, sync lease és konfliktuskezelés kész; az élő push és új login utáni pull bizonyított, fizikai offline app-restart még szükséges. |
 | Profilmodell | `REQUIRES REFACTOR` | A Room séma normalizált, de a futó UI még egyetlen telefon/e-mail/cím/link mezőt mutat; többértékű szerkesztés, sorrend és láthatóság nincs bekötve. |
 | Profilkép | `PARTIALLY SUPPORTED` | Photo Picker és tömörítés működik; crop/pan/zoom UI, külön display/thumbnail/contact asset pipeline nincs kész. |
 | Céges logó | `BLOCKED` | Külön `contain` alapú cégeslogó-kezelés még nincs. |
@@ -91,8 +91,8 @@ Az `Android CI` 16. futása sikeresen teljesítette a unit test, lint, DEV/BETA 
 | Jogi gate | `IMPLEMENTED`: signup trigger mellett OAuth/régi user RPC-ellenőrzés és elfogadás, user+verzió kötött offline cache, valamint profil-RPC gate készült. |
 | Fiókkezelés | `IMPLEMENTED`: beállításokbeli logout, `TÖRLÉS` megerősítés, lokális Room/outbox purge, rekurzív storage cleanup és Auth-kaszkád készült. |
 | Storage security | `IMPLEMENTED`: törölt Auth-user még élő JWT-je nem írhat a user bucketjeibe; a törlőfunkció pre/post cleanupot végez. |
-| Supabase tesztek | `IMPLEMENTED`, futtatás blokkolt: 24 állításos pgTAP RLS/RPC suite és őrzött távoli Auth/Profile/RLS/Storage/Delete E2E runner készült. |
-| Élő DEV bizonyíték | `BLOCKED BY EXTERNAL ACCESS`: az elérhető VIZIT projekt `main / Production`; külön DEV projekt vagy branch nincs azonosítva, ezért távoli módosítás nem történt. |
+| Supabase tesztek | `TESTED` CORE, teljes scope blokkolt: az őrzött távoli runner Beta-core ága élőben zöld; a 24 állításos pgTAP suite kész, a teljes Delete ág az Edge Function deployjára vár. |
+| Élő DEV bizonyíték | `TESTED` CORE scope: külön `vizit-dev` projekt, migrációk, publikus signup, password login, jogi gate, profil push/idempotencia/konfliktus/pull, cross-user RLS és Storage élőben zöld; az ideiglenes adatok törlődtek. |
 
 A feature ág CI-státusza a PR létrehozása után kerül rögzítésre.
 

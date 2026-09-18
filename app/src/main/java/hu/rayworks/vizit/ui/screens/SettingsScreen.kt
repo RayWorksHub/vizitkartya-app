@@ -52,6 +52,8 @@ fun SettingsScreen(
     automaticSyncEnabled: Boolean,
     onAutomaticSyncChanged: (Boolean) -> Unit,
     onRetrySync: () -> Unit,
+    onResolveConflict: (Boolean) -> Unit,
+    resolutionMessage: String?,
     authActionState: AuthActionState,
     googleSignInEnabled: Boolean,
     cloudAccountAvailable: Boolean,
@@ -60,6 +62,7 @@ fun SettingsScreen(
     onDeleteAccount: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var confirmCloudCopy by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
     var deleteConfirmation by rememberSaveable { mutableStateOf("") }
     val authLoading = authActionState is AuthActionState.Loading
@@ -122,6 +125,11 @@ fun SettingsScreen(
                             onCheckedChange = onAutomaticSyncChanged,
                         )
                     }
+                    if (syncState.status == ProfileSyncStatus.CONFLICT) {
+                        Button(onClick = { onResolveConflict(true) }, modifier = Modifier.fillMaxWidth()) { Text("A helyi változat feltöltése") }
+                        OutlinedButton(onClick = { confirmCloudCopy = true }, modifier = Modifier.fillMaxWidth()) { Text("A felhőváltozat használata") }
+                    }
+                    resolutionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     if (syncState.status == ProfileSyncStatus.RETRY_SCHEDULED) {
                         Button(onClick = onRetrySync, modifier = Modifier.fillMaxWidth()) {
                             Text("Szinkron újrapróbálása")
@@ -218,6 +226,13 @@ fun SettingsScreen(
         }
     }
 
+    if (confirmCloudCopy) {
+        AlertDialog(onDismissRequest = { confirmCloudCopy = false },
+            title = { Text("A felhőváltozat használata?") },
+            text = { Text("Ezzel lecseréled az ezen a készüléken még fel nem töltött névjegyadatokat és profilképet a felhőben tárolt változatra.") },
+            confirmButton = { TextButton(onClick = { confirmCloudCopy = false; onResolveConflict(false) }) { Text("Helyi módosítások lecserélése") } },
+            dismissButton = { TextButton(onClick = { confirmCloudCopy = false }) { Text("Mégse") } })
+    }
     if (showDeleteConfirmation) {
         AlertDialog(
             onDismissRequest = {

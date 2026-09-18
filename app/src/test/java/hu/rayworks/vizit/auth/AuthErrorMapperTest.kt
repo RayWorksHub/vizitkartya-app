@@ -52,4 +52,11 @@ class AuthErrorMapperTest {
         assertEquals("A művelet nem sikerült. Próbáld újra.", mapped)
         assertFalse(mapped.contains("private-user"))
     }
+
+    @Test fun `disabled confirmation cannot create a silent session`() {
+        assertEquals(
+            "Az e-mailes megerősítés átmenetileg nem érhető el. Próbáld újra később.",
+            authErrorMessage(EmailConfirmationNotEnforcedException()),
+        )
+    }
 }

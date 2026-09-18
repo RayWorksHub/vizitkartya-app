@@ -28,5 +28,8 @@ class GoogleAuthAdapter(private val client: SupabaseClient) {
             idToken = googleCredential.idToken
             provider = Google
         }
+        checkNotNull(client.auth.currentSessionOrNull()?.user?.id) {
+            "Supabase session was not created after Google Sign-In."
+        }
     }
 }

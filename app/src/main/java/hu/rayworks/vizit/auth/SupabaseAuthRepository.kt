@@ -15,6 +15,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import hu.rayworks.vizit.BuildConfig
 
 class SupabaseAuthRepository(
     private val client: SupabaseClient,
@@ -41,18 +44,26 @@ class SupabaseAuthRepository(
     }
 
     suspend fun register(
+        name: String,
         email: String,
         password: String,
+        redirectUrl: String,
         privacyPolicyVersion: String,
         termsVersion: String,
     ) {
-        client.auth.signUpWith(Email) {
+        client.auth.signUpWith(Email, redirectUrl = redirectUrl) {
             this.email = email.trim()
             this.password = password
             data = buildJsonObject {
+                put("display_name", name.trim())
                 put("privacy_policy_version", privacyPolicyVersion)
+                put("privacy_version", privacyPolicyVersion)
                 put("terms_version", termsVersion)
             }
+        }
+        if (client.auth.currentSessionOrNull() != null) {
+            client.auth.signOut()
+            throw EmailConfirmationNotEnforcedException()
         }
     }
 
@@ -81,10 +92,15 @@ class SupabaseAuthRepository(
 
     suspend fun acceptLegalDocuments() {
         val userId = authenticatedUserId() ?: error("Authenticated session required")
-        client.postgrest.rpc(
-            function = "accept_legal_documents",
-            parameters = legalParameters(),
-        )
+        if (BuildConfig.PROFILE_BACKEND == "legacy") {
+            client.auth.updateUser {
+                data = buildJsonObject {
+                    client.auth.currentSessionOrNull()?.user?.userMetadata?.forEach { (key, value) -> put(key, value) }
+                    put("privacy_version", privacyPolicyVersion); put("privacy_policy_version", privacyPolicyVersion)
+                    put("terms_version", termsVersion)
+                }
+            }
+        } else client.postgrest.rpc(function = "accept_legal_documents", parameters = legalParameters())
         settingsStore.rememberLegalAcceptance(
             userId = userId,
             privacyPolicyVersion = privacyPolicyVersion,
@@ -147,13 +163,20 @@ class SupabaseAuthRepository(
             termsVersion = termsVersion,
         )
 
-    private suspend fun hasLegalAcceptance(): Boolean = client.postgrest.rpc(
-        function = "has_legal_acceptance",
-        parameters = legalParameters(),
-    ).data.let { json.decodeFromString<Boolean>(it) }
+    private suspend fun hasLegalAcceptance(): Boolean {
+        if (BuildConfig.PROFILE_BACKEND == "legacy") {
+            val metadata = client.auth.retrieveUserForCurrentSession().userMetadata ?: return false
+            return metadata["privacy_version"]?.jsonPrimitive?.contentOrNull == privacyPolicyVersion &&
+                metadata["terms_version"]?.jsonPrimitive?.contentOrNull == termsVersion
+        }
+        return client.postgrest.rpc(function = "has_legal_acceptance", parameters = legalParameters())
+            .data.let { json.decodeFromString<Boolean>(it) }
+    }
 
     private fun legalParameters() = buildJsonObject {
         put("p_privacy_policy_version", JsonPrimitive(privacyPolicyVersion))
         put("p_terms_version", JsonPrimitive(termsVersion))
     }
 }
+
+internal class EmailConfirmationNotEnforcedException : IllegalStateException()

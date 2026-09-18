@@ -62,6 +62,7 @@ import hu.rayworks.vizit.qr.QrShareHelper
 @Composable
 fun ShareScreen(
     profile: ContactProfile,
+    synchronized: Boolean,
     nfcStatus: NfcStatus,
     onStartNfcShare: () -> String?,
     modifier: Modifier = Modifier,
@@ -71,14 +72,15 @@ fun ShareScreen(
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var showFullScreenQr by rememberSaveable { mutableStateOf(false) }
 
-    val publicProfileUrl = remember(profile) { QrPayloadFactory.profileUrl(profile) }
+    val publicProfileUrl = remember(profile, synchronized) { QrPayloadFactory.profileUrl(profile, synchronized) }
+    val photoContactUrl = publicProfileUrl?.takeIf { profile.photoBase64.isNotBlank() }?.plus("?contact=1")
     val contactPayload = remember(profile, publicProfileUrl) {
         QrPayloadFactory.contact(profile, publicProfileUrl)
     }
-    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload) {
+    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, photoContactUrl) {
         when (qrMode) {
             QrMode.PROFILE -> publicProfileUrl
-            QrMode.CONTACT -> contactPayload.getOrNull()
+            QrMode.CONTACT -> photoContactUrl ?: contactPayload.getOrNull()
         }
     }
     val qrBitmap = remember(qrPayload) {
@@ -149,7 +151,7 @@ fun ShareScreen(
                     FilterChip(
                         selected = qrMode == QrMode.CONTACT,
                         onClick = { qrMode = QrMode.CONTACT },
-                        label = { Text("Kontakt QR") },
+                        label = { Text(if (photoContactUrl != null) "Fényképes QR" else "Offline Kontakt QR") },
                     )
                     FilterChip(
                         selected = qrMode == QrMode.PROFILE,
@@ -172,7 +174,9 @@ fun ShareScreen(
                     }
                     Text(
                         if (qrMode == QrMode.PROFILE) {
-                            "HTTPS profil QR – Androidon App Link, iPhone-on Safari fallback."
+                            "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
+                        } else if (photoContactUrl != null) {
+                            "Beolvasás után a profilképpel együtt menthető a névjegy. Internetkapcsolat szükséges."
                         } else {
                             "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
                         },
@@ -229,7 +233,7 @@ fun ShareScreen(
                     Text(
                         text = when (qrMode) {
                             QrMode.PROFILE ->
-                                "A VIZIT profil QR-hez előbb publikus profilt és érvényes profilazonosítót kell létrehozni. A Kontakt QR addig is használható offline."
+                                "A VIZIT profil QR-hez előbb nyilvános profilt, érvényes profilazonosítót és sikeres szinkront kell létrehozni. A Kontakt QR addig is használható offline."
 
                             QrMode.CONTACT -> contactPayload.exceptionOrNull()?.message
                                 ?: "A Kontakt QR most nem állítható elő."

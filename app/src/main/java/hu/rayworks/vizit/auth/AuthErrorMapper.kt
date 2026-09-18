@@ -1,11 +1,17 @@
 package hu.rayworks.vizit.auth
 
-fun authErrorMessage(error: Throwable): String = authErrorMessage(error.message)
+fun authErrorMessage(error: Throwable): String = when (error) {
+    is EmailConfirmationNotEnforcedException ->
+        "Az e-mailes megerősítés átmenetileg nem érhető el. Próbáld újra később."
+
+    else -> authErrorMessage(error.message)
+}
 
 internal fun authErrorMessage(rawMessage: String?): String {
     val raw = rawMessage.orEmpty().lowercase()
     return when {
         "invalid login credentials" in raw -> "Hibás e-mail-cím vagy jelszó."
+        "email address" in raw && "invalid" in raw -> "Az e-mail-cím formátuma nem megfelelő."
         "email not confirmed" in raw ->
             "Az e-mail-cím még nincs megerősítve. Ellenőrizd a postafiókodat."
 
@@ -23,6 +29,8 @@ internal fun authErrorMessage(rawMessage: String?): String {
 
         "otp_expired" in raw || "expired" in raw && ("link" in raw || "token" in raw) ->
             "A hitelesítő link lejárt vagy már felhasználták. Kérj új levelet."
+
+        "cancelled" in raw || "canceled" in raw -> "A Google-belépést megszakítottad."
 
         "network" in raw ||
             "timeout" in raw ||

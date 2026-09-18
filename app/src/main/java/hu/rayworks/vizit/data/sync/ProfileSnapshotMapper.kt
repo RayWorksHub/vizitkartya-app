@@ -156,7 +156,8 @@ object ProfileSnapshotMapper {
                 company = canonical.company,
                 jobTitle = canonical.jobTitle,
                 bio = previous?.profile?.bio.orEmpty(),
-                displayImagePath = previous?.profile?.displayImagePath,
+                displayImagePath = if (canonical.photoBase64 == previous?.profile?.localContactPhotoBase64)
+                    previous?.profile?.displayImagePath else null,
                 contactImagePath = previous?.profile?.contactImagePath,
                 logoPath = previous?.profile?.logoPath,
                 publicSlug = canonical.publicSlug.ifBlank { null },
@@ -201,7 +202,7 @@ object ProfileSnapshotMapper {
             isPublic = payload.isPublic,
             updatedAtEpochMs = updatedAtEpochMs,
             pendingSync = false,
-            localContactPhotoBase64 = previous?.profile?.localContactPhotoBase64.orEmpty(),
+            localContactPhotoBase64 = payload.photoBase64 ?: previous?.profile?.localContactPhotoBase64.orEmpty(),
         ),
         contacts = payload.contacts.map {
             ProfileContactEntity(
@@ -251,6 +252,7 @@ object ProfileSnapshotMapper {
     )
 
     fun toPayload(snapshot: LocalProfileSnapshot): ProfileSyncPayload = ProfileSyncPayload(
+        photoBase64 = snapshot.profile.localContactPhotoBase64,
         firstName = snapshot.profile.firstName,
         lastName = snapshot.profile.lastName,
         displayName = snapshot.profile.displayName,

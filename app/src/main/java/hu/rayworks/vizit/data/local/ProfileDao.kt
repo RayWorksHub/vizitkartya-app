@@ -191,9 +191,19 @@ interface ProfileDao {
     suspend fun replaceRemoteSnapshotIfNoOutbox(
         snapshot: LocalProfileSnapshot,
         metadata: ProfileSyncMetadataEntity,
+        outbox: ProfileSyncOutboxEntity? = null,
     ): Boolean {
         if (getOutbox(snapshot.profile.userId) != null) return false
-        replaceSnapshot(snapshot, metadata, null)
+        replaceSnapshot(snapshot, metadata, outbox)
+        return true
+    }
+
+    @Transaction
+    suspend fun resolveConflictIfCurrent(expectedOperationId: String, snapshot: LocalProfileSnapshot,
+        metadata: ProfileSyncMetadataEntity, replacement: ProfileSyncOutboxEntity?): Boolean {
+        val current = getOutbox(snapshot.profile.userId)
+        if (current?.operationId != expectedOperationId || current.state != "CONFLICT") return false
+        replaceSnapshot(snapshot, metadata, replacement)
         return true
     }
 

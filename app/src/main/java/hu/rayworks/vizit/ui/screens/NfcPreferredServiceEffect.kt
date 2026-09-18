@@ -1,35 +1,58 @@
 package hu.rayworks.vizit.ui.screens
 
 import android.app.Activity
-import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
-import android.nfc.NfcAdapter
-import android.nfc.cardemulation.CardEmulation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
-import hu.rayworks.vizit.nfc.VizitHostApduService
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import hu.rayworks.vizit.nfc.NfcRouting
 
 @Composable
-internal fun NfcPreferredServiceEffect(enabled: Boolean) {
+internal fun NfcPreferredServiceEffect(
+    enabled: Boolean,
+    onRoutingFailed: () -> Unit,
+) {
     val context = LocalContext.current
     val activity = context.findNfcActivity()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val routingFailed = rememberUpdatedState(onRoutingFailed)
 
-    DisposableEffect(enabled, activity) {
+    DisposableEffect(enabled, activity, lifecycleOwner) {
         if (!enabled || activity == null) return@DisposableEffect onDispose {}
 
-        val adapter = NfcAdapter.getDefaultAdapter(context)
-        val cardEmulation = adapter?.let(CardEmulation::getInstance)
-        val component = ComponentName(context, VizitHostApduService::class.java)
-        val preferred = runCatching {
-            cardEmulation?.setPreferredService(activity, component) == true
-        }.getOrDefault(false)
+        var preferred = false
+
+        fun activate() {
+            preferred = NfcRouting.activate(activity)
+            if (!preferred) {
+                NfcRouting.deactivate(activity)
+                routingFailed.value()
+            }
+        }
+
+        fun deactivate() {
+            NfcRouting.deactivate(activity)
+            preferred = false
+        }
+
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> activate()
+                Lifecycle.Event.ON_PAUSE -> deactivate()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) activate()
 
         onDispose {
-            if (preferred) {
-                runCatching { cardEmulation?.unsetPreferredService(activity) }
-            }
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            deactivate()
         }
     }
 }

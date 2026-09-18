@@ -122,6 +122,19 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    var conflictResolutionMessage by mutableStateOf<String?>(null)
+        private set
+
+    fun resolveProfileConflict(keepLocal: Boolean) {
+        val userId = activeProfileOwnerId ?: return
+        viewModelScope.launch {
+            conflictResolutionMessage = try {
+                if (repository.resolveConflict(userId, keepLocal)) "A választás mentve."
+                else "A profil közben megváltozott. Ellenőrizd újra az állapotot."
+            } catch (_: Exception) { "A feloldás nem sikerült. Az adatok megmaradtak." }
+        }
+    }
+
     fun retryProfileSync() {
         val userId = activeProfileOwnerId ?: return
         viewModelScope.launch { repository.retrySync(userId) }
@@ -150,7 +163,9 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
             .takeIf { profile.isPublic && it.isNotBlank() }
             ?.let { "${BuildConfig.PUBLIC_PROFILE_BASE_URL}/${Uri.encode(it)}" }
 
-        val prepared = runCatching { NfcPayloadFactory.create(profile, fallbackUrl) }
+        val prepared = runCatching {
+            NfcPayloadFactory.create(profile.copy(photoBase64 = ""), fallbackUrl)
+        }
             .getOrElse { return "A névjegy NFC-adatcsomagja túl nagy. Rövidíts néhány mezőt, majd próbáld újra." }
 
         val sessionId = hcePayloadStore.activate(prepared.bytes, NFC_SHARE_TIMEOUT_MILLIS)
@@ -180,6 +195,14 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         activeNfcSessionId = null
         nfcSharePhase = NfcSharePhase.IDLE
         nfcPhotoIncluded = false
+    }
+
+    fun reportNfcRoutingFailure() {
+        nfcTimeoutJob?.cancel()
+        nfcTimeoutJob = null
+        activeNfcSessionId?.let(hcePayloadStore::deactivate)
+        activeNfcSessionId = null
+        nfcSharePhase = NfcSharePhase.ROUTING_FAILED
     }
 
     fun refreshNfcStatus() {
