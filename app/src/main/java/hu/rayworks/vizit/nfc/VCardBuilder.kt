@@ -31,8 +31,14 @@ object VCardBuilder {
         if (profile.address.isNotBlank()) {
             appendVCardLine("ADR;TYPE=WORK:;;${escape(profile.address)};;;;")
         }
-        if (profile.linkedIn.isNotBlank()) {
-            appendVCardLine("X-SOCIALPROFILE;TYPE=linkedin:${escape(profile.linkedIn)}")
+        listOf(
+            "linkedin" to profile.linkedIn,
+            "facebook" to profile.facebook,
+            "instagram" to profile.instagram,
+            "tiktok" to profile.tiktok,
+            "youtube" to profile.youtube,
+        ).filter { it.second.isNotBlank() }.forEach { (platform, url) ->
+            appendVCardLine("X-SOCIALPROFILE;TYPE=$platform:${escape(url)}")
         }
         if (includePhoto && profile.photoBase64.isNotBlank()) {
             appendVCardLine("PHOTO;ENCODING=b;TYPE=JPEG:${profile.photoBase64}")

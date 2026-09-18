@@ -21,6 +21,10 @@ class ProfileSnapshotMapperTest {
             website = " https://example.com ",
             address = " Budapest ",
             linkedIn = " https://linkedin.com/in/elek ",
+            facebook = " https://facebook.com/elek ",
+            instagram = " https://instagram.com/elek ",
+            tiktok = " https://tiktok.com/@elek ",
+            youtube = " https://youtube.com/@elek ",
             photoBase64 = "local-photo",
             publicSlug = " teszt-elek ",
             isPublic = true,
@@ -33,7 +37,15 @@ class ProfileSnapshotMapperTest {
         assertEquals("Teszt Elek", snapshot.profile.displayName)
         assertEquals("local-photo", snapshot.profile.localContactPhotoBase64)
         assertEquals(listOf("phone", "email"), snapshot.contacts.map { it.kind })
-        assertEquals(listOf("website", "linkedin"), snapshot.links.map { it.kind })
+        assertEquals(
+            listOf("website", "linkedin", "facebook", "instagram", "tiktok", "youtube"),
+            snapshot.links.map { it.kind },
+        )
+        val restored = ProfileSnapshotMapper.toContactProfile(snapshot)
+        assertEquals("https://facebook.com/elek", restored.facebook)
+        assertEquals("https://instagram.com/elek", restored.instagram)
+        assertEquals("https://tiktok.com/@elek", restored.tiktok)
+        assertEquals("https://youtube.com/@elek", restored.youtube)
         assertTrue(snapshot.profile.pendingSync)
         assertTrue(payload.isPublic)
         assertTrue(payload.contacts.all { !it.isPublic })

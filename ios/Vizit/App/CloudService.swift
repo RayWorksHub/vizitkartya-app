@@ -20,10 +20,15 @@ struct RemoteProfile: Decodable, Sendable {
     let updatedAt: String
     let avatarURL: String?
     var linkedIn = ""
+    var facebook = ""
+    var instagram = ""
+    var tiktok = ""
+    var youtube = ""
 
     var fingerprint: String {
         let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company,
-                      publicEmail, phone, website, address, String(isPublic), avatarURL ?? "", linkedIn]
+                      publicEmail, phone, website, address, String(isPublic), avatarURL ?? ""]
+            + SocialPlatform.allCases.map { socialURL(for: $0) }
         let bytes = (try? JSONEncoder().encode(values)) ?? Data()
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
@@ -32,8 +37,35 @@ struct RemoteProfile: Decodable, Sendable {
         let p = value.normalized
         return displayName == p.displayName && slug == p.publicSlug && jobTitle == p.jobTitle &&
             company == p.company && publicEmail == p.email && phone == p.phone && website == p.website &&
-            address == p.address && isPublic == p.isPublic && linkedIn == p.linkedIn &&
+            address == p.address && isPublic == p.isPublic &&
+            SocialPlatform.allCases.allSatisfy { socialURL(for: $0) == p.socialURL(for: $0) } &&
             (avatarURL ?? "") == ((try? ProfilePhoto.inlineURL(p.photoBase64)) ?? "invalid-photo")
+    }
+
+    func socialURL(for platform: SocialPlatform) -> String {
+        switch platform {
+        case .linkedin: return linkedIn
+        case .facebook: return facebook
+        case .instagram: return instagram
+        case .tiktok: return tiktok
+        case .youtube: return youtube
+        }
+    }
+
+    mutating func setSocialURL(_ value: String, for platform: SocialPlatform) {
+        switch platform {
+        case .linkedin: linkedIn = value
+        case .facebook: facebook = value
+        case .instagram: instagram = value
+        case .tiktok: tiktok = value
+        case .youtube: youtube = value
+        }
+    }
+
+    mutating func copySocialProfiles(from other: RemoteProfile) {
+        for platform in SocialPlatform.allCases {
+            setSocialURL(other.socialURL(for: platform), for: platform)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -51,6 +83,7 @@ struct RemoteProfile: Decodable, Sendable {
 
 private struct RemoteLink: Decodable {
     let id: UUID
+    let platform: String
     let url: String
 }
 
@@ -81,10 +114,10 @@ private struct ProfileWrite: Encodable {
 
 private struct LinkWrite: Encodable {
     let profileID: UUID
-    let platform = "linkedin"
-    let label = "LinkedIn"
+    let platform: String
+    let label: String
     let url: String
-    let sortOrder = 0
+    let sortOrder: Int
     let enabled = true
 
     enum CodingKeys: String, CodingKey {
@@ -244,11 +277,8 @@ final class CloudService: @unchecked Sendable {
         guard var remote = rows.first else { return nil }
         let links: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query: [
             URLQueryItem(name: "profile_id", value: "eq.\(remote.id.uuidString.lowercased())"),
-            URLQueryItem(name: "platform", value: "eq.linkedin"),
-            URLQueryItem(name: "select", value: "id,url"),
-            URLQueryItem(name: "limit", value: "1")
+            URLQueryItem(name: "select", value: "id,platform,url")
         ])
-        remote.linkedIn = links.first?.url ?? ""
         var profile = local
         profile.fullName = remote.displayName
         profile.jobTitle = remote.jobTitle
@@ -257,7 +287,11 @@ final class CloudService: @unchecked Sendable {
         profile.phone = remote.phone
         profile.website = remote.website
         profile.address = remote.address
-        profile.linkedIn = links.first?.url ?? ""
+        for platform in SocialPlatform.allCases {
+            let url = links.first(where: { $0.platform == platform.rawValue })?.url ?? ""
+            remote.setSocialURL(url, for: platform)
+            profile.setSocialURL(url, for: platform)
+        }
         profile.publicSlug = remote.slug
         profile.isPublic = remote.isPublic
         if loadPhoto, let avatar = remote.avatarURL {
@@ -314,29 +348,39 @@ final class CloudService: @unchecked Sendable {
                             isPublic: p.isPublic, avatarURL: try ProfilePhoto.inlineURL(p.photoBase64))
     }
 
-    func syncLinkedIn(profileID: UUID, value: String, expected: String) async throws {
-        let baseQuery = [
+    func syncSocialProfiles(profileID: UUID, value: ContactProfile, expected: ContactProfile) async throws {
+        let existing: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query: [
             URLQueryItem(name: "profile_id", value: "eq.\(profileID.uuidString.lowercased())"),
-            URLQueryItem(name: "platform", value: "eq.linkedin")
-        ]
-        let existing: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query:
-            baseQuery + [URLQueryItem(name: "select", value: "id,url"), URLQueryItem(name: "limit", value: "1")])
-        if (existing.first?.url ?? "") == value { return }
-        guard (existing.first?.url ?? "") == expected else { throw CloudError.profileConflict }
-        if value.isEmpty {
-            if let id = existing.first?.id {
-                let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "DELETE",
+            URLQueryItem(name: "select", value: "id,platform,url")
+        ])
+        for platform in SocialPlatform.allCases {
+            let current = existing.first(where: { $0.platform == platform.rawValue })?.url ?? ""
+            guard current == expected.socialURL(for: platform) else { throw CloudError.profileConflict }
+        }
+
+        for platform in SocialPlatform.allCases {
+            let current = existing.first(where: { $0.platform == platform.rawValue })
+            let desiredURL = value.socialURL(for: platform)
+            let expectedURL = expected.socialURL(for: platform)
+            if current?.url == desiredURL { continue }
+            if desiredURL.isEmpty {
+                if let id = current?.id {
+                    let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "DELETE",
+                        query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
+                                URLQueryItem(name: "url", value: "eq.\(expectedURL)")], prefer: "return=minimal")
+                }
+            } else if let id = current?.id {
+                let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "PATCH",
                     query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
-                            URLQueryItem(name: "url", value: "eq.\(expected)")], prefer: "return=minimal")
+                            URLQueryItem(name: "url", value: "eq.\(expectedURL)")],
+                    body: ["url": desiredURL], prefer: "return=minimal")
+            } else {
+                let payload = LinkWrite(profileID: profileID, platform: platform.rawValue,
+                                        label: platform.label, url: desiredURL,
+                                        sortOrder: platform.sortOrder)
+                let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "POST",
+                    body: payload, prefer: "return=minimal")
             }
-        } else if let id = existing.first?.id {
-            let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "PATCH",
-                query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
-                        URLQueryItem(name: "url", value: "eq.\(expected)")],
-                body: ["url": value], prefer: "return=minimal")
-        } else {
-            let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "POST",
-                body: LinkWrite(profileID: profileID, url: value), prefer: "return=minimal")
         }
     }
 

@@ -5,7 +5,7 @@ on:
     branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability]
     paths: ['ios/**', 'config/**', '.github/workflows/ios.yml']
   pull_request:
-    branches: [develop]
+    branches: [main, develop]
     paths: ['ios/**', 'config/**', '.github/workflows/ios.yml']
   workflow_dispatch:
 

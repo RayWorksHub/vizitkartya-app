@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.VizitViewModel
 import hu.rayworks.vizit.auth.AuthViewModel
 import hu.rayworks.vizit.ui.screens.HomeScreen
+import hu.rayworks.vizit.ui.screens.BusinessHubScreen
 import hu.rayworks.vizit.ui.screens.NfcShareScreen
 import hu.rayworks.vizit.ui.screens.ProfileScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
@@ -32,6 +34,7 @@ private enum class AppSection(val label: String) {
     HOME("Kezdőlap"),
     PROFILE("Névjegyem"),
     SHARE("Átadás"),
+    KNOWLEDGE("Tudástár"),
     SETTINGS("Beállítások"),
 }
 
@@ -80,6 +83,7 @@ fun VizitApp(
                                     AppSection.HOME -> Icons.Outlined.Home
                                     AppSection.PROFILE -> Icons.Outlined.Person
                                     AppSection.SHARE -> Icons.Outlined.Share
+                                    AppSection.KNOWLEDGE -> Icons.Outlined.MenuBook
                                     AppSection.SETTINGS -> Icons.Outlined.Settings
                                 },
                                 contentDescription = null,
@@ -112,6 +116,10 @@ fun VizitApp(
                 synchronized = viewModel.profileSyncState.status == hu.rayworks.vizit.data.sync.ProfileSyncStatus.SYNCED && !viewModel.profileSyncState.pendingChanges,
                 nfcStatus = viewModel.nfcStatus,
                 onStartNfcShare = viewModel::startNfcShare,
+                modifier = Modifier.padding(innerPadding),
+            )
+
+            AppSection.KNOWLEDGE -> BusinessHubScreen(
                 modifier = Modifier.padding(innerPadding),
             )
 

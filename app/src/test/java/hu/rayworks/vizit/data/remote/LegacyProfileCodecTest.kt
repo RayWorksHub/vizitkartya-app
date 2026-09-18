@@ -30,6 +30,16 @@ class LegacyProfileCodecTest {
         val base=row(); val counted=base.copy(updatedAt="2026-09-18T00:00:01Z")
         assertTrue(LegacyProfileCodec.canApply(base.version,LegacyProfileCodec.fingerprint(base.payload()),counted))
     }
+    @Test fun `social link changes are part of the content revision`() {
+        val base = row().copy(socialLinks = listOf(
+            LegacySocialLink("33333333-3333-4333-8333-333333333333", "facebook", "Facebook", "https://facebook.com/old"),
+        ))
+        val hash = LegacyProfileCodec.fingerprint(base.payload())
+        val changed = base.copy(socialLinks = listOf(
+            LegacySocialLink("33333333-3333-4333-8333-333333333333", "facebook", "Facebook", "https://facebook.com/new"),
+        ))
+        assertFalse(LegacyProfileCodec.canApply(base.version, hash, changed))
+    }
     @Test fun `remote photo replacement and deletion conflict`() {
         val base=row().copy(avatarUrl="data:image/jpeg;base64,/9j/AA==")
         val hash=LegacyProfileCodec.fingerprint(base.payload())

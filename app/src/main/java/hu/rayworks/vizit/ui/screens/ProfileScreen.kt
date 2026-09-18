@@ -191,10 +191,55 @@ fun ProfileScreen(
                 )
             }
             item {
+                Text(
+                    text = "Közösségi média",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    text = "A teljes, https:// kezdetű profilhivatkozásokat add meg.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            item {
                 ProfileTextField(
                     value = draft.linkedIn,
                     onValueChange = { draft = draft.copy(linkedIn = it) },
                     label = "LinkedIn-profil",
+                    keyboardType = KeyboardType.Uri,
+                )
+            }
+            item {
+                ProfileTextField(
+                    value = draft.facebook,
+                    onValueChange = { draft = draft.copy(facebook = it) },
+                    label = "Facebook-profil",
+                    keyboardType = KeyboardType.Uri,
+                )
+            }
+            item {
+                ProfileTextField(
+                    value = draft.instagram,
+                    onValueChange = { draft = draft.copy(instagram = it) },
+                    label = "Instagram-profil",
+                    keyboardType = KeyboardType.Uri,
+                )
+            }
+            item {
+                ProfileTextField(
+                    value = draft.tiktok,
+                    onValueChange = { draft = draft.copy(tiktok = it) },
+                    label = "TikTok-profil",
+                    keyboardType = KeyboardType.Uri,
+                )
+            }
+            item {
+                ProfileTextField(
+                    value = draft.youtube,
+                    onValueChange = { draft = draft.copy(youtube = it) },
+                    label = "YouTube-csatorna",
                     keyboardType = KeyboardType.Uri,
                 )
             }

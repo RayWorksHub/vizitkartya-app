@@ -128,6 +128,10 @@ struct HomeScreen: View {
                             contactLine("globe", store.profile.website)
                             contactLine("mappin.and.ellipse", store.profile.address)
                             contactLine("link", store.profile.linkedIn)
+                            contactLine("link", store.profile.facebook)
+                            contactLine("link", store.profile.instagram)
+                            contactLine("link", store.profile.tiktok)
+                            contactLine("play.rectangle.fill", store.profile.youtube)
                         }
                     }
                 }
@@ -173,7 +177,8 @@ struct HomeScreen: View {
 
     private var hasContactDetails: Bool {
         ![store.profile.phone, store.profile.email, store.profile.website,
-          store.profile.address, store.profile.linkedIn].allSatisfy(\.isEmpty)
+          store.profile.address, store.profile.linkedIn, store.profile.facebook,
+          store.profile.instagram, store.profile.tiktok, store.profile.youtube].allSatisfy(\.isEmpty)
     }
 
     @ViewBuilder private func contactLine(_ icon: String, _ value: String) -> some View {
@@ -570,6 +575,100 @@ struct ScanScreen: View {
         }
         clean.urlAddresses = clean.urlAddresses.filter { SafeLink.https($0.value as String) != nil }
         incoming = IncomingContact(contact: clean)
+    }
+}
+
+private struct BusinessResource: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let url: String
+    let icon: String
+}
+
+struct BusinessHubScreen: View {
+    @Environment(\.openURL) private var openURL
+
+    private let resources = [
+        BusinessResource(
+            id: "vosz-youtube",
+            title: "VOSZ videók",
+            description: "Vállalkozói hírek, interjúk és gyakorlati videók a VOSZ YouTube-csatornáján.",
+            url: "https://youtube.com/@vosz.?si=k2EmMlI8Q5ttlPZC",
+            icon: "play.rectangle.fill"
+        ),
+        BusinessResource(
+            id: "vosz",
+            title: "VOSZ vállalkozói információk",
+            description: "Érdekképviselet, tanácsadás, programok és aktuális vállalkozói hírek.",
+            url: "https://www.vosz.hu/hu",
+            icon: "briefcase.fill"
+        ),
+        BusinessResource(
+            id: "voszport",
+            title: "VOSZPort",
+            description: "Digitális ügyintézési és tudásmegosztási felület vállalkozásoknak.",
+            url: "https://voszport.com/",
+            icon: "globe.europe.africa.fill"
+        )
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                VizitScreenBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Vállalkozói tudástár")
+                                .font(.largeTitle.bold())
+                            Text("Hasznos külső források hírekhez, fejlődéshez és ügyintézéshez.")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        ForEach(resources) { resource in
+                            Button {
+                                guard let url = SafeLink.https(resource.url) else { return }
+                                openURL(url)
+                            } label: {
+                                VizitCard {
+                                    HStack(alignment: .top, spacing: 14) {
+                                        Image(systemName: resource.icon)
+                                            .font(.title2.weight(.semibold))
+                                            .foregroundStyle(Brand.blue)
+                                            .frame(width: 46, height: 46)
+                                            .background(Brand.blue.opacity(0.1))
+                                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(resource.title)
+                                                .font(.headline)
+                                                .foregroundStyle(.primary)
+                                            Text(resource.description)
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                                .multilineTextAlignment(.leading)
+                                        }
+                                        Spacer(minLength: 0)
+                                        Image(systemName: "arrow.up.right")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Text("A hivatkozások külső oldalakra vezetnek. A VIZIT nem áll kapcsolatban ezek tartalmának üzemeltetésével.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: 620)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationBarHidden(true)
+        }
     }
 }
 
