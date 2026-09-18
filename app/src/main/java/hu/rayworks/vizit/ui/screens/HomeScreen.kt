@@ -2,31 +2,31 @@ package hu.rayworks.vizit.ui.screens
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Nfc
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -35,195 +35,198 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
-import hu.rayworks.vizit.ui.components.ProfileAvatar
-import hu.rayworks.vizit.ui.components.VizitBrandMark
-import hu.rayworks.vizit.ui.theme.VizitBlue
-import hu.rayworks.vizit.ui.theme.VizitNavy
-import hu.rayworks.vizit.ui.theme.VizitTeal
+import hu.rayworks.vizit.data.sync.ProfileSyncState
+import hu.rayworks.vizit.data.sync.ProfileSyncStatus
+import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitButton
+import hu.rayworks.vizit.ui.design.components.VizitDigitalCard
+import hu.rayworks.vizit.ui.design.components.VizitIconChip
+import hu.rayworks.vizit.ui.design.components.VizitRow
+import hu.rayworks.vizit.ui.design.components.VizitStatusPill
+import hu.rayworks.vizit.ui.design.components.VizitTone
+import hu.rayworks.vizit.ui.design.components.VizitGroup
+import hu.rayworks.vizit.ui.util.rememberProfilePhoto
 import kotlinx.coroutines.launch
 
+/**
+ * Home answers four questions immediately: who is signed in, what their card
+ * looks like, how to hand it over, and whether the phone is actually ready to
+ * do it. One primary action, three shortcuts, then status.
+ */
 @Composable
 fun HomeScreen(
     profile: ContactProfile,
     nfcStatus: NfcStatus,
+    syncState: ProfileSyncState,
     onStartNfcShare: () -> String?,
-    onEditProfile: () -> Unit,
+    onOpenCard: () -> Unit,
+    onOpenShare: () -> Unit,
+    onOpenKnowledgeHub: () -> Unit,
     onShareAsText: (Context) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val colors = Vizit.colors
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val photo = rememberProfilePhoto(profile.photoBase64)
 
-    Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+    Box(modifier = modifier.fillMaxSize().background(colors.canvas)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = Vizit.space.md),
+            verticalArrangement = Arrangement.spacedBy(Vizit.space.xl),
         ) {
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(listOf(VizitNavy, VizitBlue)),
-                        )
-                        .padding(horizontal = 24.dp, vertical = 28.dp),
-                ) {
-                    VizitBrandMark()
-                    Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Vizit.space.xs))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Üdv újra,", style = Vizit.type.bodySmall, color = colors.textMuted)
                     Text(
-                        text = "Egy érintés.\nEgy kapcsolat.",
-                        color = Color.White,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
+                        text = profile.resolvedDisplayName.ifBlank { "VIZIT" },
+                        style = Vizit.type.h2,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(colors.primarySubtle, RoundedCornerShape(Vizit.radius.full))
+                        .clickable(role = Role.Button, onClick = onOpenCard),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = profile.initials.ifBlank { "V" },
+                        style = Vizit.type.label,
+                        color = colors.primary,
                     )
                 }
             }
 
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ProfileAvatar(
-                            photoBase64 = profile.photoBase64,
-                            initials = profile.initials,
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 16.dp),
-                        ) {
-                            Text(
-                                text = profile.resolvedDisplayName.ifBlank { "Állítsd össze a névjegyed" },
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            val subtitle = listOf(profile.jobTitle, profile.company)
-                                .filter(String::isNotBlank)
-                                .joinToString(" · ")
-                            if (subtitle.isNotBlank()) {
-                                Text(
-                                    text = subtitle,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        OutlinedButton(onClick = onEditProfile) {
-                            Icon(Icons.Outlined.Edit, contentDescription = null)
-                        }
-                    }
-                }
+            Box(modifier = Modifier.clickable(role = Role.Button, onClick = onOpenCard)) {
+                VizitDigitalCard(
+                    fullName = profile.resolvedDisplayName,
+                    initials = profile.initials,
+                    jobTitle = profile.jobTitle,
+                    company = profile.company,
+                    phone = profile.phone,
+                    email = profile.email,
+                    photo = photo,
+                )
             }
 
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Button(
-                        onClick = {
-                            onStartNfcShare()?.let { message ->
-                                scope.launch { snackbarHostState.showSnackbar(message) }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(58.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = VizitTeal),
-                    ) {
-                        Icon(Icons.Outlined.Nfc, contentDescription = null)
-                        Text(
-                            text = "NFC kontaktátadás",
-                            modifier = Modifier.padding(start = 10.dp),
-                            color = VizitNavy,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
+            VizitButton(
+                text = "Névjegy megosztása",
+                onClick = onOpenShare,
+                icon = Icons.Outlined.Share,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
-                    OutlinedButton(
-                        onClick = { onShareAsText(context) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        shape = RoundedCornerShape(18.dp),
-                    ) {
-                        Icon(Icons.Outlined.Share, contentDescription = null)
-                        Text("Megosztás másképp", modifier = Modifier.padding(start = 10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+            ) {
+                QuickTile(
+                    icon = Icons.Outlined.Nfc,
+                    title = "NFC",
+                    subtitle = "Érintéssel",
+                    enabled = nfcStatus.isReady,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    onStartNfcShare()?.let { message ->
+                        scope.launch { snackbarHostState.showSnackbar(message) }
                     }
                 }
+                QuickTile(
+                    icon = Icons.Outlined.QrCode2,
+                    title = "QR-kód",
+                    subtitle = "Mutatás",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenShare,
+                )
+                QuickTile(
+                    icon = Icons.Outlined.ContentCopy,
+                    title = "Egyéb",
+                    subtitle = "Megosztás",
+                    modifier = Modifier.weight(1f),
+                ) { onShareAsText(context) }
             }
 
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (nfcStatus.isReady) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.errorContainer
-                        },
-                    ),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = if (nfcStatus.isReady) {
-                                Icons.Outlined.CheckCircle
-                            } else {
-                                Icons.Outlined.ErrorOutline
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp),
-                        )
-                        Column(modifier = Modifier.padding(start = 14.dp)) {
-                            Text(
-                                text = if (nfcStatus.isReady) "NFC használatra kész" else "NFC beállítás szükséges",
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = nfcStatus.description(),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
+            VizitStatusPill(
+                text = if (nfcStatus.isReady) "NFC használatra kész" else "NFC beállítás szükséges",
+                tone = if (nfcStatus.isReady) VizitTone.Success else VizitTone.Warning,
+            )
+
+            if (syncState.status == ProfileSyncStatus.FAILED) {
+                VizitStatusPill(text = "A szinkron nem sikerült", tone = VizitTone.Error)
             }
 
-            item { Spacer(Modifier.height(8.dp)) }
+            VizitGroup {
+                VizitRow(
+                    label = "Tudástár",
+                    supporting = "Tippek a digitális névjegyhez",
+                    icon = Icons.AutoMirrored.Outlined.MenuBook,
+                    onClick = onOpenKnowledgeHub,
+                )
+            }
+
+            Spacer(Modifier.height(Vizit.space.md))
         }
 
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(16.dp),
+                .padding(Vizit.space.md),
         )
     }
 }
 
-private fun NfcStatus.description(): String = when {
-    !isAvailable -> "A készülékben nincs elérhető NFC-egység."
-    !hasHostCardEmulation -> "A készülék nem támogatja a telefonos kártyaemulációt."
-    !isEnabled -> "Kapcsold be az NFC-t a rendszerbeállításokban."
-    else -> "A telefon készen áll a közvetlen kontaktátadásra."
+@Composable
+private fun QuickTile(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val colors = Vizit.colors
+    Column(
+        modifier = modifier
+            .background(colors.surface, RoundedCornerShape(Vizit.radius.lg))
+            .border(1.dp, colors.border, RoundedCornerShape(Vizit.radius.lg))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = Vizit.space.sm, vertical = Vizit.space.md),
+        verticalArrangement = Arrangement.spacedBy(Vizit.space.xs + 2.dp),
+    ) {
+        VizitIconChip(
+            icon = icon,
+            tint = if (enabled) colors.primary else colors.textDisabled,
+            background = if (enabled) colors.primarySubtle else colors.controlDisabled,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                text = title,
+                style = Vizit.type.label,
+                color = if (enabled) colors.textPrimary else colors.textDisabled,
+            )
+            Text(text = subtitle, style = Vizit.type.caption, color = colors.textMuted)
+        }
+    }
 }

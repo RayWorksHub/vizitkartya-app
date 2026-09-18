@@ -51,6 +51,13 @@ fun VizitButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     contentDescription: String? = null,
+    /**
+     * Fixed colours for "island" surfaces that do not follow the theme — the
+     * always-dark NFC hand-off screen, the always-light QR panel. Leave null
+     * everywhere else so the button stays themed.
+     */
+    containerOverride: Color? = null,
+    contentOverride: Color? = null,
 ) {
     val colors = Vizit.colors
     val interaction = remember { MutableInteractionSource() }
@@ -62,6 +69,7 @@ fun VizitButton(
     )
 
     val container: Color = when {
+        containerOverride != null -> if (pressed && active) containerOverride.copy(alpha = 0.86f) else containerOverride
         !active -> colors.controlDisabled
         style == VizitButtonStyle.Primary -> if (pressed) colors.primaryPressed else colors.primary
         style == VizitButtonStyle.Secondary -> if (pressed) colors.sunken else colors.surface
@@ -69,6 +77,7 @@ fun VizitButton(
         else -> colors.error
     }
     val content: Color = when {
+        contentOverride != null -> contentOverride
         !active -> colors.textDisabled
         style == VizitButtonStyle.Primary -> colors.textOnBrand
         style == VizitButtonStyle.Secondary -> colors.textPrimary
@@ -76,6 +85,7 @@ fun VizitButton(
         else -> colors.textOnBrand
     }
     val border: BorderStroke? = when {
+        containerOverride != null -> null
         style == VizitButtonStyle.Secondary && active -> BorderStroke(1.dp, colors.borderStrong)
         else -> null
     }

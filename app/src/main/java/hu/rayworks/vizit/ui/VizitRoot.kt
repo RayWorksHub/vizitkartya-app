@@ -1,26 +1,36 @@
 package hu.rayworks.vizit.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.VizitViewModel
 import hu.rayworks.vizit.auth.AuthSessionState
 import hu.rayworks.vizit.auth.AuthViewModel
+import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitButton
+import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
+import hu.rayworks.vizit.ui.design.components.VizitEmptyState
+import hu.rayworks.vizit.ui.design.components.VizitErrorState
+import hu.rayworks.vizit.ui.design.components.VizitLoadingState
 import hu.rayworks.vizit.ui.screens.AuthScreen
 
+private const val LOCAL_DEBUG_PROFILE_OWNER_ID = "local-dev-profile"
+
+/**
+ * Session gate. Decides between the auth surface, the app, and the small set of
+ * blocking states (booting, backend missing, refresh failed, legal gate) — each
+ * of which now gets a proper designed state rather than a bare centred string.
+ */
 @Composable
 fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
     val session by authViewModel.sessionState.collectAsState()
@@ -50,66 +60,112 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
         if (vizitViewModel.hasOfflineProfileSession) {
             VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
         } else {
-            CenteredStatus { CircularProgressIndicator() }
+            Booting("Helyi profil betöltése…")
         }
         return
     }
 
     if (
         authViewModel.passwordRecovery &&
-        (currentSession is AuthSessionState.Authenticated ||
-            currentSession is AuthSessionState.LegalAcceptanceRequired ||
-            currentSession is AuthSessionState.LegalAcceptanceCheckFailed)
+        (
+            currentSession is AuthSessionState.Authenticated ||
+                currentSession is AuthSessionState.LegalAcceptanceRequired ||
+                currentSession is AuthSessionState.LegalAcceptanceCheckFailed
+            )
     ) {
         AuthScreen(viewModel = authViewModel, forceNewPassword = true)
         return
     }
 
     when (currentSession) {
-        is AuthSessionState.Authenticated -> if (vizitViewModel.hasOfflineProfileSession) {
-            VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
-        } else {
-            CenteredStatus { CircularProgressIndicator() }
-        }
-        AuthSessionState.Initializing -> CenteredStatus { CircularProgressIndicator() }
-        AuthSessionState.BackendUnavailable -> CenteredStatus {
-            Text("A VIZIT backend ebben a buildben még nincs konfigurálva.", textAlign = TextAlign.Center)
-            if (authViewModel.canUseDebugLocalProfile) {
-                Button(onClick = authViewModel::useDebugLocalProfile) { Text("Helyi DEV tesztprofil használata") }
+        is AuthSessionState.Authenticated ->
+            if (vizitViewModel.hasOfflineProfileSession) {
+                VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
+            } else {
+                Booting("Névjegy betöltése…")
             }
-        }
-        is AuthSessionState.RefreshFailed -> if (vizitViewModel.hasOfflineProfileSession) {
-            VizitApp(
-                viewModel = vizitViewModel,
-                authViewModel = authViewModel,
-                offlineMode = true,
+
+        AuthSessionState.Initializing -> Booting("Biztonságos munkamenet ellenőrzése…")
+
+        AuthSessionState.BackendUnavailable -> Screen {
+            VizitEmptyState(
+                icon = Icons.Outlined.CloudOff,
+                title = "Ez a build nem használható",
+                message = "A VIZIT backend ebben a buildben még nincs konfigurálva.",
+                actionLabel = if (authViewModel.canUseDebugLocalProfile) {
+                    "Helyi DEV tesztprofil használata"
+                } else {
+                    null
+                },
+                onAction = if (authViewModel.canUseDebugLocalProfile) {
+                    authViewModel::useDebugLocalProfile
+                } else {
+                    null
+                },
             )
-        } else {
-            CenteredStatus {
-                Text(currentSession.message, textAlign = TextAlign.Center)
-                Button(onClick = authViewModel::logout) { Text("Újra bejelentkezem") }
-            }
         }
+
+        is AuthSessionState.RefreshFailed ->
+            if (vizitViewModel.hasOfflineProfileSession) {
+                VizitApp(
+                    viewModel = vizitViewModel,
+                    authViewModel = authViewModel,
+                    offlineMode = true,
+                )
+            } else {
+                Screen {
+                    VizitErrorState(
+                        title = "A munkamenet lejárt",
+                        message = currentSession.message,
+                        retryLabel = "Újra bejelentkezem",
+                        onRetry = authViewModel::logout,
+                    )
+                }
+            }
+
         is AuthSessionState.LegalAcceptanceRequired -> AuthScreen(
             viewModel = authViewModel,
             forceLegalAcceptance = true,
         )
-        is AuthSessionState.LegalAcceptanceCheckFailed -> CenteredStatus {
-            Text(currentSession.message, textAlign = TextAlign.Center)
-            Button(onClick = authViewModel::retryLegalAcceptanceCheck) { Text("Újrapróbálás") }
-            Button(onClick = authViewModel::logout) { Text("Kijelentkezés") }
+
+        is AuthSessionState.LegalAcceptanceCheckFailed -> Screen {
+            VizitErrorState(
+                title = "Nem sikerült ellenőrizni a feltételeket",
+                message = currentSession.message,
+                onRetry = authViewModel::retryLegalAcceptanceCheck,
+            )
+            VizitButton(
+                text = "Kijelentkezés",
+                onClick = authViewModel::logout,
+                style = VizitButtonStyle.Tertiary,
+            )
         }
+
         AuthSessionState.SignedOut -> AuthScreen(viewModel = authViewModel)
     }
 }
 
-private const val LOCAL_DEBUG_PROFILE_OWNER_ID = "local-dev-profile"
+@Composable
+private fun Booting(message: String) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(Vizit.colors.canvas),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        VizitLoadingState(message = message)
+    }
+}
 
 @Composable
-private fun CenteredStatus(content: @Composable () -> Unit) {
+private fun Screen(content: @Composable () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Vizit.colors.canvas)
+            .padding(Vizit.space.md),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-    ) { content() }
+        verticalArrangement = Arrangement.Center,
+    ) {
+        content()
+    }
 }

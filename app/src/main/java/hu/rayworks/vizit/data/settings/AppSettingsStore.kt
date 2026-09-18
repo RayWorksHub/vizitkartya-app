@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.map
 private val Context.vizitSettingsDataStore by preferencesDataStore(name = "vizit_settings")
 
 data class AppSettings(
-    val appearance: String = "SYSTEM",
+    val appearance: String = "LIGHT",
     val publicProfileEnabled: Boolean = false,
     val analyticsEnabled: Boolean = true,
     val automaticSyncEnabled: Boolean = true,
@@ -32,7 +32,7 @@ class AppSettingsStore(private val context: Context) {
         }
         .map { preferences ->
             AppSettings(
-                appearance = preferences[APPEARANCE] ?: "SYSTEM",
+                appearance = preferences[APPEARANCE] ?: "LIGHT",
                 publicProfileEnabled = preferences[PUBLIC_PROFILE_ENABLED] ?: false,
                 analyticsEnabled = preferences[ANALYTICS_ENABLED] ?: true,
                 automaticSyncEnabled = preferences[AUTOMATIC_SYNC_ENABLED] ?: true,

@@ -28,6 +28,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitDivider
+import hu.rayworks.vizit.ui.design.components.VizitGroup
+import hu.rayworks.vizit.ui.design.components.VizitIconButton
+import hu.rayworks.vizit.ui.design.components.VizitRow
 
 private data class BusinessResource(
     val title: String,
@@ -58,75 +69,56 @@ private val businessResources = listOf(
 )
 
 @Composable
-fun BusinessHubScreen(modifier: Modifier = Modifier) {
+fun BusinessHubScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = Vizit.colors
     val uriHandler = LocalUriHandler.current
+    BackHandler(onBack = onBack)
 
-    LazyColumn(
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .background(colors.canvas)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(horizontal = Vizit.space.md),
+        verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
-        item {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = "Vállalkozói tudástár",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            VizitIconButton(
+                icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "Vissza",
+                onClick = onBack,
             )
             Text(
-                text = "Hasznos külső források hírekhez, fejlődéshez és ügyintézéshez.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = "Tudástár",
+                style = Vizit.type.h3,
+                color = colors.textPrimary,
+                modifier = Modifier.padding(start = Vizit.space.xs),
             )
         }
 
-        items(businessResources) { resource ->
-            Card(
-                onClick = { runCatching { uriHandler.openUri(resource.url) } },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-            ) {
-                Row(
-                    modifier = Modifier.padding(18.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Icon(
-                        imageVector = resource.icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        Text(resource.title, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            text = resource.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Outlined.OpenInNew,
-                        contentDescription = "Megnyitás böngészőben",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        Text(
+            text = "Hasznos külső források hírekhez, fejlődéshez és ügyintézéshez.",
+            style = Vizit.type.body,
+            color = colors.textSecondary,
+        )
+
+        VizitGroup {
+            businessResources.forEachIndexed { index, resource ->
+                if (index > 0) VizitDivider()
+                VizitRow(
+                    label = resource.title,
+                    supporting = resource.description,
+                    icon = resource.icon,
+                    onClick = { runCatching { uriHandler.openUri(resource.url) } },
+                )
             }
         }
 
-        item {
-            Text(
-                text = "A hivatkozások külső oldalakra vezetnek. A VIZIT nem áll kapcsolatban ezek tartalmának üzemeltetésével.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-            Spacer(Modifier.height(18.dp))
-        }
+        Text(
+            text = "A hivatkozások külső oldalakra vezetnek. A VIZIT nem áll kapcsolatban ezek tartalmának üzemeltetésével.",
+            style = Vizit.type.bodySmall,
+            color = colors.textMuted,
+            modifier = Modifier.padding(vertical = Vizit.space.xs),
+        )
     }
 }

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Mirrors VizitTokens.kt. Only the values the platform needs outside Compose. -->
     <color name="vizit_navy">#061B46</color>
     <color name="vizit_ice">#EAF8FF</color>
+    <color name="vizit_canvas">#F6F7F9</color>
+    <color name="vizit_canvas_dark">#0A0F1C</color>
 </resources>

@@ -18,6 +18,7 @@ import hu.rayworks.vizit.nfc.HcePayloadStore
 import hu.rayworks.vizit.nfc.NfcPayloadFactory
 import hu.rayworks.vizit.nfc.NfcShareEvent
 import hu.rayworks.vizit.nfc.NfcShareEvents
+import hu.rayworks.vizit.ui.design.ThemeMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -43,6 +44,10 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     var automaticSyncEnabled by mutableStateOf(true)
         private set
 
+    /** User-selected appearance. Light is the product default. */
+    var themeMode by mutableStateOf(ThemeMode.LIGHT)
+        private set
+
     var hasOfflineProfileSession by mutableStateOf(false)
         private set
 
@@ -62,6 +67,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             settingsStore.settings.collect { settings ->
                 automaticSyncEnabled = settings.automaticSyncEnabled
+                themeMode = ThemeMode.fromStorage(settings.appearance)
             }
         }
         viewModelScope.launch {
@@ -138,6 +144,11 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     fun retryProfileSync() {
         val userId = activeProfileOwnerId ?: return
         viewModelScope.launch { repository.retrySync(userId) }
+    }
+
+    fun updateThemeMode(mode: ThemeMode) {
+        themeMode = mode
+        viewModelScope.launch { settingsStore.setAppearance(mode.storageValue) }
     }
 
     fun updateAutomaticSyncEnabled(enabled: Boolean) {
