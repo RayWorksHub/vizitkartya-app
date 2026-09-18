@@ -1,7 +1,11 @@
 package hu.rayworks.vizit.data
 
+import hu.rayworks.vizit.qr.PublicProfileUrlFactory
+
 data class ContactProfile(
     val fullName: String = "",
+    val firstName: String = "",
+    val lastName: String = "",
     val jobTitle: String = "",
     val company: String = "",
     val phone: String = "",
@@ -10,9 +14,19 @@ data class ContactProfile(
     val address: String = "",
     val linkedIn: String = "",
     val photoBase64: String = "",
+    val publicSlug: String = "",
+    val isPublic: Boolean = false,
 ) {
+    val resolvedDisplayName: String
+        get() = fullName.trim().ifBlank {
+            listOf(lastName, firstName)
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .joinToString(" ")
+        }
+
     val initials: String
-        get() = fullName
+        get() = resolvedDisplayName
             .trim()
             .split(Regex("\\s+"))
             .filter(String::isNotBlank)
@@ -24,12 +38,18 @@ data class ContactProfile(
 
 object ContactProfileValidator {
     fun validate(profile: ContactProfile): String? = when {
-        profile.fullName.isBlank() -> "Add meg a nevedet a névjegyben."
+        profile.resolvedDisplayName.isBlank() -> "Add meg a nevedet a névjegyben."
         profile.phone.isBlank() && profile.email.isBlank() ->
             "Legalább egy telefonszámot vagy e-mail-címet adj meg."
 
         profile.email.isNotBlank() && !profile.email.contains("@") ->
             "Az e-mail-cím formátuma nem megfelelő."
+
+        profile.isPublic && profile.publicSlug.isBlank() ->
+            "A publikus profilhoz adj meg egy profilazonosítót."
+
+        profile.publicSlug.isNotBlank() && !PublicProfileUrlFactory.isValidSlug(profile.publicSlug) ->
+            "A profilazonosító 3–50 kisbetűből, számból vagy kötőjelből állhat."
 
         else -> null
     }

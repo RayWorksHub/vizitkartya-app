@@ -1,0 +1,10 @@
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcresult/
+*.xcarchive/
+*.ipa
+*.p12
+*.mobileprovision
+AuthKey*.p8
