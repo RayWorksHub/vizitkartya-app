@@ -1,4 +1,5 @@
 import java.net.URI
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 fun String.asBuildConfigString(): String =
@@ -21,7 +22,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sharing = java.util.Properties().apply { rootProject.file("config/sharing.properties").inputStream().use { load(it) } }
+val sharing = Properties().apply { rootProject.file("config/sharing.properties").inputStream().use { load(it) } }
 val sharingBase = providers.gradleProperty("VIZIT_PUBLIC_PROFILE_BASE_URL").orElse(sharing.getProperty("publicProfileBaseUrl")).get()
 val profileHost = providers.gradleProperty("VIZIT_PROFILE_HOST").orElse(URI(sharingBase).host).get()
 val profileBackend = providers.gradleProperty("VIZIT_PROFILE_BACKEND").orElse(sharing.getProperty("profileBackend", "legacy")).get()
@@ -64,11 +65,7 @@ android {
         buildConfigField("String", "PRIVACY_POLICY_VERSION", privacyPolicyVersion.asBuildConfigString())
         buildConfigField("String", "TERMS_URL", termsUrl.asBuildConfigString())
         buildConfigField("String", "TERMS_VERSION", termsVersion.asBuildConfigString())
-        buildConfigField(
-            "boolean",
-            "LEGAL_DOCUMENTS_READY",
-            legalDocumentsReady.toString(),
-        )
+        buildConfigField("boolean", "LEGAL_DOCUMENTS_READY", legalDocumentsReady.toString())
     }
 
     signingConfigs {
@@ -99,7 +96,6 @@ android {
             buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", devGoogleWebClientId.isNotBlank().toString())
             buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", sharingBase.asBuildConfigString())
         }
-
         create("beta") {
             dimension = "environment"
             applicationIdSuffix = ".beta"
@@ -115,7 +111,6 @@ android {
             buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", "false")
             buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", sharingBase.asBuildConfigString())
         }
-
         create("prod") {
             dimension = "environment"
             manifestPlaceholders["appLabel"] = "VIZIT"
@@ -144,7 +139,6 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -154,13 +148,11 @@ android {
 }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
-
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
     val supabaseBom = platform("io.github.jan-tennert.supabase:bom:3.7.0")
-
     implementation(composeBom)
     androidTestImplementation(composeBom)
     implementation("androidx.activity:activity-compose:1.11.0")
@@ -174,25 +166,21 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-
     implementation("androidx.room:room-runtime:2.8.2")
     implementation("androidx.room:room-ktx:2.8.2")
     ksp("androidx.room:room-compiler:2.8.2")
     implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
-
     implementation(supabaseBom)
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.ktor:ktor-client-okhttp:3.5.2")
-
     implementation("androidx.credentials:credentials:1.6.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
     implementation("com.google.zxing:core:3.5.4")
-
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
