@@ -161,12 +161,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun markPasswordRecovery() { passwordRecovery = true }
+    fun reportDeepLinkSuccess(isPasswordRecovery: Boolean) {
+        passwordRecovery = isPasswordRecovery
+        if (actionState is AuthActionState.Error) actionState = AuthActionState.Idle
+    }
     fun clearActionState() { actionState = AuthActionState.Idle }
     fun reportDeepLinkError(error: Throwable) {
+        passwordRecovery = false
         actionState = AuthActionState.Error(operation = null, message = authErrorMessage(error))
     }
     fun reportDeepLinkErrorCode(code: String?) {
+        passwordRecovery = false
         actionState = AuthActionState.Error(operation = null, message = authCallbackErrorMessage(code))
     }
     fun reportUiError(message: String) {

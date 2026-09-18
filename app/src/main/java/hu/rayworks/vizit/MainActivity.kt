@@ -48,17 +48,32 @@ class MainActivity : ComponentActivity() {
     private fun handleAuthIntent(intent: Intent?) {
         val actualIntent = intent ?: return
         val rawUrl = actualIntent.dataString.orEmpty()
-        when (val callback = AuthCallbackParser.parse(rawUrl, BuildConfig.AUTH_SCHEME)) {
-            AuthCallback.PasswordRecovery -> authViewModel.markPasswordRecovery()
+        val callback = when (val parsed = AuthCallbackParser.parse(rawUrl, BuildConfig.AUTH_SCHEME)) {
+            AuthCallback.PasswordRecovery, AuthCallback.Generic -> parsed
+
             is AuthCallback.Error -> {
-                authViewModel.reportDeepLinkErrorCode(callback.code)
+                authViewModel.reportDeepLinkErrorCode(parsed.code)
                 return
             }
-            AuthCallback.Generic -> Unit
+
             null -> return
         }
-        SupabaseProvider.getOrNull()?.handleDeeplinks(
+        val client = SupabaseProvider.getOrNull()
+        if (client == null) {
+            authViewModel.reportDeepLinkError(
+                IllegalStateException("Supabase is not configured"),
+            )
+            return
+        }
+        client.handleDeeplinks(
             actualIntent,
+            onSessionSuccess = {
+                // A PKCE code is single-use. Enter recovery mode only after
+                // Supabase exchanged it for a real session successfully.
+                authViewModel.reportDeepLinkSuccess(
+                    isPasswordRecovery = callback == AuthCallback.PasswordRecovery,
+                )
+            },
             onError = authViewModel::reportDeepLinkError,
         )
     }
