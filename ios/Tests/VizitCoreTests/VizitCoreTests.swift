@@ -46,6 +46,24 @@ final class VizitCoreTests: XCTestCase {
         var p = sample(); p.website = "example.com"
         XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .invalidURL) }
     }
+    func testSocialProfilesRoundTripAndVCardExport() throws {
+        var p = sample()
+        p.linkedIn = "https://linkedin.com/in/teszt"
+        p.facebook = "https://facebook.com/teszt"
+        p.instagram = "https://instagram.com/teszt"
+        p.tiktok = "https://tiktok.com/@teszt"
+        p.youtube = "https://youtube.com/@teszt"
+        let restored = try JSONDecoder().decode(ContactProfile.self, from: JSONEncoder().encode(p))
+        XCTAssertEqual(restored, p)
+        let card = try VCard.encode(restored)
+        for platform in SocialPlatform.allCases {
+            XCTAssertTrue(card.contains("X-SOCIALPROFILE;TYPE=\(platform.rawValue):"))
+        }
+    }
+    func testInsecureSocialProfileFailsValidation() {
+        var p = sample(); p.instagram = "http://instagram.com/teszt"
+        XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .invalidURL) }
+    }
     func testSafeLinksRejectExecutableAndCredentialURLs() {
         for value in ["javascript:alert(1)", "file:///etc/passwd", "http://example.com", "https://user:password@example.com", "https:///", "https://exa mple.com", "https://example.com\n"] {
             XCTAssertNil(SafeLink.https(value), value)
@@ -159,6 +177,10 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertEqual(profile.fullName, "Teszt Elek")
         XCTAssertEqual(profile.publicSlug, "")
         XCTAssertFalse(profile.isPublic)
+        XCTAssertEqual(profile.facebook, "")
+        XCTAssertEqual(profile.instagram, "")
+        XCTAssertEqual(profile.tiktok, "")
+        XCTAssertEqual(profile.youtube, "")
     }
 
     func testPublicProfileURLRequiresHTTPSAndStrictSlug() {

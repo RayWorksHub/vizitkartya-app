@@ -16,7 +16,9 @@ public enum VCard {
         add("TEL;TYPE=CELL", p.phone)
         add("EMAIL;TYPE=INTERNET", p.email)
         add("URL", p.website)
-        add("URL;TYPE=WORK", p.linkedIn)
+        for profile in p.socialProfiles where !profile.url.isEmpty {
+            add("X-SOCIALPROFILE;TYPE=\(profile.platform.rawValue)", profile.url)
+        }
         if !p.address.isEmpty { lines.append("ADR;TYPE=WORK:;;\(escape(p.address));;;;") }
         if includePhoto && !p.photoBase64.isEmpty {
             lines.append("PHOTO;ENCODING=b;TYPE=JPEG:\(p.photoBase64)")

@@ -217,6 +217,11 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
             if (profile.phone.isNotBlank()) appendLine(profile.phone)
             if (profile.email.isNotBlank()) appendLine(profile.email)
             if (profile.website.isNotBlank()) appendLine(profile.website)
+            if (profile.linkedIn.isNotBlank()) appendLine("LinkedIn: ${profile.linkedIn}")
+            if (profile.facebook.isNotBlank()) appendLine("Facebook: ${profile.facebook}")
+            if (profile.instagram.isNotBlank()) appendLine("Instagram: ${profile.instagram}")
+            if (profile.tiktok.isNotBlank()) appendLine("TikTok: ${profile.tiktok}")
+            if (profile.youtube.isNotBlank()) appendLine("YouTube: ${profile.youtube}")
         }.trim()
 
         val intent = Intent.createChooser(

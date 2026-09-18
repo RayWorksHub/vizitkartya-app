@@ -5,7 +5,7 @@ import ImageIO
 struct ProfileEditor: View {
     private enum Field: Hashable {
         case fullName, lastName, firstName, phone, email, website
-        case company, jobTitle, address, linkedIn, publicSlug
+        case company, jobTitle, address, linkedIn, facebook, instagram, tiktok, youtube, publicSlug
     }
 
     @EnvironmentObject private var store: AppStore
@@ -68,9 +68,25 @@ struct ProfileEditor: View {
                         .focused($focusedField, equals: .jobTitle).textContentType(.jobTitle)
                     TextField("Cím", text: $draft.address)
                         .focused($focusedField, equals: .address).textContentType(.fullStreetAddress)
+                }
+                Section("Közösségi média") {
                     TextField("LinkedIn – https://…", text: $draft.linkedIn)
                         .focused($focusedField, equals: .linkedIn)
                         .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Facebook – https://…", text: $draft.facebook)
+                        .focused($focusedField, equals: .facebook)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Instagram – https://…", text: $draft.instagram)
+                        .focused($focusedField, equals: .instagram)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("TikTok – https://…", text: $draft.tiktok)
+                        .focused($focusedField, equals: .tiktok)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("YouTube – https://…", text: $draft.youtube)
+                        .focused($focusedField, equals: .youtube)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Text("A megadott profilok a VIZIT-névjeggyel együtt szinkronizálódnak és kerülnek átadásra.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Nyilvános VIZIT-profil") {
                     Toggle("Nyilvános profil engedélyezése", isOn: $draft.isPublic)

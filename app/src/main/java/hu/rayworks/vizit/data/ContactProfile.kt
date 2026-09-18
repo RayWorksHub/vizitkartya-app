@@ -1,6 +1,7 @@
 package hu.rayworks.vizit.data
 
 import hu.rayworks.vizit.qr.PublicProfileUrlFactory
+import java.net.URI
 
 data class ContactProfile(
     val fullName: String = "",
@@ -13,6 +14,10 @@ data class ContactProfile(
     val website: String = "",
     val address: String = "",
     val linkedIn: String = "",
+    val facebook: String = "",
+    val instagram: String = "",
+    val tiktok: String = "",
+    val youtube: String = "",
     val photoBase64: String = "",
     val publicSlug: String = "",
     val isPublic: Boolean = false,
@@ -45,6 +50,9 @@ object ContactProfileValidator {
         profile.email.isNotBlank() && !profile.email.contains("@") ->
             "Az e-mail-cím formátuma nem megfelelő."
 
+        profile.socialAndWebsiteUrls().any { !isValidHttpsUrl(it) } ->
+            "A webes és közösségi hivatkozások teljes, https:// kezdetű címek legyenek."
+
         profile.isPublic && profile.publicSlug.isBlank() ->
             "A publikus profilhoz adj meg egy profilazonosítót."
 
@@ -53,4 +61,21 @@ object ContactProfileValidator {
 
         else -> null
     }
+
+    private fun ContactProfile.socialAndWebsiteUrls(): List<String> = listOf(
+        website,
+        linkedIn,
+        facebook,
+        instagram,
+        tiktok,
+        youtube,
+    ).map(String::trim).filter(String::isNotBlank)
+
+    private fun isValidHttpsUrl(value: String): Boolean = runCatching {
+        URI(value).let { uri ->
+            uri.scheme.equals("https", ignoreCase = true) &&
+                !uri.host.isNullOrBlank() &&
+                uri.userInfo == null
+        }
+    }.getOrDefault(false)
 }

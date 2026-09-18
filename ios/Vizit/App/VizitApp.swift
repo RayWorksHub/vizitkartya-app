@@ -376,7 +376,7 @@ final class AppStore: ObservableObject {
                         syncStatus = .conflict
                         return
                     }
-                    remote.linkedIn = remoteBundle.0.linkedIn
+                    remote.copySocialProfiles(from: remoteBundle.0)
                     metadata = try metadataStore.load()
                     metadata.profileID = remote.id
                     metadata.remoteUpdatedAt = remote.updatedAt
@@ -390,7 +390,8 @@ final class AppStore: ObservableObject {
                         syncStatus = .pending
                         return
                     }
-                    try await cloud.syncLinkedIn(profileID: remote.id, value: localProfile.linkedIn, expected: remoteBundle.0.linkedIn)
+                    try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
+                                                       expected: remoteBundle.1)
                 } else {
                     let reservedID = metadata.profileID ?? UUID()
                     metadata.profileID = reservedID
@@ -422,7 +423,8 @@ final class AppStore: ObservableObject {
                     local.publicSlug = remote.slug
                     try storage.save(local)
                     profile = local
-                    try await cloud.syncLinkedIn(profileID: remote.id, value: localProfile.linkedIn, expected: "")
+                    try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
+                                                       expected: ContactProfile())
                 }
                 guard userID == id else { return }
                 metadata = try metadataStore.load()
@@ -804,6 +806,7 @@ struct RootView: View {
             HomeScreen().tabItem { Label("Névjegy", systemImage: "person.crop.rectangle") }
             ShareScreen().tabItem { Label("Megosztás", systemImage: "qrcode") }
             ScanScreen().tabItem { Label("Beolvasás", systemImage: "qrcode.viewfinder") }
+            BusinessHubScreen().tabItem { Label("Tudástár", systemImage: "book.closed") }
             SettingsScreen().tabItem { Label("Beállítások", systemImage: "gearshape") }
         }
         .tint(Brand.blue)

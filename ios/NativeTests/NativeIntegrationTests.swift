@@ -37,10 +37,17 @@ final class NativeIntegrationTests: XCTestCase {
     }
 
     func testNativeContactContainsMatchingFields() {
-        let contact = ContactBridge.contact(profile())
+        var source = profile()
+        source.linkedIn = ""
+        source.facebook = "https://facebook.com/teszt"
+        source.youtube = "https://youtube.com/@teszt"
+        let contact = ContactBridge.contact(source)
         XCTAssertEqual(contact.givenName, "Elek")
         XCTAssertEqual(contact.familyName, "Őri")
         XCTAssertEqual(contact.phoneNumbers.first?.value.stringValue, "+36201234567")
+        XCTAssertEqual(contact.urlAddresses.map { $0.value as String }, [
+            "https://facebook.com/teszt", "https://youtube.com/@teszt"
+        ])
     }
 
     func testSecureSessionStorageRoundTripAndRemoval() throws {
@@ -114,9 +121,12 @@ final class NativeIntegrationTests: XCTestCase {
     func testRemoteFingerprintTracksContentNotAnalyticsTimestamp() throws {
         let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null}"#
         let decode = { (text: String) throws in try JSONDecoder().decode(RemoteProfile.self, from: Data(text.utf8)) }
-        let first = try decode(raw)
+        var first = try decode(raw)
         XCTAssertEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "first", with: "later")).fingerprint)
         XCTAssertNotEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "Teszt Elek", with: "Másik Név")).fingerprint)
         XCTAssertNotEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: #""avatar_url":null"#, with: #""avatar_url":"data:image/jpeg;base64,/9j/""#)).fingerprint)
+        let originalFingerprint = first.fingerprint
+        first.facebook = "https://facebook.com/teszt"
+        XCTAssertNotEqual(first.fingerprint, originalFingerprint)
     }
 }
