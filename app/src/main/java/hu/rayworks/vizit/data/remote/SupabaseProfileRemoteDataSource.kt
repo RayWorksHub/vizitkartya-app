@@ -35,7 +35,7 @@ class SupabaseProfileRemoteDataSource(
                 put("p_base_version", JsonPrimitive(mutation.baseServerVersion))
                 put(
                     "p_snapshot",
-                    json.encodeToJsonElement(ProfileSyncPayload.serializer(), mutation.payload),
+                    json.encodeToJsonElement(ProfileSyncPayload.serializer(), mutation.payload.copy(photoBase64 = null, baseFingerprint = null)),
                 )
             },
         ).data.let { json.decodeFromString<ProfileSyncRpcResponse>(it) }

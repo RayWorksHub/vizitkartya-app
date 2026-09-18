@@ -28,7 +28,9 @@ class VizitAppContainer(application: Application) {
     private val database = VizitDatabase.get(application)
     private val localStore = RoomProfileStore(database.profileDao())
     private val syncScheduler = WorkManagerProfileSyncScheduler(application)
-    private val remoteDataSource = SupabaseProfileRemoteDataSource(SupabaseProvider.getOrNull())
+    private val remoteDataSource: hu.rayworks.vizit.data.sync.ProfileRemoteDataSource =
+        if (BuildConfig.PROFILE_BACKEND == "legacy") hu.rayworks.vizit.data.remote.LegacyProfileRemoteDataSource(SupabaseProvider.getOrNull())
+        else SupabaseProfileRemoteDataSource(SupabaseProvider.getOrNull())
 
     val profileRepository = ContactProfileRepository(
         localStore = localStore,

@@ -27,6 +27,9 @@ data class ProfileRepositoryState(
 
 @Serializable
 data class ProfileSyncPayload(
+    // null = legacy payload has no photo operation; empty = explicit deletion.
+    val photoBase64: String? = null,
+    val baseFingerprint: String? = null,
     val firstName: String = "",
     val lastName: String = "",
     val displayName: String = "",

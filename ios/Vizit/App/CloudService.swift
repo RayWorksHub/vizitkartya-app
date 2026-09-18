@@ -3,6 +3,7 @@ import Foundation
 import Supabase
 import UIKit
 import ImageIO
+import CryptoKit
 
 struct RemoteProfile: Decodable, Sendable {
     let id: UUID
@@ -18,6 +19,22 @@ struct RemoteProfile: Decodable, Sendable {
     let isPublic: Bool
     let updatedAt: String
     let avatarURL: String?
+    var linkedIn = ""
+
+    var fingerprint: String {
+        let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company,
+                      publicEmail, phone, website, address, String(isPublic), avatarURL ?? "", linkedIn]
+        let bytes = (try? JSONEncoder().encode(values)) ?? Data()
+        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    }
+
+    func matches(_ value: ContactProfile) -> Bool {
+        let p = value.normalized
+        return displayName == p.displayName && slug == p.publicSlug && jobTitle == p.jobTitle &&
+            company == p.company && publicEmail == p.email && phone == p.phone && website == p.website &&
+            address == p.address && isPublic == p.isPublic && linkedIn == p.linkedIn &&
+            (avatarURL ?? "") == ((try? ProfilePhoto.inlineURL(p.photoBase64)) ?? "invalid-photo")
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, slug, phone, website, address
@@ -217,20 +234,21 @@ final class CloudService: @unchecked Sendable {
         try await client.functions.invoke("delete-account")
     }
 
-    func fetchProfile(ownerID: UUID, preserving local: ContactProfile) async throws -> (RemoteProfile, ContactProfile)? {
+    func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
         let query = [
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
             URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at,avatar_url"),
             URLQueryItem(name: "limit", value: "1")
         ]
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
-        guard let remote = rows.first else { return nil }
+        guard var remote = rows.first else { return nil }
         let links: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query: [
             URLQueryItem(name: "profile_id", value: "eq.\(remote.id.uuidString.lowercased())"),
             URLQueryItem(name: "platform", value: "eq.linkedin"),
             URLQueryItem(name: "select", value: "id,url"),
             URLQueryItem(name: "limit", value: "1")
         ])
+        remote.linkedIn = links.first?.url ?? ""
         var profile = local
         profile.fullName = remote.displayName
         profile.jobTitle = remote.jobTitle
@@ -242,10 +260,10 @@ final class CloudService: @unchecked Sendable {
         profile.linkedIn = links.first?.url ?? ""
         profile.publicSlug = remote.slug
         profile.isPublic = remote.isPublic
-        if let avatar = remote.avatarURL {
+        if loadPhoto, let avatar = remote.avatarURL {
             profile.photoBase64 = try await readProfilePhoto(avatar)
             profile.photoSyncInitialized = true
-        } else if local.photoSyncInitialized {
+        } else if loadPhoto && local.photoSyncInitialized {
             // A later deletion from the web must not resurrect an old local image.
             profile.photoBase64 = ""
         }
@@ -296,21 +314,25 @@ final class CloudService: @unchecked Sendable {
                             isPublic: p.isPublic, avatarURL: try ProfilePhoto.inlineURL(p.photoBase64))
     }
 
-    func syncLinkedIn(profileID: UUID, value: String) async throws {
+    func syncLinkedIn(profileID: UUID, value: String, expected: String) async throws {
         let baseQuery = [
             URLQueryItem(name: "profile_id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "platform", value: "eq.linkedin")
         ]
         let existing: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query:
             baseQuery + [URLQueryItem(name: "select", value: "id,url"), URLQueryItem(name: "limit", value: "1")])
+        if (existing.first?.url ?? "") == value { return }
+        guard (existing.first?.url ?? "") == expected else { throw CloudError.profileConflict }
         if value.isEmpty {
             if let id = existing.first?.id {
                 let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "DELETE",
-                    query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())")], prefer: "return=minimal")
+                    query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
+                            URLQueryItem(name: "url", value: "eq.\(expected)")], prefer: "return=minimal")
             }
         } else if let id = existing.first?.id {
             let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "PATCH",
-                query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())")],
+                query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
+                        URLQueryItem(name: "url", value: "eq.\(expected)")],
                 body: ["url": value], prefer: "return=minimal")
         } else {
             let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "POST",
@@ -323,6 +345,17 @@ final class CloudService: @unchecked Sendable {
         if avatar.hasPrefix("data:image/jpeg;base64,") {
             let base64 = String(avatar.dropFirst("data:image/jpeg;base64,".count))
             _ = try ProfilePhoto.inlineURL(base64)
+            guard let bytes = Data(base64Encoded: base64),
+                  let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+                  CGImageSourceGetCount(source) == 1,
+                  let info = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                  let width = info[kCGImagePropertyPixelWidth] as? NSNumber,
+                  let height = info[kCGImagePropertyPixelHeight] as? NSNumber,
+                  width.doubleValue * height.doubleValue <= 16_000_000,
+                  CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 512
+                  ] as CFDictionary) != nil else { throw ProfileError.invalidPhoto }
             return base64
         }
         guard let url = ProfilePhoto.trustedStorageURL(avatar, origin: configuration.supabaseURL)
@@ -397,6 +430,7 @@ private struct AnyEncodable: Encodable {
 
 enum CloudError: LocalizedError {
     case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled, providerUnavailable
+    case profileConflict
     case passwordResetCooldown(Int)
     case server(status: Int, code: String?)
 
@@ -408,6 +442,7 @@ enum CloudError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidCallback: return "A bejelentkezési hivatkozás nem a VIZIT biztonságos visszahívási címe."
+        case .profileConflict: return "A profil közben másik eszközön megváltozott. Válaszd ki a megtartandó változatot."
         case .invalidRequest: return "A kiszolgáló kérése nem állítható össze biztonságosan."
         case .emptyResponse: return "A kiszolgáló nem adott vissza mentett profilt."
         case .emailConfirmationDisabled: return "A kiszolgálón nincs kötelező e-mail-megerősítés. A munkamenetet biztonsági okból megszakítottuk."

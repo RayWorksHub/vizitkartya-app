@@ -122,6 +122,19 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    var conflictResolutionMessage by mutableStateOf<String?>(null)
+        private set
+
+    fun resolveProfileConflict(keepLocal: Boolean) {
+        val userId = activeProfileOwnerId ?: return
+        viewModelScope.launch {
+            conflictResolutionMessage = try {
+                if (repository.resolveConflict(userId, keepLocal)) "A választás mentve."
+                else "A profil közben megváltozott. Ellenőrizd újra az állapotot."
+            } catch (_: Exception) { "A feloldás nem sikerült. Az adatok megmaradtak." }
+        }
+    }
+
     fun retryProfileSync() {
         val userId = activeProfileOwnerId ?: return
         viewModelScope.launch { repository.retrySync(userId) }

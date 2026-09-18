@@ -42,4 +42,27 @@ final class ProfilePhotoTests: XCTestCase {
         XCTAssertFalse(link.absoluteString.contains("PHOTO"))
         XCTAssertLessThan(link.absoluteString.utf8.count, 100)
     }
+    func testViewCounterTimestampDoesNotConflictWithUnchangedContent() {
+        let id = UUID()
+        XCTAssertTrue(ProfileRevisionPolicy.mayUpload(localID: id, localRevision: "old",
+            localFingerprint: "same", remoteID: id, remoteRevision: "new", remoteFingerprint: "same"))
+    }
+    func testChangedPhotoConflictsEvenWhenTimestampMatches() {
+        let id = UUID()
+        XCTAssertFalse(ProfileRevisionPolicy.mayUpload(localID: id, localRevision: "same",
+            localFingerprint: "photo-a", remoteID: id, remoteRevision: "same", remoteFingerprint: "photo-b"))
+    }
+    func testUnknownBaseAndOtherOwnerNeverPermitUpload() {
+        let id = UUID()
+        XCTAssertFalse(ProfileRevisionPolicy.mayUpload(localID: id, localRevision: nil,
+            localFingerprint: nil, remoteID: id, remoteRevision: "new", remoteFingerprint: "same"))
+        XCTAssertFalse(ProfileRevisionPolicy.mayUpload(localID: UUID(), localRevision: "same",
+            localFingerprint: "same", remoteID: id, remoteRevision: "same", remoteFingerprint: "same"))
+    }
+    func testSharingBaseCannotInjectParametersOrFragments() throws {
+        var p = ContactProfile(); p.isPublic = true; p.publicSlug = "teszt-elek"
+        for address in ["https://example.test/p?x=1", "https://example.test/p#other"] {
+            XCTAssertNil(PublicProfileLink.make(baseURL: try XCTUnwrap(URL(string: address)), slug: p.publicSlug))
+        }
+    }
 }

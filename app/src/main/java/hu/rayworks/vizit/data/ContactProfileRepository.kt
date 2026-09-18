@@ -69,6 +69,12 @@ class ContactProfileRepository(
         if (localStore.retryNow(userId, clock.nowEpochMs())) syncScheduler.enqueue()
     }
 
+    suspend fun resolveConflict(userId: String, keepLocal: Boolean): Boolean {
+        val changed = localStore.resolveConflict(userId, keepLocal, operationIdFactory.create(), clock.nowEpochMs())
+        if (changed && keepLocal) syncScheduler.enqueue()
+        return changed
+    }
+
     fun setAutomaticSyncEnabled(enabled: Boolean) {
         if (enabled) syncScheduler.enqueue() else syncScheduler.cancel()
     }

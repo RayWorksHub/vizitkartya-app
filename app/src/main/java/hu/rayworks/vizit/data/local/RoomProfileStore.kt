@@ -1,5 +1,6 @@
 package hu.rayworks.vizit.data.local
 
+import hu.rayworks.vizit.data.remote.LegacyProfileCodec
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.sync.PendingProfileMutation
 import hu.rayworks.vizit.data.sync.ProfilePayloadCodec
@@ -9,6 +10,8 @@ import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.data.sync.RemoteProfileSnapshot
 import hu.rayworks.vizit.data.sync.SyncRetryPolicy
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -64,10 +67,13 @@ interface ProfileLocalStore {
 
     suspend fun retryNow(userId: String, nowEpochMs: Long): Boolean
 
+    suspend fun resolveConflict(userId: String, keepLocal: Boolean, operationId: String, nowEpochMs: Long): Boolean = false
+
     suspend fun deleteUserData(userId: String)
 }
 
 class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
+    private val mutationLock = Mutex()
     override fun observe(userId: String): Flow<ProfileRepositoryState> {
         val snapshot = dao.observeAggregate(userId).map { aggregate ->
             aggregate?.let {
@@ -105,6 +111,8 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
         operationId: String,
         nowEpochMs: Long,
     ) {
+        mutationLock.lock()
+        try {
         val previous = dao.getSnapshot(userId)
         val previousMetadata = dao.getSyncMetadata(userId)
         val snapshot = ProfileSnapshotMapper.toLocalSnapshot(
@@ -114,9 +122,11 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
             updatedAtEpochMs = nowEpochMs,
             pendingSync = queueForCloudSync,
         )
-        val payload = ProfileSnapshotMapper.toPayload(snapshot)
+        val previousOutbox = dao.getOutbox(userId)
+        val baseFingerprint = if (previousOutbox != null) ProfilePayloadCodec.decode(previousOutbox.payloadJson).baseFingerprint
+            else previous?.takeIf { (previousMetadata?.serverVersion ?: 0L) > 0L }?.let { LegacyProfileCodec.fingerprint(ProfileSnapshotMapper.toPayload(it)) }
+        val payload = ProfileSnapshotMapper.toPayload(snapshot).copy(baseFingerprint = baseFingerprint)
         val outbox = if (queueForCloudSync) {
-            val previousOutbox = dao.getOutbox(userId)
             ProfileSyncOutboxEntity(
                 queueKey = queueKey(userId),
                 operationId = operationId,
@@ -138,10 +148,17 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
             lastError = null,
         )
         dao.replaceSnapshot(snapshot, metadata, outbox)
+
+        } finally { mutationLock.unlock() }
     }
 
-    override suspend fun dueMutation(userId: String, nowEpochMs: Long): PendingProfileMutation? =
-        dao.getDueOutbox(userId, nowEpochMs)?.toDomain()
+    override suspend fun dueMutation(userId: String, nowEpochMs: Long): PendingProfileMutation? {
+        val mutation = dao.getDueOutbox(userId, nowEpochMs)?.toDomain() ?: return null
+        // An older queued payload must not drop a still-local photo on upgrade.
+        if (mutation.payload.photoBase64 != null) return mutation
+        val current = dao.getSnapshot(userId) ?: return mutation
+        return mutation.copy(payload = mutation.payload.copy(photoBase64 = current.profile.localContactPhotoBase64))
+    }
 
     override suspend fun hasPendingMutation(userId: String): Boolean = dao.getOutbox(userId) != null
 
@@ -153,6 +170,8 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
         operationId: String,
         nowEpochMs: Long,
     ): Boolean {
+        mutationLock.lock()
+        try {
         if (dao.getOutbox(userId) != null) return false
         val snapshot = dao.getSnapshot(userId) ?: return false
         val hasUnsyncedRows = snapshot.profile.pendingSync ||
@@ -180,6 +199,8 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
             ),
         )
         return true
+
+        } finally { mutationLock.unlock() }
     }
 
     override suspend fun markSyncing(
@@ -259,6 +280,8 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
         remote: RemoteProfileSnapshot,
         nowEpochMs: Long,
     ): Boolean {
+        mutationLock.lock()
+        try {
         val previous = dao.getSnapshot(mutation.userId)
         val snapshot = ProfileSnapshotMapper.toLocalSnapshot(
             userId = mutation.userId,
@@ -282,6 +305,8 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
             snapshot = snapshot,
             metadata = metadata,
         )
+
+        } finally { mutationLock.unlock() }
     }
 
     override suspend fun applyRemoteIfClean(
@@ -289,20 +314,28 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
         remote: RemoteProfileSnapshot,
         nowEpochMs: Long,
     ): Boolean {
+        mutationLock.lock()
+        try {
         val currentMetadata = dao.getSyncMetadata(userId)
         if (remote.serverVersion < (currentMetadata?.serverVersion ?: 0L)) return false
+        val previous = dao.getSnapshot(userId)
+        val migratePhoto = previous?.profile?.displayImagePath == null &&
+            !previous?.profile?.localContactPhotoBase64.isNullOrEmpty() && remote.payload.photoBase64 == ""
+        val payload = if (migratePhoto) remote.payload.copy(photoBase64 = previous!!.profile.localContactPhotoBase64,
+            displayImagePath = null, baseFingerprint = LegacyProfileCodec.fingerprint(remote.payload)) else remote.payload
         val snapshot = ProfileSnapshotMapper.toLocalSnapshot(
-            userId = userId,
-            payload = remote.payload,
-            previous = dao.getSnapshot(userId),
-            updatedAtEpochMs = nowEpochMs,
+            userId = userId, payload = payload, previous = previous, updatedAtEpochMs = nowEpochMs,
         )
+        val migration = if (migratePhoto) ProfileSyncOutboxEntity(
+            queueKey(userId), java.util.UUID.randomUUID().toString(), userId, ProfilePayloadCodec.encode(payload),
+            remote.serverVersion, OUTBOX_PENDING, 0, nowEpochMs, nowEpochMs, nowEpochMs, null) else null
         return dao.replaceRemoteSnapshotIfNoOutbox(
             snapshot = snapshot,
+            outbox = migration,
             metadata = ProfileSyncMetadataEntity(
                 userId = userId,
                 serverVersion = remote.serverVersion,
-                state = STATE_SYNCED,
+                state = if (migratePhoto) STATE_PENDING else STATE_SYNCED,
                 lastSyncedAtEpochMs = nowEpochMs,
                 lastAttemptAtEpochMs = nowEpochMs,
                 lastError = null,
@@ -310,6 +343,8 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
                 conflictSnapshotJson = null,
             ),
         )
+
+        } finally { mutationLock.unlock() }
     }
 
     override suspend fun retryNow(userId: String, nowEpochMs: Long): Boolean {
@@ -332,8 +367,38 @@ class RoomProfileStore(private val dao: ProfileDao) : ProfileLocalStore {
         )
     }
 
+    override suspend fun resolveConflict(userId: String, keepLocal: Boolean, operationId: String, nowEpochMs: Long): Boolean {
+        mutationLock.lock()
+        try {
+        val outbox = dao.getOutbox(userId) ?: return false
+        val metadata = dao.getSyncMetadata(userId) ?: return false
+        if (outbox.state != OUTBOX_CONFLICT || metadata.conflictSnapshotJson == null) return false
+        val cloud = ProfilePayloadCodec.decode(metadata.conflictSnapshotJson)
+        val current = dao.getSnapshot(userId) ?: return false
+        // A deleted cloud profile is not silently recreated. Keep-local is explicit consent to recreate.
+        val version = metadata.conflictServerVersion ?: return false
+        val payload = if (keepLocal) ProfileSnapshotMapper.toPayload(current).copy(
+            baseFingerprint = if (version == 0L) null else LegacyProfileCodec.fingerprint(cloud),
+            displayImagePath = null,
+        ) else cloud
+        val replacement = if (keepLocal) outbox.copy(operationId = operationId,
+            payloadJson = ProfilePayloadCodec.encode(payload), baseServerVersion = version,
+            state = OUTBOX_PENDING, attemptCount = 0, nextAttemptAtEpochMs = nowEpochMs,
+            updatedAtEpochMs = nowEpochMs, lastError = null) else null
+        val resolved = if (keepLocal) current else ProfileSnapshotMapper.toLocalSnapshot(userId, cloud, current, nowEpochMs)
+        return dao.resolveConflictIfCurrent(outbox.operationId, resolved,
+            metadata.copy(serverVersion = version, state = if (keepLocal) STATE_PENDING else STATE_SYNCED,
+                conflictServerVersion = null, conflictSnapshotJson = null, lastError = null), replacement)
+
+        } finally { mutationLock.unlock() }
+    }
+
     override suspend fun deleteUserData(userId: String) {
+        mutationLock.lock()
+        try {
         dao.deleteUserData(userId)
+
+        } finally { mutationLock.unlock() }
     }
 
     private fun syncState(

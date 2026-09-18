@@ -608,9 +608,19 @@ struct SettingsScreen: View {
                             Text(store.syncStatus.label)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            if [.pending, .conflict, .failed].contains(store.syncStatus), store.isOnline {
+                            if [.pending, .failed].contains(store.syncStatus), store.isOnline {
                                 Button("Szinkron újrapróbálása") { store.retrySync() }
                                     .font(.subheadline.weight(.semibold))
+                            }
+                            if store.syncStatus == .conflict, store.isOnline {
+                                Text("Válassz példányt. A felhőből letöltés előtt a helyi változatról biztonsági másolat készül.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                                Button("Helyi változat feltöltése") {
+                                    Task { await store.resolveSyncConflict(keepLocal: true) }
+                                }
+                                Button("Felhőben lévő változat használata") {
+                                    Task { await store.resolveSyncConflict(keepLocal: false) }
+                                }
                             }
                         }
 

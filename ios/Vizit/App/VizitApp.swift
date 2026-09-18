@@ -114,9 +114,10 @@ final class AppStore: ObservableObject {
         fileStore = profileStore
         syncStore = metadataStore
         userID = id
-        profile = try profileStore.load()
+        let metadata = try metadataStore.load()
+        profile = try metadata.pendingProfile ?? profileStore.load()
+        try profile.validateIfPresent()
         profileRevision &+= 1
-        _ = try metadataStore.load()
         storageError = nil
     }
 
@@ -229,8 +230,11 @@ final class AppStore: ObservableObject {
         } catch {
             // The SDK removes the local token before its best-effort server call.
         }
-        try? fileStore?.reset()
-        try? syncStore?.reset()
+        // Keep only unsent edits; signed-out UI has no access to another account's files.
+        if (try? syncStore?.load().pendingUpload) == false {
+            try? fileStore?.reset()
+            try? syncStore?.reset()
+        }
         clearUser()
         authStatus = .signedOut
     }
@@ -253,7 +257,9 @@ final class AppStore: ObservableObject {
         guard let storage = fileStore, let metadataStore = syncStore else { throw ProfileError.damagedFile }
         try draft.validate()
         var metadata = try metadataStore.load()
+        _ = try storage.load()
         metadata.pendingUpload = !uiTesting
+        metadata.pendingProfile = uiTesting ? nil : draft.normalized
         metadata.conflict = false
         try metadataStore.save(metadata)
         try storage.save(draft)
@@ -282,6 +288,10 @@ final class AppStore: ObservableObject {
 
     func reset() throws {
         guard let storage = fileStore else { throw ProfileError.damagedFile }
+        if try syncStore?.load().pendingUpload == true {
+            message = "Van még fel nem töltött módosítás. Előbb szinkronizálj vagy oldd fel az ütközést."
+            return
+        }
         try storage.reset()
         try syncStore?.reset()
         profile = ContactProfile()
@@ -312,7 +322,9 @@ final class AppStore: ObservableObject {
         syncStatus = .syncing
         do {
             var metadata = try metadataStore.load()
-            let remoteBundle = try await cloud.fetchProfile(ownerID: id, preserving: localProfile)
+            let remoteBundle = try await cloud.fetchProfile(ownerID: id, preserving: localProfile,
+                                                           loadPhoto: !metadata.pendingUpload)
+            guard userID == id else { return }
             guard profileRevision == revision else {
                 syncAgain = true
                 syncStatus = .pending
@@ -322,27 +334,41 @@ final class AppStore: ObservableObject {
             // Upgrade the previous local-only photo only when the exact same
             // cloud revision is still current. Existing conflict protection stays.
             if !metadata.pendingUpload, let (remote, _) = remoteBundle,
-               remote.avatarURL == nil, !localProfile.photoSyncInitialized,
+               (remote.avatarURL ?? "").isEmpty, !localProfile.photoSyncInitialized,
                !localProfile.photoBase64.isEmpty,
                metadata.profileID == remote.id, metadata.remoteUpdatedAt == remote.updatedAt {
                 metadata.pendingUpload = true
+                metadata.pendingProfile = localProfile
                 try metadataStore.save(metadata)
+            }
+
+            if !metadata.pendingUpload, let (remote, _) = remoteBundle,
+               !localProfile.photoSyncInitialized, !localProfile.photoBase64.isEmpty,
+               (remote.avatarURL ?? "").isEmpty {
+                metadata.pendingUpload = true
+                metadata.pendingProfile = localProfile
+                metadata.conflict = true
+                try metadataStore.save(metadata)
+                syncStatus = .conflict
+                return
             }
 
             if metadata.pendingUpload {
                 if let remoteBundle {
-                    guard ProfileSyncPolicy.mayUploadPending(
-                        localProfileID: metadata.profileID,
-                        localUpdatedAt: metadata.remoteUpdatedAt,
-                        remoteProfileID: remoteBundle.0.id,
-                        remoteUpdatedAt: remoteBundle.0.updatedAt
+                    guard ProfileRevisionPolicy.mayUpload(
+                        localID: metadata.profileID,
+                        localRevision: metadata.remoteUpdatedAt,
+                        localFingerprint: metadata.remoteFingerprint,
+                        remoteID: remoteBundle.0.id,
+                        remoteRevision: remoteBundle.0.updatedAt,
+                        remoteFingerprint: remoteBundle.0.fingerprint
                     ) else {
                         metadata.conflict = true
                         try metadataStore.save(metadata)
                         syncStatus = .conflict
                         return
                     }
-                    guard let remote = try await cloud.updateProfile(ownerID: id, profileID: remoteBundle.0.id,
+                    guard var remote = try await cloud.updateProfile(ownerID: id, profileID: remoteBundle.0.id,
                                                                      profile: localProfile,
                                                                      expectedUpdatedAt: remoteBundle.0.updatedAt) else {
                         metadata.conflict = true
@@ -350,9 +376,13 @@ final class AppStore: ObservableObject {
                         syncStatus = .conflict
                         return
                     }
+                    remote.linkedIn = remoteBundle.0.linkedIn
+                    metadata = try metadataStore.load()
                     metadata.profileID = remote.id
                     metadata.remoteUpdatedAt = remote.updatedAt
+                    metadata.remoteFingerprint = remote.fingerprint
                     try metadataStore.save(metadata)
+                    guard userID == id else { return }
                     guard profileRevision == revision else {
                         metadata.pendingUpload = true
                         try metadataStore.save(metadata)
@@ -360,7 +390,7 @@ final class AppStore: ObservableObject {
                         syncStatus = .pending
                         return
                     }
-                    try await cloud.syncLinkedIn(profileID: remote.id, value: localProfile.linkedIn)
+                    try await cloud.syncLinkedIn(profileID: remote.id, value: localProfile.linkedIn, expected: remoteBundle.0.linkedIn)
                 } else {
                     let reservedID = metadata.profileID ?? UUID()
                     metadata.profileID = reservedID
@@ -369,9 +399,12 @@ final class AppStore: ObservableObject {
                     let remote = try await cloud.createProfile(ownerID: id, profileID: reservedID,
                                                                profile: localProfile)
                     guard remote.id == reservedID else { throw CloudError.emptyResponse }
+                    metadata = try metadataStore.load()
                     metadata.profileID = remote.id
                     metadata.remoteUpdatedAt = remote.updatedAt
+                    metadata.remoteFingerprint = remote.fingerprint
                     try metadataStore.save(metadata)
+                    guard userID == id else { return }
                     guard profileRevision == revision else {
                         var latest = profile
                         if latest.publicSlug == localProfile.publicSlug {
@@ -389,8 +422,10 @@ final class AppStore: ObservableObject {
                     local.publicSlug = remote.slug
                     try storage.save(local)
                     profile = local
-                    try await cloud.syncLinkedIn(profileID: remote.id, value: localProfile.linkedIn)
+                    try await cloud.syncLinkedIn(profileID: remote.id, value: localProfile.linkedIn, expected: "")
                 }
+                guard userID == id else { return }
+                metadata = try metadataStore.load()
                 guard profileRevision == revision else {
                     metadata.pendingUpload = true
                     try metadataStore.save(metadata)
@@ -398,11 +433,19 @@ final class AppStore: ObservableObject {
                     syncStatus = .pending
                     return
                 }
+                let verified = try await cloud.fetchProfile(ownerID: id, preserving: profile, loadPhoto: false)
+                guard userID == id else { return }
+                metadata = try metadataStore.load()
+                guard profileRevision == revision else { syncAgain = true; syncStatus = .pending; return }
+                guard let verified, verified.0.matches(profile) else { throw CloudError.profileConflict }
+                metadata.remoteUpdatedAt = verified.0.updatedAt
+                metadata.remoteFingerprint = verified.0.fingerprint
                 var photoSynced = profile
                 photoSynced.photoSyncInitialized = true
                 try storage.save(photoSynced)
                 profile = photoSynced
                 metadata.pendingUpload = false
+                metadata.pendingProfile = nil
                 metadata.conflict = false
                 try metadataStore.save(metadata)
                 syncStatus = .synced
@@ -412,22 +455,83 @@ final class AppStore: ObservableObject {
                 profile = pulled
                 metadata.profileID = remote.id
                 metadata.remoteUpdatedAt = remote.updatedAt
+                metadata.remoteFingerprint = remote.fingerprint
+                metadata.pendingProfile = nil
                 metadata.conflict = false
                 try metadataStore.save(metadata)
                 syncStatus = .synced
             } else {
-                syncStatus = hasProfile ? .pending : .synced
+                if hasProfile {
+                    metadata.pendingUpload = true
+                    metadata.pendingProfile = localProfile
+                    metadata.conflict = metadata.profileID != nil
+                    try metadataStore.save(metadata)
+                    syncStatus = metadata.conflict ? .conflict : .pending
+                    if !metadata.conflict { syncAgain = true }
+                } else { syncStatus = .localOnly }
             }
         } catch let error as CloudError {
-            syncStatus = .failed
+            guard userID == id else { return }
+            if case .profileConflict = error {
+                if var latest = try? metadataStore.load() {
+                    latest.conflict = true
+                    try? metadataStore.save(latest)
+                }
+                syncStatus = .conflict
+            } else { syncStatus = .failed }
             let text = error.localizedDescription
             syncFailureMessage = text
             message = text
         } catch {
+            guard userID == id else { return }
             syncStatus = .failed
             let text = "A névjegyet helyben megőriztük, de a felhőszinkron most nem sikerült."
             syncFailureMessage = text
             message = text
+        }
+    }
+
+    func resolveSyncConflict(keepLocal: Bool) async {
+        guard syncStatus == .conflict, !syncInFlight, authStatus == .authenticated,
+              let cloud, let id = userID, let storage = fileStore, let metadataStore = syncStore else { return }
+        let revision = profileRevision
+        let local = profile
+        syncInFlight = true
+        defer { syncInFlight = false }
+        syncStatus = .syncing
+        do {
+            let remote = try await cloud.fetchProfile(ownerID: id, preserving: ContactProfile(), loadPhoto: !keepLocal)
+            guard revision == profileRevision, userID == id else { syncStatus = .pending; return }
+            var metadata = try metadataStore.load()
+            metadata.profileID = remote?.0.id
+            metadata.remoteUpdatedAt = remote?.0.updatedAt
+            metadata.remoteFingerprint = remote?.0.fingerprint
+            metadata.conflict = false
+            if keepLocal {
+                metadata.pendingUpload = true
+                metadata.pendingProfile = local
+                try metadataStore.save(metadata)
+                syncStatus = .pending
+                syncInFlight = false
+                await synchronize()
+            } else {
+                guard let (server, downloaded) = remote else { throw CloudError.emptyResponse }
+                try downloaded.validate()
+                // A separate recoverable copy preserves the local conflict version.
+                let backup = storage.fileURL.deletingLastPathComponent().appendingPathComponent("conflict-backup.json")
+                try JSONEncoder().encode(local).write(to: backup, options: [.atomic, .completeFileProtection])
+                try storage.save(downloaded)
+                profile = downloaded
+                profileRevision &+= 1
+                metadata.profileID = server.id
+                metadata.pendingUpload = false
+                metadata.pendingProfile = nil
+                try metadataStore.save(metadata)
+                syncStatus = .synced
+            }
+        } catch {
+            syncStatus = .conflict
+            message = "Az ütközés feloldása nem sikerült. A helyi változtatásokat megőriztük."
         }
     }
 

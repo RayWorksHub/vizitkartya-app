@@ -88,4 +88,35 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertFalse(CloudError.server(status: 409, code: "PGRST116").isUniqueConstraintViolation)
         XCTAssertFalse(CloudError.server(status: 500, code: "23505").isUniqueConstraintViolation)
     }
+    func testPendingPhotoSurvivesJournalReloadBeforeProfileFileWrite() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileSyncStore(directory: directory)
+        var p = profile()
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { context in
+            UIColor.systemGreen.setFill(); context.fill(CGRect(x: 0, y: 0, width: 20, height: 20))
+        }
+        p.photoBase64 = try XCTUnwrap(image.jpegData(compressionQuality: 0.8)).base64EncodedString()
+        var journal = ProfileSyncMetadata(); journal.pendingUpload = true; journal.pendingProfile = p
+        try store.save(journal)
+        XCTAssertEqual(try store.load().pendingProfile?.photoBase64, p.photoBase64)
+        XCTAssertTrue(try store.load().pendingUpload)
+        journal.pendingProfile?.photoBase64 = ""
+        try store.save(journal)
+        XCTAssertEqual(try store.load().pendingProfile?.photoBase64, "")
+    }
+    func testInconsistentJournalIsNotAcceptedAsSynced() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var journal = ProfileSyncMetadata(); journal.pendingProfile = profile()
+        XCTAssertThrowsError(try ProfileSyncStore(directory: directory).save(journal))
+    }
+    func testRemoteFingerprintTracksContentNotAnalyticsTimestamp() throws {
+        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null}"#
+        let decode = { (text: String) throws in try JSONDecoder().decode(RemoteProfile.self, from: Data(text.utf8)) }
+        let first = try decode(raw)
+        XCTAssertEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "first", with: "later")).fingerprint)
+        XCTAssertNotEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "Teszt Elek", with: "Másik Név")).fingerprint)
+        XCTAssertNotEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: #""avatar_url":null"#, with: #""avatar_url":"data:image/jpeg;base64,/9j/""#)).fingerprint)
+    }
 }

@@ -183,13 +183,13 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertTrue(values.allSatisfy { $0.count <= 50 })
     }
 
-    func testInterruptedFirstUploadCanRecoverWithoutWeakeningEstablishedConflictCheck() {
+    func testUnknownFirstUploadRevisionRequiresExplicitConflictResolution() {
         let remoteID = UUID()
         XCTAssertFalse(ProfileSyncPolicy.mayUploadPending(
             localProfileID: nil, localUpdatedAt: nil,
             remoteProfileID: remoteID, remoteUpdatedAt: "2026-09-17T17:00:00Z"
         ))
-        XCTAssertTrue(ProfileSyncPolicy.mayUploadPending(
+        XCTAssertFalse(ProfileSyncPolicy.mayUploadPending(
             localProfileID: remoteID, localUpdatedAt: nil,
             remoteProfileID: remoteID, remoteUpdatedAt: "2026-09-17T17:00:00Z"
         ))

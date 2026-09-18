@@ -21,7 +21,11 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val profileHost = providers.gradleProperty("VIZIT_PROFILE_HOST").orElse("vizit.hu").get()
+val sharing = java.util.Properties().apply { rootProject.file("config/sharing.properties").inputStream().use { load(it) } }
+val sharingBase = providers.gradleProperty("VIZIT_PUBLIC_PROFILE_BASE_URL").orElse(sharing.getProperty("publicProfileBaseUrl")).get()
+val profileHost = providers.gradleProperty("VIZIT_PROFILE_HOST").orElse(URI(sharingBase).host).get()
+val profileBackend = providers.gradleProperty("VIZIT_PROFILE_BACKEND").orElse(sharing.getProperty("profileBackend", "legacy")).get()
+require(profileBackend in setOf("legacy", "v2"))
 val devSupabaseUrl = providers.gradleProperty("VIZIT_DEV_SUPABASE_URL").orElse("").get()
 val devSupabaseKey = providers.gradleProperty("VIZIT_DEV_SUPABASE_KEY").orElse("").get()
 val betaSupabaseUrl = providers.gradleProperty("VIZIT_BETA_SUPABASE_URL").orElse("").get()
@@ -49,12 +53,13 @@ android {
         applicationId = "hu.rayworks.vizit"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0-alpha.1"
+        versionCode = 40300
+        versionName = "0.4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders["profileHost"] = profileHost
+        buildConfigField("String", "PROFILE_BACKEND", profileBackend.asBuildConfigString())
         buildConfigField("String", "PRIVACY_POLICY_URL", privacyPolicyUrl.asBuildConfigString())
         buildConfigField("String", "PRIVACY_POLICY_VERSION", privacyPolicyVersion.asBuildConfigString())
         buildConfigField("String", "TERMS_URL", termsUrl.asBuildConfigString())
@@ -92,7 +97,7 @@ android {
             buildConfigField("boolean", "SUPABASE_ENABLED", (devSupabaseUrl.isNotBlank() && devSupabaseKey.isNotBlank()).toString())
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", devGoogleWebClientId.asBuildConfigString())
             buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", devGoogleWebClientId.isNotBlank().toString())
-            buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", "https://$profileHost/p".asBuildConfigString())
+            buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", sharingBase.asBuildConfigString())
         }
 
         create("beta") {
@@ -108,7 +113,7 @@ android {
             buildConfigField("boolean", "SUPABASE_ENABLED", (betaSupabaseUrl.isNotBlank() && betaSupabaseKey.isNotBlank()).toString())
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "".asBuildConfigString())
             buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", "false")
-            buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", "https://$profileHost/p".asBuildConfigString())
+            buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", sharingBase.asBuildConfigString())
         }
 
         create("prod") {
@@ -122,7 +127,7 @@ android {
             buildConfigField("boolean", "SUPABASE_ENABLED", (prodSupabaseUrl.isNotBlank() && prodSupabaseKey.isNotBlank()).toString())
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "".asBuildConfigString())
             buildConfigField("boolean", "GOOGLE_SIGN_IN_ENABLED", "false")
-            buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", "https://$profileHost/p".asBuildConfigString())
+            buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", sharingBase.asBuildConfigString())
         }
     }
 

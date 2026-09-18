@@ -109,6 +109,7 @@ fun VizitApp(
 
             AppSection.SHARE -> ShareScreen(
                 profile = viewModel.profile,
+                synchronized = viewModel.profileSyncState.status == hu.rayworks.vizit.data.sync.ProfileSyncStatus.SYNCED && !viewModel.profileSyncState.pendingChanges,
                 nfcStatus = viewModel.nfcStatus,
                 onStartNfcShare = viewModel::startNfcShare,
                 modifier = Modifier.padding(innerPadding),
@@ -120,6 +121,8 @@ fun VizitApp(
                 automaticSyncEnabled = viewModel.automaticSyncEnabled,
                 onAutomaticSyncChanged = viewModel::updateAutomaticSyncEnabled,
                 onRetrySync = viewModel::retryProfileSync,
+                onResolveConflict = viewModel::resolveProfileConflict,
+                resolutionMessage = viewModel.conflictResolutionMessage,
                 authActionState = authViewModel.actionState,
                 googleSignInEnabled = authViewModel.googleSignInEnabled,
                 cloudAccountAvailable = authViewModel.cloudAccountAvailable,

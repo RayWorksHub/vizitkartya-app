@@ -134,6 +134,7 @@ public enum PublicProfileLink {
     public static func make(baseURL: URL, slug: String) -> URL? {
         guard baseURL.scheme?.lowercased() == "https", baseURL.host?.isEmpty == false,
               baseURL.user == nil, baseURL.password == nil,
+              baseURL.query == nil, baseURL.fragment == nil,
               isValidSlug(slug) else { return nil }
         return baseURL.appendingPathComponent(slug, isDirectory: false)
     }
@@ -164,7 +165,7 @@ public enum ProfileSyncPolicy {
     public static func mayUploadPending(localProfileID: UUID?, localUpdatedAt: String?,
                                         remoteProfileID: UUID, remoteUpdatedAt: String) -> Bool {
         guard localProfileID == remoteProfileID else { return false }
-        return localUpdatedAt == nil || localUpdatedAt == remoteUpdatedAt
+        return localUpdatedAt != nil && localUpdatedAt == remoteUpdatedAt
     }
 }
 
@@ -209,5 +210,27 @@ public enum ContactQRLink {
         parts?.queryItems = [URLQueryItem(name: "contact", value: "1")]
         parts?.fragment = nil
         return parts?.url
+    }
+}
+
+
+public enum ProfileRevisionPolicy {
+    public static func mayUpload(localID: UUID?, localRevision: String?, localFingerprint: String?,
+                                 remoteID: UUID, remoteRevision: String, remoteFingerprint: String) -> Bool {
+        guard localID == remoteID else { return false }
+        if let localFingerprint { return localFingerprint == remoteFingerprint }
+        return localRevision != nil && localRevision == remoteRevision
+    }
+
+    public static func migrateLocalPhoto(initialized: Bool, hasLocalPhoto: Bool,
+                                         remoteHasPhoto: Bool, sameRevision: Bool) -> Bool {
+        return !initialized && hasLocalPhoto && !remoteHasPhoto && sameRevision
+    }
+}
+
+
+public extension ContactProfile {
+    func validateIfPresent() throws {
+        if !displayName.isEmpty || !phone.isEmpty || !email.isEmpty { try validate() }
     }
 }

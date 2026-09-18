@@ -36,6 +36,7 @@ class ProfileSyncEngine(
                 return ProfileSyncRunResult.RETRY
             }
 
+            if (remoteDataSource.authenticatedUserId() != userId) return ProfileSyncRunResult.WAITING_FOR_SESSION
             when (result) {
                 is RemoteProfileSyncResult.Applied -> localStore.completeSync(
                     mutation = mutation,
@@ -73,13 +74,14 @@ class ProfileSyncEngine(
 
         return try {
             remoteDataSource.pull(userId)?.let { remote ->
+                if (remoteDataSource.authenticatedUserId() != userId) return ProfileSyncRunResult.WAITING_FOR_SESSION
                 localStore.applyRemoteIfClean(
                     userId = userId,
                     remote = remote,
                     nowEpochMs = clock.nowEpochMs(),
                 )
             }
-            ProfileSyncRunResult.COMPLETE
+            if (localStore.hasRetryableMutation(userId)) ProfileSyncRunResult.RETRY else ProfileSyncRunResult.COMPLETE
         } catch (error: CancellationException) {
             throw error
         } catch (_: Throwable) {
