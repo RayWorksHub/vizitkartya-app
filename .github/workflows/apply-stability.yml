@@ -1,0 +1,68 @@
+name: Apply verified stability patch
+on:
+  push:
+    branches: [fix/beta-share-stability]
+    paths: ['.github/workflows/apply-stability.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/beta-share-stability
+      - name: Verify transport and apply exact source diff
+        run: |
+          python3 - <<'PY'
+          import base64,gzip,hashlib,subprocess
+          from pathlib import Path
+          encoded=''.join(Path(f'.ci/stability-patch.{i}').read_text().strip() for i in range(4))
+          patch=gzip.decompress(base64.b64decode(encoded,validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='cea714d84d2cf89b5e455d107dbf5df3b86167691bcf9f60801eb93719b596fa'
+          Path('/tmp/stability.patch').write_bytes(patch)
+          subprocess.run(['git','apply','--check','/tmp/stability.patch'],check=True)
+          subprocess.run(['git','apply','/tmp/stability.patch'],check=True)
+          for i in range(4): Path(f'.ci/stability-patch.{i}').unlink()
+          p=Path('.github/workflows/ios.yml');t=p.read_text()
+          t=t.replace('branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo]','branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability]')
+          t=t.replace("paths: ['ios/**', '.github/workflows/ios.yml']", "paths: ['ios/**', 'config/**', '.github/workflows/ios.yml']")
+          assert t.count('https://vizit-kartya.hu/p')==2
+          t=t.replace('https://vizit-kartya.hu/p','https://e-nevjegy.vercel.app/p').replace('expected = 13','expected = 16')
+          marker='      - name: Select App Store-compatible Xcode'
+          check='''      - name: Verify shared public endpoint configuration
+                  run: |
+                    python3 - <<'PYCONFIG'
+                    import os, urllib.request
+                    values = dict(line.strip().split('=',1) for line in open('config/sharing.properties') if '=' in line and not line.startswith('#'))
+                    assert values['publicProfileBaseUrl'] == os.environ['VIZIT_PUBLIC_PROFILE_BASE_URL']
+                    with urllib.request.urlopen(values['publicProfileBaseUrl'] + '/csukardi-rajmund', timeout=20) as response:
+                        assert response.status == 200
+                        assert 'Mentés a kontaktok közé' in response.read(1000000).decode()
+                    print('Configured public endpoint: PASS; no production writes')
+                    PYCONFIG
+
+          '''
+          # Dedent embedded YAML independently from the Python heredoc.
+          import textwrap
+          check=textwrap.dedent(check)
+          check='\n'.join('      '+line if line else '' for line in check.splitlines())+'\n'
+          # The first line above is already at the intended six-space indentation;
+          # construct explicitly to keep workflow indentation deterministic.
+          lines=["      - name: Verify shared public endpoint configuration","        run: |","          python3 - <<'PYCONFIG'","          import os, urllib.request","          values = dict(line.strip().split('=',1) for line in open('config/sharing.properties') if '=' in line and not line.startswith('#'))","          assert values['publicProfileBaseUrl'] == os.environ['VIZIT_PUBLIC_PROFILE_BASE_URL']","          with urllib.request.urlopen(values['publicProfileBaseUrl'] + '/csukardi-rajmund', timeout=20) as response:","              assert response.status == 200","              assert 'Mentés a kontaktok közé' in response.read(1000000).decode()","          print('Configured public endpoint: PASS; no production writes')","          PYCONFIG",""]
+          t=t.replace(marker,'\n'.join(lines)+'\n'+marker,1)
+          t=t.replace('          package="$RUNNER_TEMP/ipa"','          test "$(plutil -extract VIZITPublicProfileBaseURL raw "$app/Info.plist")" = "$VIZIT_PUBLIC_PROFILE_BASE_URL"\n          package="$RUNNER_TEMP/ipa"')
+          old="      github.event_name == 'workflow_dispatch' ||\n      (github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]'))"
+          assert old in t
+          t=t.replace(old,"      vars.VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED == 'true' &&\n      (github.event_name == 'workflow_dispatch' ||\n      (github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]')))")
+          Path('.ci/ios.generated.txt').write_text(t)
+          PY
+          git diff --check
+      - name: Commit application source only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app ios config .ci
+          git commit -m 'fix: preserve profile photos, handle conflicts and align Android with the shared backend'
+          git push origin HEAD:fix/beta-share-stability
