@@ -7,7 +7,7 @@ struct VizitApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppGate().environmentObject(store).tint(Brand.blue)
+            AppGate().environmentObject(store).tint(VizitColor.primary)
                 .onOpenURL { url in Task { await store.handleCallback(url) } }
         }
     }
@@ -587,293 +587,116 @@ final class AppStore: ObservableObject {
     }
 }
 
+// MARK: - Root navigation
+
+/// Four primary destinations, matching Android. Scanning and the knowledge hub
+/// are tasks you start from a destination, not tabs of their own.
+enum RootTab: Hashable {
+    case home, card, share, settings
+}
+
 struct AppGate: View {
     @EnvironmentObject private var store: AppStore
+    @State private var themeMode: ThemeMode = ThemeStorage.current
 
     var body: some View {
         Group {
             switch store.authStatus {
             case .launching:
-                ZStack {
-                    Brand.heroGradient.ignoresSafeArea()
-                    VStack(spacing: 20) {
-                        VizitBrandLockup(height: 92)
-                            .frame(maxWidth: 300)
-                        ProgressView()
-                            .controlSize(.large)
-                            .tint(Brand.cyan)
-                        Text("Biztonságos munkamenet ellenőrzése…")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
-                    .padding(28)
-                }
-                .preferredColorScheme(.dark)
+                LaunchScreen()
+
             case .signedOut, .verificationSent:
                 AuthScreen()
+
             case .passwordRecovery:
                 PasswordChangeScreen()
+
             case .configurationError(let detail):
-                ZStack {
-                    VizitScreenBackground()
-                    VizitCard {
-                        VStack(spacing: 18) {
-                            Image(systemName: "exclamationmark.shield.fill")
-                                .font(.system(size: 52))
-                                .foregroundStyle(.red)
-                            Text("Ez a build nem használható").font(.title2.bold())
-                            Text(detail).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .padding(24)
-                    .frame(maxWidth: 520)
+                VizitScreen {
+                    VizitErrorState(
+                        title: "Ez a build nem használható",
+                        message: detail
+                    )
+                    .padding(.horizontal, VizitSpace.md)
                 }
+
             case .authenticated, .offline:
-                RootView()
+                RootView(themeMode: $themeMode)
             }
         }
-        .alert("VIZIT", isPresented: Binding(get: { store.message != nil },
-                                              set: { if !$0 { store.dismissMessage() } })) {
+        .preferredColorScheme(themeMode.colorScheme)
+        .alert("VIZIT", isPresented: Binding(
+            get: { store.message != nil },
+            set: { if !$0 { store.dismissMessage() } }
+        )) {
             Button("Rendben", role: .cancel) { store.dismissMessage() }
         } message: { Text(store.message ?? "") }
     }
 }
 
-enum Brand {
-    static let navy = Color(red: 6 / 255, green: 27 / 255, blue: 70 / 255)
-    static let blue = Color(red: 5 / 255, green: 94 / 255, blue: 236 / 255)
-    static let cyan = Color(red: 19 / 255, green: 209 / 255, blue: 252 / 255)
-    static let cyanLight = Color(red: 139 / 255, green: 233 / 255, blue: 255 / 255)
-    static let ice = Color(red: 234 / 255, green: 248 / 255, blue: 255 / 255)
-    static let cloud = Color(red: 245 / 255, green: 247 / 255, blue: 249 / 255)
-    static let darkSurface = Color(red: 8 / 255, green: 35 / 255, blue: 92 / 255)
-
-    static let heroGradient = LinearGradient(
-        colors: [navy, Color(red: 4 / 255, green: 52 / 255, blue: 132 / 255), blue],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let actionGradient = LinearGradient(
-        colors: [blue, Color(red: 20 / 255, green: 116 / 255, blue: 255 / 255)],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
-
-    static let canvas = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 3 / 255, green: 13 / 255, blue: 34 / 255, alpha: 1)
-            : UIColor(red: 245 / 255, green: 247 / 255, blue: 249 / 255, alpha: 1)
-    })
-
-    static let surface = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 8 / 255, green: 28 / 255, blue: 66 / 255, alpha: 1)
-            : .white
-    })
-
-    static let elevatedSurface = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 12 / 255, green: 39 / 255, blue: 88 / 255, alpha: 1)
-            : UIColor(red: 250 / 255, green: 252 / 255, blue: 255 / 255, alpha: 1)
-    })
-
-    static let border = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor.white.withAlphaComponent(0.14)
-            : UIColor(red: 6 / 255, green: 27 / 255, blue: 70 / 255, alpha: 0.10)
-    })
-}
-
-struct VizitBrandLockup: View {
-    var height: CGFloat = 94
-    var padded = true
-
-    private static let image: UIImage? = {
-        guard let url = Bundle.main.url(forResource: "VizitLogo", withExtension: "png") else { return nil }
-        return UIImage(contentsOfFile: url.path)
-    }()
-
-    var body: some View {
-        Group {
-            if let image = Self.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-            } else {
-                VStack(spacing: 3) {
-                    Text("VIZIT")
-                        .font(.system(size: 30, weight: .black, design: .rounded))
-                        .tracking(7)
-                        .foregroundStyle(Brand.navy)
-                    Text("EGY ÉRINTÉS. EGY KAPCSOLAT.")
-                        .font(.system(size: 8, weight: .bold))
-                        .tracking(2)
-                        .foregroundStyle(Brand.blue)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .padding(padded ? 14 : 0)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("VIZIT – Egy érintés. Egy kapcsolat.")
-    }
-}
-
-struct VizitMark: View {
+private struct LaunchScreen: View {
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white)
-            Image(systemName: "link")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(Brand.actionGradient)
-        }
-        .frame(width: 54, height: 46)
-        .accessibilityLabel("VIZIT")
-    }
-}
+            LinearGradient(
+                colors: [
+                    Color(uiColor: UIColor(hex: 0x0C2C63)),
+                    Color(uiColor: UIColor(hex: 0x05163A))
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-struct VizitScreenBackground: View {
-    var body: some View {
-        ZStack {
-            Brand.canvas
-            Circle()
-                .fill(Brand.blue.opacity(0.08))
-                .frame(width: 280, height: 280)
-                .blur(radius: 2)
-                .offset(x: 170, y: -330)
-        }
-        .ignoresSafeArea()
-    }
-}
-
-struct VizitCard<Content: View>: View {
-    private let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        content
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Brand.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Brand.border, lineWidth: 1)
+            VStack(spacing: VizitSpace.lg) {
+                VizitBrandLockup(maxHeight: 96)
+                    .frame(maxWidth: 300)
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(Color(uiColor: UIColor(hex: 0x0FBEE6)))
+                Text("Biztonságos munkamenet ellenőrzése…")
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(.white.opacity(0.72))
             }
-            .shadow(color: Brand.navy.opacity(0.08), radius: 18, y: 8)
-    }
-}
-
-struct VizitPrimaryButtonLabel: View {
-    let title: String
-    var systemImage: String?
-    var busy = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            if busy {
-                ProgressView().tint(.white)
-            } else if let systemImage {
-                Image(systemName: systemImage).font(.headline)
-            }
-            Text(title).font(.headline.weight(.bold))
+            .padding(VizitSpace.xl)
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-        .frame(height: 56)
-        .background(Brand.actionGradient)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: Brand.blue.opacity(0.25), radius: 14, y: 7)
     }
 }
 
 struct RootView: View {
-    var body: some View {
-        TabView {
-            HomeScreen().tabItem { Label("Névjegy", systemImage: "person.crop.rectangle") }
-            ShareScreen().tabItem { Label("Megosztás", systemImage: "qrcode") }
-            ScanScreen().tabItem { Label("Beolvasás", systemImage: "qrcode.viewfinder") }
-            BusinessHubScreen().tabItem { Label("Tudástár", systemImage: "book.closed") }
-            SettingsScreen().tabItem { Label("Beállítások", systemImage: "gearshape") }
-        }
-        .tint(Brand.blue)
-        .toolbarBackground(Brand.surface, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
-    }
-}
-
-struct ProfileAvatar: View {
-    let profile: ContactProfile
-    var size: CGFloat = 72
-    var body: some View {
-        Group {
-            if let bytes = Data(base64Encoded: profile.photoBase64), let image = UIImage(data: bytes) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                Text(profile.initials.isEmpty ? "V" : profile.initials)
-                    .font(.system(size: size * 0.34, weight: .bold, design: .rounded))
-                    .foregroundStyle(Brand.navy)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(
-                        LinearGradient(colors: [Brand.cyanLight, Brand.ice],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay { Circle().stroke(Color.white.opacity(0.75), lineWidth: 3) }
-        .shadow(color: Brand.navy.opacity(0.16), radius: 10, y: 5)
-        .accessibilityLabel("Profilkép: \(profile.displayName)")
-    }
-}
-
-struct PreviewNotice: View {
     @EnvironmentObject private var store: AppStore
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Label(store.syncStatus.label, systemImage: statusIcon)
-            Spacer()
-            if [.pending, .conflict, .failed].contains(store.syncStatus), store.isOnline {
-                Button("Újra") { store.retrySync() }
-                    .buttonStyle(.borderless)
-                    .fontWeight(.semibold)
-            }
-        }
-        .font(.footnote)
-        .foregroundStyle(store.syncStatus == .conflict ? .orange : .secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(Brand.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .stroke(Brand.border, lineWidth: 1)
-        }
-    }
+    @Binding var themeMode: ThemeMode
+    @State private var selection: RootTab = .home
 
-    private var statusIcon: String {
-        if store.authStatus == .offline { return "wifi.slash" }
-        switch store.syncStatus {
-        case .syncing: return "arrow.triangle.2.circlepath"
-        case .conflict, .failed: return "exclamationmark.triangle.fill"
-        case .pending: return "clock.fill"
-        case .localOnly: return "iphone"
-        case .synced: return "checkmark.shield.fill"
+    var body: some View {
+        TabView(selection: $selection) {
+            HomeScreen(selectedTab: $selection)
+                .tabItem { Label("Kezdőlap", systemImage: "house") }
+                .tag(RootTab.home)
+
+            CardScreen(selectedTab: $selection)
+                .tabItem { Label("Névjegy", systemImage: "person.crop.rectangle") }
+                .tag(RootTab.card)
+
+            ShareScreen()
+                .tabItem { Label("Megosztás", systemImage: "square.and.arrow.up") }
+                .tag(RootTab.share)
+
+            SettingsScreen(themeMode: $themeMode)
+                .tabItem { Label("Beállítások", systemImage: "gearshape") }
+                .tag(RootTab.settings)
+        }
+        .tint(VizitColor.primary)
+        .toolbarBackground(VizitColor.surface, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+        .overlay(alignment: .top) {
+            if store.authStatus == .offline {
+                VizitBanner(
+                    text: "Offline mód – a helyi névjegyed olvasható és szerkeszthető.",
+                    tone: .info
+                )
+                .padding(.horizontal, VizitSpace.md)
+                .padding(.top, VizitSpace.xxs)
+            }
         }
     }
 }
