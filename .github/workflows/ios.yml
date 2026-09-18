@@ -64,6 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/check-physical-e2e-readiness.mjs
           for name in VIZIT_SUPABASE_URL VIZIT_SUPABASE_KEY VIZIT_AUTH_SCHEME VIZIT_PRIVACY_POLICY_URL VIZIT_PRIVACY_POLICY_VERSION VIZIT_TERMS_URL VIZIT_TERMS_VERSION; do
             test -n "${!name}" || { echo "Missing required configuration: $name"; exit 1; }
           done

@@ -53,6 +53,14 @@ A futtatás DEV külső adatot hoz létre és töröl, ezért minden alkalommal 
 
 ## Fizikai
 
+A teljes `0.4.3` iPhone–iPhone–Android forgatókönyv és a kitölthető eredménylap: [PHYSICAL_E2E.md](PHYSICAL_E2E.md).
+
+Az alkalmazásverziók, a közös DEV Supabase és a nyilvános profilcím egyezését a következő parancs ellenőrzi:
+
+```bash
+node scripts/check-physical-e2e-readiness.mjs
+```
+
 NFC release minősítéshez fizikai eszköz kell. Az eredmény nem `SUPPORTED`, amíg nincs valódi készülékteszt. A mátrixban külön rögzítendő készülékmodell, HyperOS/Android/iOS verzió, kontaktimport, fotó, több mező, böngésző/fájlletöltés és fallback.
 
 Az offline profilhoz külön ellenőrizendő: repülő módú szerkesztés és újraindítás, több egymás utáni szerkesztés outbox-coalescingje, hálózat-visszatérés, process kill alatti sync lease, kijelentkezett állapot, valamint két eszköz verziókonfliktusa. Élő Supabase vagy fizikai eszköz használata külön jóváhagyást igényel.
