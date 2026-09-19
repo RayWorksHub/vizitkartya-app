@@ -25,7 +25,7 @@ object QrCodeEncoder {
 
         val hints = EnumMap<EncodeHintType, Any>(EncodeHintType::class.java).apply {
             put(EncodeHintType.CHARACTER_SET, Charsets.UTF_8.name())
-            put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M)
+            put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.L)
             put(EncodeHintType.MARGIN, QUIET_ZONE_MODULES)
         }
         val matrix = MultiFormatWriter().encode(
