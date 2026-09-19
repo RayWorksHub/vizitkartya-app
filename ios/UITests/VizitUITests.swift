@@ -56,7 +56,7 @@ final class VizitUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["auth.forgotPassword"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["auth.version"].exists)
-        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("DEV 5.1.1"))
+        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("DEV 5.1.2"))
         app.buttons["auth.forgotPassword"].tap()
         XCTAssertTrue(app.textFields["auth.reset.email"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
