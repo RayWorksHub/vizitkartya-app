@@ -6,7 +6,7 @@ import hu.rayworks.vizit.data.PhotoProcessor
 import hu.rayworks.vizit.nfc.VCardBuilder
 
 object QrPayloadFactory {
-    const val MAX_CONTACT_QR_BYTES = 2_400
+    const val MAX_CONTACT_QR_BYTES = 2_200
 
     fun profileUrl(profile: ContactProfile, synchronized: Boolean = false): String? {
         if (!synchronized || !profile.isPublic || profile.publicSlug.isBlank()) return null
