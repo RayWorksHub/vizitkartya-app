@@ -31,7 +31,7 @@ public enum VCard {
         let payload = try encode(profile, includePhoto: includePhoto)
         // Keep enough module headroom for reliable camera decoding on a
         // handheld screen; the .vcf share route remains available for denser data.
-        guard payload.utf8.count <= 2400 else { throw ProfileError.oversizedQR }
+        guard payload.utf8.count <= 2200 else { throw ProfileError.oversizedQR }
         return payload
     }
 
