@@ -22,4 +22,18 @@ class QrPayloadFactoryTest {
         assertFalse(payload.contains("PHOTO"))
         assertTrue(payload.toByteArray(Charsets.UTF_8).size <= QrPayloadFactory.MAX_CONTACT_QR_BYTES)
     }
+
+    @Test
+    fun `photo contact QR embeds photo in vCard instead of a web URL`() {
+        val payload = QrPayloadFactory.photoContactFromOptimized(
+            profile = ContactProfile(fullName = "Teszt Elek", phone = "+36 20 123 4567"),
+            optimizedPhotoBase64 = "QUJD".repeat(180),
+            profileUrl = "https://e-nevjegy.vercel.app/p/teszt-elek",
+        ).getOrThrow()
+
+        assertTrue(payload.startsWith("BEGIN:VCARD\r\n"))
+        assertTrue(payload.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
+        assertFalse(payload.startsWith("https://"))
+        assertTrue(payload.toByteArray(Charsets.UTF_8).size <= QrPayloadFactory.MAX_CONTACT_QR_BYTES)
+    }
 }
