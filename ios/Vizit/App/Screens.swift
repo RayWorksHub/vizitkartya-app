@@ -1121,6 +1121,7 @@ private struct CourseDetailScreen: View {
     private var lessons: [CourseModule] { course.modules }
     private var selectedLesson: CourseModule { lessons.first { $0.id == selectedLessonID } ?? lessons[0] }
     private var completed: Set<String> { Set(completedLessonIDs.split(separator: "|").map(String.init)) }
+    private var completedLessonCount: Int { completed.intersection(Set(lessons.map(\.id))).count }
     private var learningModules: [[CourseModule]] {
         stride(from: 0, to: lessons.count, by: 2).map { Array(lessons[$0..<min($0 + 2, lessons.count)]) }
     }
@@ -1136,95 +1137,122 @@ private struct CourseDetailScreen: View {
     }
 
     var body: some View {
-        PortalScroll(title: course.title, subtitle: course.description) {
-            VizitPanel {
-                HStack(spacing: VizitSpace.sm) {
-                    VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle)
-                    VStack(alignment: .leading) {
-                        Text("\(course.duration) · \(course.level)").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                        Text("\(learningModules.count) modul · \(lessons.count) videólecke").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
-                    }
-                }
-            }
-            VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                HStack {
-                    Text("Kurzus haladása").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                    Spacer()
-                    Text("\(completed.intersection(Set(lessons.map(\.id))).count)/\(lessons.count) lecke")
-                        .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
-                }
-                ProgressView(value: Double(completed.intersection(Set(lessons.map(\.id))).count), total: Double(lessons.count))
-                    .tint(VizitColor.primary)
-            }
-
-            VStack(alignment: .leading, spacing: VizitSpace.sm) {
-                YouTubeLessonPlayer(url: videoURL(for: selectedLesson), onCompleted: markSelectedLessonComplete)
-                    .id(selectedLesson.id)
-                    .frame(maxWidth: .infinity).aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
-                Text("AKTUÁLIS LECKE").vizitOverline().foregroundStyle(VizitColor.primary)
-                Text(selectedLesson.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
-                Text(selectedLesson.summary).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
-                HStack(spacing: VizitSpace.xs) {
-                    Image(systemName: completed.contains(selectedLesson.id) ? "checkmark.circle.fill" : "play.circle")
-                    Text(completed.contains(selectedLesson.id) ? "Lecke teljesítve" : "A lecke a videó legalább 90%-ának lejátszása után lesz kész")
-                        .font(VizitFont.caption)
-                }
-                .foregroundStyle(completed.contains(selectedLesson.id) ? VizitColor.success : VizitColor.textMuted)
-                if selectedLesson.resourceURL != videoURL(for: selectedLesson) {
-                    VizitButton(title: selectedLesson.resourceTitle, systemImage: "doc.text", kind: .secondary) {
-                        guard let url = SafeLink.https(selectedLesson.resourceURL) else { return }
-                        openURL(url)
-                    }
-                }
-            }
-            .padding(VizitSpace.md).background(VizitColor.surface)
-            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
-
-            VizitSectionHeader(title: "Tananyag")
-            ForEach(Array(learningModules.enumerated()), id: \.offset) { moduleIndex, moduleLessons in
-                let moduleComplete = moduleLessons.allSatisfy { completed.contains($0.id) }
+        VizitScreen {
+            VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: VizitSpace.sm) {
-                    HStack(spacing: VizitSpace.sm) {
-                        Image(systemName: moduleComplete ? "checkmark.circle.fill" : "rectangle.stack.fill")
-                            .foregroundStyle(moduleComplete ? VizitColor.success : VizitColor.primary)
+                    YouTubeLessonPlayer(url: videoURL(for: selectedLesson), onCompleted: markSelectedLessonComplete)
+                        .id(selectedLesson.id)
+                        .frame(maxWidth: .infinity).aspectRatio(16 / 9, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+
+                    HStack(alignment: .top, spacing: VizitSpace.sm) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("AKTUÁLIS LECKE · \(course.category.uppercased())")
+                                .vizitOverline().foregroundStyle(VizitColor.primary)
+                            Text(selectedLesson.title)
+                                .font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary).lineLimit(2)
+                            Text(selectedLesson.summary)
+                                .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary).lineLimit(2)
+                        }
+                        Spacer(minLength: VizitSpace.xs)
+                        Image(systemName: completed.contains(selectedLesson.id) ? "checkmark.circle.fill" : "play.circle")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(completed.contains(selectedLesson.id) ? VizitColor.success : VizitColor.primary)
+                            .accessibilityLabel(completed.contains(selectedLesson.id) ? "Lecke teljesítve" : "Lecke folyamatban")
+                    }
+                }
+                .padding(.horizontal, VizitSpace.md)
+                .padding(.top, VizitSpace.xs)
+                .padding(.bottom, VizitSpace.sm)
+
+                VStack(spacing: VizitSpace.xs) {
+                    HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(moduleIndex + 1). MODUL").vizitOverline().foregroundStyle(VizitColor.textMuted)
-                            Text(moduleIndex == 0 ? "Alapok és felkészülés" : "Gyakorlati alkalmazás")
-                                .font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                            Text("TANANYAG").vizitOverline().foregroundStyle(VizitColor.primary)
+                            Text("\(learningModules.count) modul · \(lessons.count) lecke")
+                                .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
                         }
                         Spacer()
-                        Text("\(moduleLessons.filter { completed.contains($0.id) }.count)/\(moduleLessons.count)")
-                            .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                        Text("\(completedLessonCount)/\(lessons.count)")
+                            .font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
                     }
-                    ForEach(Array(moduleLessons.enumerated()), id: \.element.id) { lessonIndex, lesson in
-                        if lessonIndex > 0 { VizitDivider() }
-                        Button { selectedLessonID = lesson.id } label: {
-                            HStack(spacing: VizitSpace.sm) {
-                                Image(systemName: completed.contains(lesson.id) ? "checkmark.circle.fill" : "play.circle")
-                                    .font(.system(size: 21)).foregroundStyle(completed.contains(lesson.id) ? VizitColor.success : VizitColor.primary)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("\(moduleIndex + 1).\(lessonIndex + 1) · VIDEÓLECKE")
-                                        .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
-                                    Text(lesson.title).font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                                }
-                                Spacer()
-                                Image(systemName: selectedLesson.id == lesson.id ? "speaker.wave.2.fill" : "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(VizitColor.textMuted)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    ProgressView(value: Double(completedLessonCount), total: Double(lessons.count))
+                        .tint(VizitColor.primary)
                 }
-                .padding(VizitSpace.md).background(VizitColor.surface)
-                .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+                .padding(.horizontal, VizitSpace.md)
+                .padding(.vertical, VizitSpace.sm)
+                .background(VizitColor.surface)
+                .overlay(alignment: .bottom) { Rectangle().fill(VizitColor.border).frame(height: 1) }
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: VizitSpace.sm) {
+                        if selectedLesson.resourceURL != videoURL(for: selectedLesson) {
+                            VizitButton(title: selectedLesson.resourceTitle, systemImage: "doc.text", kind: .secondary) {
+                                guard let url = SafeLink.https(selectedLesson.resourceURL) else { return }
+                                openURL(url)
+                            }
+                        }
+
+                        ForEach(Array(learningModules.enumerated()), id: \.offset) { moduleIndex, moduleLessons in
+                            let moduleComplete = moduleLessons.allSatisfy { completed.contains($0.id) }
+                            VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                                HStack(spacing: VizitSpace.sm) {
+                                    Image(systemName: moduleComplete ? "checkmark.circle.fill" : "rectangle.stack.fill")
+                                        .foregroundStyle(moduleComplete ? VizitColor.success : VizitColor.primary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(moduleIndex + 1). MODUL").vizitOverline().foregroundStyle(VizitColor.textMuted)
+                                        Text(moduleIndex == 0 ? "Alapok és felkészülés" : "Gyakorlati alkalmazás")
+                                            .font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                                    }
+                                    Spacer()
+                                    Text("\(moduleLessons.filter { completed.contains($0.id) }.count)/\(moduleLessons.count)")
+                                        .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                                }
+
+                                ForEach(Array(moduleLessons.enumerated()), id: \.element.id) { lessonIndex, lesson in
+                                    if lessonIndex > 0 { VizitDivider() }
+                                    Button { selectedLessonID = lesson.id } label: {
+                                        HStack(spacing: VizitSpace.sm) {
+                                            Image(systemName: completed.contains(lesson.id) ? "checkmark.circle.fill" : "play.circle")
+                                                .font(.system(size: 21))
+                                                .foregroundStyle(completed.contains(lesson.id) ? VizitColor.success : VizitColor.primary)
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text("\(moduleIndex + 1).\(lessonIndex + 1) · VIDEÓLECKE")
+                                                    .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                                                Text(lesson.title).font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                                            }
+                                            Spacer()
+                                            Image(systemName: selectedLesson.id == lesson.id ? "speaker.wave.2.fill" : "chevron.right")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(selectedLesson.id == lesson.id ? VizitColor.primary : VizitColor.textMuted)
+                                        }
+                                        .padding(.horizontal, VizitSpace.xs)
+                                        .padding(.vertical, VizitSpace.sm)
+                                        .background(selectedLesson.id == lesson.id ? VizitColor.primarySubtle : Color.clear)
+                                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.sm, style: .continuous))
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(VizitSpace.md).background(VizitColor.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+                            .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+                        }
+
+                        Text("A kész állapotot az alkalmazás automatikusan rögzíti a videó legalább 90%-ának tényleges lejátszása után. Kézzel nem módosítható.")
+                            .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                    }
+                    .padding(.horizontal, VizitSpace.md)
+                    .padding(.top, VizitSpace.sm)
+                    .padding(.bottom, VizitSpace.xxl)
+                }
+                .frame(maxHeight: .infinity)
             }
-            Text("A kész állapotot az alkalmazás automatikusan rögzíti a videó legalább 90%-ának tényleges lejátszása után. Kézzel nem módosítható.")
-                .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+            .frame(maxWidth: 620, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .navigationTitle(course.title).navigationBarTitleDisplayMode(.inline)
         .onAppear { if selectedLessonID == nil { selectedLessonID = lessons.first?.id } }
     }
 }
