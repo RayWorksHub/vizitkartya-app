@@ -1,5 +1,12 @@
 package hu.rayworks.vizit.ui.screens
 
+import android.annotation.SuppressLint
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -57,14 +64,18 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.ui.design.Vizit
@@ -230,9 +241,9 @@ private val courses = listOf(
         "Magyar videók",
         "Kezdő",
         Icons.Outlined.Cloud,
-        "Microsoft 365 oktatóvideók magyarul",
-        "Microsoft 365 magyar találatok",
-        "https://www.youtube.com/results?search_query=Microsoft+365+oktat%C3%A1s+magyar",
+        "Microsoft 365 bevezetés és csoportok",
+        "Sämling Üzleti Oktatási Központ",
+        "https://www.youtube.com/watch?v=py9fGXyBZcE",
         listOf(
             CourseModule(
                 "Fiókok és jogosultságok",
@@ -344,9 +355,9 @@ private val courses = listOf(
         "Magyar videók",
         "Középhaladó",
         Icons.Outlined.Campaign,
-        "Google Cégprofil – magyar útmutatók",
-        "Magyar oktatóvideók",
-        "https://www.youtube.com/results?search_query=Google+C%C3%A9gprofil+be%C3%A1ll%C3%ADt%C3%A1sa+magyar",
+        "Hogyan kerülhetsz fel a Google Térképre?",
+        "Jobbágy András",
+        "https://www.youtube.com/watch?v=-4qATDuCWgU",
         listOf(
             CourseModule(
                 "Pozicionálási mondat",
@@ -557,7 +568,6 @@ fun BusinessHubScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         PortalPage.Toolkit -> BusinessToolkit({ navigate(PortalPage.Home) }, modifier)
     }
 }
-
 @Composable
 private fun PortalHome(onBack: () -> Unit, navigate: (PortalPage) -> Unit, modifier: Modifier) {
     val colors = Vizit.colors
@@ -770,7 +780,7 @@ private fun CourseCard(course: BusinessCourse, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${course.duration}  ·  ${course.level}  ·  ${course.modules.size} modul",
+                    "${course.duration}  ·  ${course.level}  ·  ${(course.modules.size + 1) / 2} modul  ·  ${course.modules.size} lecke",
                     style = Vizit.type.caption,
                     color = colors.textMuted,
                 )
@@ -782,8 +792,29 @@ private fun CourseCard(course: BusinessCourse, onClick: () -> Unit) {
 @Composable
 private fun CourseDetail(course: BusinessCourse, onBack: () -> Unit, modifier: Modifier) {
     val colors = Vizit.colors
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    var completed by rememberSaveable(course.id) { mutableStateOf(emptyList<Int>()) }
+    val preferences = remember { context.applicationContext.getSharedPreferences("vizit_education", 0) }
+    var completed by remember(course.id) {
+        mutableStateOf(preferences.getStringSet("completed_lessons", emptySet())?.toSet() ?: emptySet())
+    }
+    var selectedLessonIndex by rememberSaveable(course.id) { mutableStateOf(0) }
+    val selectedLesson = course.modules[selectedLessonIndex]
+    val learningModules = course.modules.chunked(2)
+    val courseCompleted = completed.intersect(course.modules.indices.map { "${course.id}:$it" }.toSet()).size
+
+    fun lessonKey(index: Int) = "${course.id}:$index"
+    fun markSelectedComplete() {
+        val next = completed + lessonKey(selectedLessonIndex)
+        completed = next
+        preferences.edit().putStringSet("completed_lessons", next).apply()
+    }
+
+    val selectedVideoUrl = if (youtubeVideoId(selectedLesson.resourceUrl) != null) {
+        selectedLesson.resourceUrl
+    } else {
+        course.videoUrl
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.canvas)
             .windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = Vizit.space.md),
@@ -795,14 +826,14 @@ private fun CourseDetail(course: BusinessCourse, onBack: () -> Unit, modifier: M
                 VizitRow(
                     label = "${course.duration} · ${course.level}",
                     icon = course.icon,
-                    supporting = "${course.modules.size} rövid, egymásra épülő modul",
+                    supporting = "${learningModules.size} modul · ${course.modules.size} videólecke",
                     showChevron = false,
                 )
             }
         }
         item {
             LinearProgressIndicator(
-                progress = { completed.size.toFloat() / course.modules.size },
+                progress = { courseCompleted.toFloat() / course.modules.size },
                 modifier = Modifier.fillMaxWidth(),
                 color = colors.primary,
                 trackColor = colors.controlTrack,
@@ -810,38 +841,51 @@ private fun CourseDetail(course: BusinessCourse, onBack: () -> Unit, modifier: M
         }
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = colors.ink),
-                shape = RoundedCornerShape(Vizit.radius.xl),
-                border = BorderStroke(1.dp, colors.borderStrong),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(Vizit.radius.lg),
+                border = BorderStroke(1.dp, colors.border),
             ) {
                 Column(
-                    Modifier.fillMaxWidth().padding(Vizit.space.lg),
+                    Modifier.fillMaxWidth().padding(Vizit.space.md),
                     verticalArrangement = Arrangement.spacedBy(Vizit.space.sm),
                 ) {
-                    Icon(
-                        Icons.Outlined.PlayCircleOutline,
-                        "Videó lejátszása",
-                        tint = Color.White,
-                        modifier = Modifier.size(44.dp),
-                    )
-                    Text("MAGYAR VIDEÓ", style = Vizit.type.overline, color = Color.White.copy(alpha = .7f))
-                    Text(course.videoTitle, style = Vizit.type.h3, color = Color.White)
-                    Text(course.videoSource, style = Vizit.type.bodySmall, color = Color.White.copy(alpha = .72f))
-                    VizitButton(
-                        "Videó megnyitása",
-                        { runCatching { uriHandler.openUri(course.videoUrl) } },
-                        modifier = Modifier.fillMaxWidth(),
-                        icon = Icons.Outlined.PlayArrow,
-                        containerOverride = Color.White,
-                        contentOverride = colors.ink,
-                    )
+                    YouTubeLessonPlayer(selectedVideoUrl, selectedLessonIndex) { markSelectedComplete() }
+                    Text("AKTUÁLIS LECKE", style = Vizit.type.overline, color = colors.primary)
+                    Text(selectedLesson.title, style = Vizit.type.h3, color = colors.textPrimary)
+                    Text(selectedLesson.summary, style = Vizit.type.bodySmall, color = colors.textSecondary)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Vizit.space.xs),
+                    ) {
+                        val isComplete = lessonKey(selectedLessonIndex) in completed
+                        Icon(
+                            if (isComplete) Icons.Outlined.CheckCircle else Icons.Outlined.PlayCircleOutline,
+                            null,
+                            tint = if (isComplete) colors.success else colors.textMuted,
+                        )
+                        Text(
+                            if (isComplete) "Lecke teljesítve" else "A videó legalább 90%-ának lejátszása után lesz kész",
+                            style = Vizit.type.caption,
+                            color = if (isComplete) colors.success else colors.textMuted,
+                        )
+                    }
+                    if (selectedLesson.resourceUrl != selectedVideoUrl) {
+                        VizitButton(
+                            selectedLesson.resourceTitle,
+                            { runCatching { uriHandler.openUri(selectedLesson.resourceUrl) } },
+                            modifier = Modifier.fillMaxWidth(),
+                            style = VizitButtonStyle.Secondary,
+                            icon = Icons.Outlined.Language,
+                        )
+                    }
                 }
             }
         }
-        item { VizitSectionHeader("Kurzusmodulok") }
-        items(course.modules.indices.toList()) { index ->
-            val isComplete = index in completed
-            val module = course.modules[index]
+        item { VizitSectionHeader("Tananyag") }
+        items(learningModules.indices.toList()) { moduleIndex ->
+            val moduleLessons = learningModules[moduleIndex]
+            val firstLessonIndex = moduleIndex * 2
+            val moduleComplete = moduleLessons.indices.all { lessonKey(firstLessonIndex + it) in completed }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = colors.surface),
@@ -856,48 +900,103 @@ private fun CourseDetail(course: BusinessCourse, onBack: () -> Unit, modifier: M
                         horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
                     ) {
                         Icon(
-                            if (isComplete) Icons.Outlined.CheckCircle else Icons.Outlined.PlayArrow,
+                            if (moduleComplete) Icons.Outlined.CheckCircle else Icons.Outlined.School,
                             null,
-                            tint = if (isComplete) colors.success else colors.primary,
+                            tint = if (moduleComplete) colors.success else colors.primary,
                         )
                         Column(Modifier.weight(1f)) {
-                            Text("${index + 1}. modul", style = Vizit.type.caption, color = colors.textMuted)
-                            Text(module.title, style = Vizit.type.h3, color = colors.textPrimary)
+                            Text("${moduleIndex + 1}. MODUL", style = Vizit.type.overline, color = colors.textMuted)
+                            Text(
+                                if (moduleIndex == 0) "Alapok és felkészülés" else "Gyakorlati alkalmazás",
+                                style = Vizit.type.h3,
+                                color = colors.textPrimary,
+                            )
                         }
+                        Text(
+                            "${moduleLessons.indices.count { lessonKey(firstLessonIndex + it) in completed }}/${moduleLessons.size}",
+                            style = Vizit.type.caption,
+                            color = colors.textMuted,
+                        )
                     }
-                    Text(
-                        module.summary,
-                        style = Vizit.type.bodySmall,
-                        color = colors.textSecondary,
-                    )
-                    VizitButton(
-                        module.resourceTitle,
-                        { runCatching { uriHandler.openUri(module.resourceUrl) } },
-                        modifier = Modifier.fillMaxWidth(),
-                        style = VizitButtonStyle.Secondary,
-                        icon = Icons.Outlined.Language,
-                    )
-                    VizitButton(
-                        if (isComplete) "Kész" else "Modul késznek jelölése",
-                        {
-                            completed = if (isComplete) completed - index else (completed + index).distinct()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        style = VizitButtonStyle.Tertiary,
-                        icon = Icons.Outlined.CheckCircle,
-                    )
+                    moduleLessons.forEachIndexed { lessonIndex, lesson ->
+                        if (lessonIndex > 0) VizitDivider()
+                        val absoluteIndex = firstLessonIndex + lessonIndex
+                        val isComplete = lessonKey(absoluteIndex) in completed
+                        VizitRow(
+                            label = lesson.title,
+                            icon = if (isComplete) Icons.Outlined.CheckCircle else Icons.Outlined.PlayCircleOutline,
+                            supporting = "${moduleIndex + 1}.${lessonIndex + 1} · Videólecke",
+                            onClick = { selectedLessonIndex = absoluteIndex },
+                        )
+                    }
                 }
             }
         }
         item {
             Text(
-                "A videók és segédanyagok külső, magyar nyelvű forrásoknál nyílnak meg. A jogi és adózási lépéseket indulás előtt egyeztesd szakértővel.",
+                "A kész állapotot az alkalmazás automatikusan rögzíti a videó legalább 90%-ának tényleges lejátszása után. Kézzel nem módosítható.",
                 style = Vizit.type.bodySmall,
                 color = colors.textMuted,
             )
         }
     }
 }
+
+private fun youtubeVideoId(url: String): String? {
+    val short = Regex("youtu\\.be/([A-Za-z0-9_-]{6,})").find(url)?.groupValues?.getOrNull(1)
+    if (short != null) return short
+    return Regex("[?&]v=([A-Za-z0-9_-]{6,})").find(url)?.groupValues?.getOrNull(1)
+        ?: Regex("youtube\\.com/embed/([A-Za-z0-9_-]{6,})").find(url)?.groupValues?.getOrNull(1)
+}
+
+private class LessonCompletionBridge(private val onCompleted: () -> Unit) {
+    @JavascriptInterface
+    fun completed() {
+        Handler(Looper.getMainLooper()).post { onCompleted() }
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun YouTubeLessonPlayer(url: String, lessonIndex: Int, onCompleted: () -> Unit) {
+    val videoId = youtubeVideoId(url) ?: return
+    key(videoId, lessonIndex) {
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.mediaPlaybackRequiresUserGesture = true
+                    webChromeClient = WebChromeClient()
+                    webViewClient = WebViewClient()
+                    addJavascriptInterface(LessonCompletionBridge(onCompleted), "VizitLesson")
+                    loadDataWithBaseURL(
+                        "https://www.youtube-nocookie.com",
+                        youtubePlayerHtml(videoId),
+                        "text/html",
+                        "UTF-8",
+                        null,
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+        )
+    }
+}
+
+private fun youtubePlayerHtml(videoId: String): String = """
+    <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+    <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
+    <body><div id="player"></div><script src="https://www.youtube.com/iframe_api"></script><script>
+    var player, watched=0, tick=0;
+    function onYouTubeIframeAPIReady(){ player=new YT.Player('player',{videoId:'$videoId',playerVars:{playsinline:1,rel:0},events:{onStateChange:onState}}); }
+    function onState(e){
+      if(e.data===YT.PlayerState.PLAYING && !tick){tick=setInterval(function(){watched+=1;},1000);}
+      if(e.data!==YT.PlayerState.PLAYING && tick){clearInterval(tick);tick=0;}
+      if(e.data===YT.PlayerState.ENDED){var d=player.getDuration();if(d>0 && watched/d>=0.9){VizitLesson.completed();}}
+    }
+    </script></body></html>
+""".trimIndent()
 
 @Composable
 private fun DigitalHelp(onBack: () -> Unit, modifier: Modifier) {
