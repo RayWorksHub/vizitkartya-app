@@ -2,7 +2,7 @@ import Foundation
 
 /// The editable contact fields mirror the currently supported Android profile
 /// fields and the live Supabase profile schema.
-public struct ContactProfile: Codable, Equatable, Sendable {
+public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public var fullName = ""
     public var firstName = ""
     public var lastName = ""
@@ -264,20 +264,6 @@ public enum ProfilePhoto {
         return url
     }
 }
-
-public enum ContactQRLink {
-    public static func make(publicURL: URL) -> URL? {
-        guard SafeLink.https(publicURL.absoluteString) != nil else { return nil }
-        var parts = URLComponents(url: publicURL, resolvingAgainstBaseURL: false)
-        guard parts?.query == nil, parts?.fragment == nil else { return nil }
-        let basePath = parts?.path ?? ""
-        parts?.path = basePath.hasSuffix("/") ? basePath + "vcard" : basePath + "/vcard"
-        parts?.queryItems = nil
-        parts?.fragment = nil
-        return parts?.url
-    }
-}
-
 
 public enum ProfileRevisionPolicy {
     public static func mayUpload(localID: UUID?, localRevision: String?, localFingerprint: String?,
