@@ -249,6 +249,7 @@ struct ShareScreen: View {
     @State private var showScanner = false
     @State private var error: String?
     @State private var modeIndex = 0
+    @State private var embeddedPhotoQRPayload: String?
 
     private var usePublicProfile: Bool { modeIndex == 1 }
 
@@ -271,7 +272,7 @@ struct ShareScreen: View {
                         .padding(.top, VizitSpace.md)
 
                         VizitSegmentedControl(
-                            options: [photoContactURL != nil ? "Fényképes QR" : "Kontakt QR", "Profil QR"],
+                            options: [embeddedPhotoQRPayload != nil ? "Fényképes QR" : "Kontakt QR", "Profil QR"],
                             selection: $modeIndex
                         )
 
@@ -313,6 +314,9 @@ struct ShareScreen: View {
                 }
             }
             .navigationBarHidden(true)
+            .task(id: store.profile) {
+                embeddedPhotoQRPayload = PhotoContactQR.payload(store.profile)
+            }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
@@ -366,7 +370,7 @@ struct ShareScreen: View {
         if usePublicProfile {
             return "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
         }
-        if photoContactURL != nil {
+        if embeddedPhotoQRPayload != nil {
             return "Beolvasás után közvetlenül megnyílik a profilképes névjegy mentése."
         }
         return "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
@@ -404,7 +408,7 @@ struct ShareScreen: View {
 
     private var qrPayload: String? {
         if usePublicProfile { return publicURL?.absoluteString }
-        if let url = photoContactURL { return url.absoluteString }
+        if let embeddedPhotoQRPayload { return embeddedPhotoQRPayload }
         return try? VCard.qrPayload(store.profile)
     }
 
@@ -412,12 +416,6 @@ struct ShareScreen: View {
         guard store.profile.isPublic, store.syncStatus == .synced,
               let base = store.configuration?.publicProfileBaseURL else { return nil }
         return PublicProfileLink.make(baseURL: base, slug: store.profile.publicSlug)
-    }
-
-    private var photoContactURL: URL? {
-        guard !store.profile.photoBase64.isEmpty, store.profile.photoSyncInitialized,
-              let url = publicURL else { return nil }
-        return ContactQRLink.make(publicURL: url)
     }
 
     private func shareVCard() {
@@ -489,6 +487,43 @@ enum QRImage {
         let output = scaled.composited(over: quietZone)
         guard let cg = context.createCGImage(output, from: output.extent) else { return nil }
         return UIImage(cgImage: cg)
+    }
+}
+
+private enum PhotoContactQR {
+    static func payload(_ profile: ContactProfile) -> String? {
+        guard !profile.photoBase64.isEmpty,
+              let bytes = Data(base64Encoded: profile.photoBase64),
+              let source = UIImage(data: bytes) else { return nil }
+
+        for side in [64, 56, 48, 40, 32] {
+            let size = CGSize(width: side, height: side)
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            format.opaque = true
+            let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                UIColor.white.setFill()
+                context.cgContext.fill(CGRect(origin: .zero, size: size))
+                let scale = max(size.width / source.size.width, size.height / source.size.height)
+                let drawSize = CGSize(width: source.size.width * scale, height: source.size.height * scale)
+                source.draw(in: CGRect(
+                    x: (size.width - drawSize.width) / 2,
+                    y: (size.height - drawSize.height) / 2,
+                    width: drawSize.width,
+                    height: drawSize.height
+                ))
+            }
+            for quality in [0.55, 0.45, 0.35, 0.25, 0.18] {
+                guard let jpeg = image.jpegData(compressionQuality: quality) else { continue }
+                var candidate = profile
+                candidate.photoBase64 = jpeg.base64EncodedString()
+                if let value = try? VCard.qrPayload(candidate, includePhoto: true),
+                   value.contains("PHOTO;ENCODING=b;TYPE=JPEG:") {
+                    return value
+                }
+            }
+        }
+        return nil
     }
 }
 
