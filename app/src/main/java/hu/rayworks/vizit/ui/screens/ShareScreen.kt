@@ -56,7 +56,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
-import hu.rayworks.vizit.qr.PublicProfileUrlFactory
 import hu.rayworks.vizit.qr.QrCodeGenerator
 import hu.rayworks.vizit.qr.QrMode
 import hu.rayworks.vizit.qr.QrPayloadFactory
@@ -99,16 +98,17 @@ fun ShareScreen(
     val publicProfileUrl = remember(profile, synchronized) {
         QrPayloadFactory.profileUrl(profile, synchronized)
     }
-    val photoContactUrl = publicProfileUrl
-        ?.takeIf { profile.photoBase64.isNotBlank() }
-        ?.let { PublicProfileUrlFactory.createVCardUrl(it).getOrNull() }
     val contactPayload = remember(profile, publicProfileUrl) {
         QrPayloadFactory.contact(profile, publicProfileUrl)
     }
-    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, photoContactUrl) {
+    val photoContactPayload = remember(profile, publicProfileUrl) {
+        profile.photoBase64.takeIf(String::isNotBlank)
+            ?.let { QrPayloadFactory.photoContact(profile, publicProfileUrl).getOrNull() }
+    }
+    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, photoContactPayload) {
         when (qrMode) {
             QrMode.PROFILE -> publicProfileUrl
-            QrMode.CONTACT -> photoContactUrl ?: contactPayload.getOrNull()
+            QrMode.CONTACT -> photoContactPayload ?: contactPayload.getOrNull()
         }
     }
     val qrBitmap = remember(qrPayload) {
@@ -142,7 +142,7 @@ fun ShareScreen(
 
             VizitSegmentedControl(
                 options = listOf(
-                    if (photoContactUrl != null) "Fényképes QR" else "Kontakt QR",
+                    if (photoContactPayload != null) "Fényképes QR" else "Kontakt QR",
                     "Profil QR",
                 ),
                 selectedIndex = if (qrMode == QrMode.CONTACT) 0 else 1,
@@ -155,7 +155,7 @@ fun ShareScreen(
                     caption = when {
                         qrMode == QrMode.PROFILE ->
                             "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
-                        photoContactUrl != null ->
+                        photoContactPayload != null ->
                             "Beolvasás után közvetlenül megnyílik a profilképes névjegy mentése."
                         else ->
                             "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
