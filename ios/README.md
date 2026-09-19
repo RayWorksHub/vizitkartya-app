@@ -1,4 +1,4 @@
-# VIZIT iOS 6.0
+# VIZIT iOS 6.1
 
 Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az aktív VIZIT Supabase-projekthez csatlakozik, az Androidon elérhető névjegyfolyamatokat az iOS platformbiztonsági korlátai között valósítja meg.
 
@@ -48,7 +48,7 @@ Az artifact aláíratlan IPA. Sideloadly/AltStore a saját Apple ID-val újra tu
 
 A `VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED=true` repository-változó és a
 `[testflight]` kiadási commit együtt engedélyezi az aláírt App Store-archívum
-ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 6.0.0**.
+ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 6.1.0**.
 
 ## Kötelező fizikai készülékteszt
 

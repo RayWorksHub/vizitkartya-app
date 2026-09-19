@@ -747,7 +747,35 @@ private struct BusinessCourse: Identifiable {
     let duration: String
     let level: String
     let icon: String
-    let modules: [String]
+    let videoTitle: String
+    let videoSource: String
+    let videoURL: String
+    let modules: [CourseModule]
+}
+
+private struct CourseModule: Identifiable {
+    let id: String
+    let title: String
+    let summary: String
+    let resourceTitle: String
+    let resourceURL: String
+}
+
+private struct GuideLink: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let url: String
+}
+
+private struct ToolkitGuide: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let result: String
+    let icon: String
+    let steps: [String]
+    let links: [GuideLink]
 }
 
 private let portalFeatures = [
@@ -764,12 +792,186 @@ private let businessResources = [
 ]
 
 private let businessCourses = [
-    BusinessCourse(id: "ai", title: "AI a mindennapi vállalkozásban", category: "Mesterséges intelligencia", description: "Használható promptok, automatizálási ötletek és felelős AI-használat.", duration: "52 perc", level: "Kezdő", icon: "sparkles", modules: ["Hol teremt értéket az AI?", "Jó prompt 5 lépésben", "Ajánlat és e-mail gyorsítása", "Adatvédelem és ellenőrzés"]),
-    BusinessCourse(id: "m365", title: "Microsoft 365 kisvállalkozásoknak", category: "Digitális munka", description: "Teams, Outlook, OneDrive és SharePoint egyszerű, biztonságos rendszerben.", duration: "1 óra 18 perc", level: "Kezdő", icon: "cloud.fill", modules: ["Fiókok és jogosultságok", "Közös fájlkezelés", "Teams-együttműködés", "Naptár és automatizmusok"]),
-    BusinessCourse(id: "basics", title: "Vállalkozói alapismeretek", category: "Cégépítés", description: "Üzleti modell, célpiac, árazás és az első 90 nap terve.", duration: "1 óra 05 perc", level: "Kezdő", icon: "storefront.fill", modules: ["Üzleti modell egy oldalon", "Ideális ügyfél", "Árképzési alapok", "90 napos akcióterv"]),
-    BusinessCourse(id: "security", title: "Kiberbiztonság emberi nyelven", category: "Biztonság", description: "Fiókvédelem, mentés, adathalászat és egy egyszerű incidens-terv.", duration: "44 perc", level: "Kezdő", icon: "lock.shield.fill", modules: ["Többlépcsős belépés", "Biztonságos eszközök", "Adathalászat felismerése", "Mit tegyünk baj esetén?"]),
-    BusinessCourse(id: "marketing", title: "Online jelenlét és ügyfélszerzés", category: "Marketing", description: "Egyszerű pozicionálás, tartalomterv és mérhető kampányalapok.", duration: "58 perc", level: "Középhaladó", icon: "megaphone.fill", modules: ["Pozicionálási mondat", "Bizalmat építő profil", "4 hetes tartalomterv", "Mérés és javítás"]),
-    BusinessCourse(id: "finance", title: "Pénzügyi tudatosság alapjai", category: "Pénzügy", description: "Cash-flow, költségek és a könyvelővel való hatékony együttműködés.", duration: "49 perc", level: "Kezdő", icon: "building.columns.fill", modules: ["Bevétel nem egyenlő nyereség", "Cash-flow tábla", "Tartalék és tervezés", "Kérdések a könyvelőhöz"])
+    BusinessCourse(
+        id: "ai", title: "AI a mindennapi vállalkozásban", category: "Mesterséges intelligencia",
+        description: "Használható promptok, automatizálási ötletek és felelős AI-használat.",
+        duration: "Magyar videó", level: "Kezdő", icon: "sparkles",
+        videoTitle: "ChatGPT képzés – Promptolási technikák", videoSource: "VOSZ",
+        videoURL: "https://www.youtube.com/watch?v=uPYOrXxTxJI",
+        modules: [
+            CourseModule(id: "ai-value", title: "Hol teremt értéket az AI?", summary: "Gyűjts össze három ismétlődő szöveges feladatot, és válaszd ki azt, amelyiknél a legkisebb a hibakockázat.", resourceTitle: "VOSZ AI-videósorozat", resourceURL: "https://www.youtube.com/results?search_query=VOSZ+ChatGPT+k%C3%A9pz%C3%A9s"),
+            CourseModule(id: "ai-prompt", title: "Jó prompt 5 lépésben", summary: "Add meg a szerepet, a célt, a bemenetet, a korlátokat és a kívánt kimeneti formátumot.", resourceTitle: "Promptolási videó megnyitása", resourceURL: "https://www.youtube.com/watch?v=uPYOrXxTxJI"),
+            CourseModule(id: "ai-mail", title: "Ajánlat és e-mail gyorsítása", summary: "Készíts ellenőrzött sablont ajánlatra, utánkövetésre és ügyfélválaszra; érzékeny adatot ne másolj be.", resourceTitle: "Microsoft Copilot vállalkozásoknak", resourceURL: "https://www.microsoft.com/hu-hu/microsoft-365/business/copilot-for-microsoft-365"),
+            CourseModule(id: "ai-privacy", title: "Ellenőrzés és adatvédelem", summary: "Minden AI-kimenetet ember ellenőrizzen, és legyen belső szabály arra, milyen adat kerülhet a rendszerbe.", resourceTitle: "NAIH tájékoztatók", resourceURL: "https://www.naih.hu/")
+        ]
+    ),
+    BusinessCourse(
+        id: "m365", title: "Microsoft 365 kisvállalkozásoknak", category: "Digitális munka",
+        description: "Teams, Outlook, OneDrive és SharePoint egyszerű, biztonságos rendszerben.",
+        duration: "Magyar videók", level: "Kezdő", icon: "cloud.fill",
+        videoTitle: "Microsoft 365 oktatóvideók magyarul", videoSource: "Microsoft 365 magyar találatok",
+        videoURL: "https://www.youtube.com/results?search_query=Microsoft+365+oktat%C3%A1s+magyar",
+        modules: [
+            CourseModule(id: "m365-accounts", title: "Fiókok és jogosultságok", summary: "Minden munkatársnak külön fiók, szerepkör szerinti hozzáférés és bekapcsolt többtényezős védelem kell.", resourceTitle: "Microsoft 365 Vállalati verzió", resourceURL: "https://www.microsoft.com/hu-hu/microsoft-365/business"),
+            CourseModule(id: "m365-files", title: "Közös fájlkezelés OneDrive-val", summary: "Alakíts ki közös mappaszerkezetet, tulajdonost és visszaállítási rendet; ne e-mailben küldözgess fájlmásolatokat.", resourceTitle: "OneDrive magyar súgó", resourceURL: "https://support.microsoft.com/hu-hu/onedrive"),
+            CourseModule(id: "m365-teams", title: "Teams-együttműködés", summary: "Hozz létre ügyfél- vagy projektcsatornákat, és rögzítsd, melyik információ hol található.", resourceTitle: "Teams magyar súgó", resourceURL: "https://support.microsoft.com/hu-hu/teams"),
+            CourseModule(id: "m365-automation", title: "Naptár és automatizmusok", summary: "Használj közös naptárt, foglalási oldalt és egyetlen jóváhagyott automatizmust egy ismétlődő folyamathoz.", resourceTitle: "Power Automate", resourceURL: "https://www.microsoft.com/hu-hu/power-platform/products/power-automate")
+        ]
+    ),
+    BusinessCourse(
+        id: "basics", title: "Vállalkozói alapismeretek", category: "Cégépítés",
+        description: "Üzleti modell, célpiac, árazás és az első 90 nap terve.",
+        duration: "Magyar videó", level: "Kezdő", icon: "storefront.fill",
+        videoTitle: "Az egyéni vállalkozás és indítása", videoSource: "Magyar nyelvű oktatóvideó",
+        videoURL: "https://www.youtube.com/watch?v=d2tyNSnyv1Q",
+        modules: [
+            CourseModule(id: "basics-model", title: "Üzleti modell egy oldalon", summary: "Írd le egy mondatban a vevőt, a problémáját, az ajánlatodat, az értékesítési csatornát és a bevételi módot.", resourceTitle: "VOSZ vállalkozói információk", resourceURL: "https://www.vosz.hu/hu"),
+            CourseModule(id: "basics-launch", title: "Indítás és kötelező lépések", summary: "Ellenőrizd a tevékenységet, adózást, képesítési feltételt, kamarai bejelentést és számlázást.", resourceTitle: "NAV: egyéni vállalkozás indítása", resourceURL: "https://nav.gov.hu/Elethelyzetek-adozasa/vallalkozas/Egyeni-vallalkozas-inditasa"),
+            CourseModule(id: "basics-pricing", title: "Ideális ügyfél és árazás", summary: "Határozz meg egy konkrét célcsoportot, eredményt, költségszintet és minimális vállalható árat.", resourceTitle: "MKIK Mentorprogram", resourceURL: "https://vallalkozztudatosan.mkik.hu/"),
+            CourseModule(id: "basics-plan", title: "90 napos akcióterv", summary: "Bonts három havi célra, heti mérőszámokra és minden héten egy lezárandó ügyfélszerzési feladatra.", resourceTitle: "Vállalkozz digitálisan", resourceURL: "https://vallalkozzdigitalisan.mkik.hu/")
+        ]
+    ),
+    BusinessCourse(
+        id: "security", title: "Kiberbiztonság emberi nyelven", category: "Biztonság",
+        description: "Fiókvédelem, mentés, adathalászat és egy egyszerű incidens-terv.",
+        duration: "Magyar videó", level: "Kezdő", icon: "lock.shield.fill",
+        videoTitle: "KiberPajzs – digitális biztonság", videoSource: "Pénziránytű / KiberPajzs",
+        videoURL: "https://www.youtube.com/watch?v=2LqpB_03Jt0",
+        modules: [
+            CourseModule(id: "security-mfa", title: "Többlépcsős belépés", summary: "Kapcsold be először az e-mail-, banki, közösségi és adminisztrációs fiókoknál.", resourceTitle: "KiberPajzs biztonsági tippek", resourceURL: "https://kiberpajzs.hu/hasznos-tippeket-olvasnek"),
+            CourseModule(id: "security-backup", title: "Eszközök és mentés", summary: "Automatikus frissítés, képernyőzár és legalább egy külön helyen tárolt, visszaállítással is tesztelt mentés kell.", resourceTitle: "NKI tudásbázis", resourceURL: "https://nki.gov.hu/"),
+            CourseModule(id: "security-phishing", title: "Adathalászat felismerése", summary: "Sürgetésnél állj meg, külön csatornán ellenőrizd a feladót, és ne a levélből nyisd meg a belépési oldalt.", resourceTitle: "KiberPajzs videó", resourceURL: "https://www.youtube.com/watch?v=2LqpB_03Jt0"),
+            CourseModule(id: "security-incident", title: "Incidens-terv", summary: "Írd le, kit kell hívni, hogyan zárod a fiókokat, hol van a mentés, és hogyan értesíted az érintetteket.", resourceTitle: "NKI incidensbejelentés", resourceURL: "https://nki.gov.hu/intezet/tartalom/incidens-bejelentes/")
+        ]
+    ),
+    BusinessCourse(
+        id: "marketing", title: "Online jelenlét és ügyfélszerzés", category: "Marketing",
+        description: "Egyszerű pozicionálás, tartalomterv és mérhető kampányalapok.",
+        duration: "Magyar videók", level: "Középhaladó", icon: "megaphone.fill",
+        videoTitle: "Google Cégprofil – magyar útmutatók", videoSource: "Magyar oktatóvideók",
+        videoURL: "https://www.youtube.com/results?search_query=Google+C%C3%A9gprofil+be%C3%A1ll%C3%ADt%C3%A1sa+magyar",
+        modules: [
+            CourseModule(id: "marketing-position", title: "Pozicionálási mondat", summary: "Ne szolgáltatást sorolj: mondd meg, kinek, milyen eredményt és mitől más módon adsz.", resourceTitle: "VOSZ videók", resourceURL: "https://www.youtube.com/@vosz."),
+            CourseModule(id: "marketing-profile", title: "Bizalmat építő Google Cégprofil", summary: "Tölts ki minden adatot, adj képeket, szolgáltatásokat és rendszeresen válaszolj az értékelésekre.", resourceTitle: "Google Cégprofil hozzáadása", resourceURL: "https://support.google.com/business/answer/2911778?hl=hu"),
+            CourseModule(id: "marketing-content", title: "4 hetes tartalomterv", summary: "Hetente mutass problémát, megoldást, bizonyítékot és konkrét következő lépést.", resourceTitle: "Meta Business Suite", resourceURL: "https://business.facebook.com/"),
+            CourseModule(id: "marketing-measure", title: "Mérés és javítás", summary: "Mérd a forrást, érdeklődést, ajánlatot és vásárlást; a követőszám önmagában nem üzleti eredmény.", resourceTitle: "Google Analytics", resourceURL: "https://analytics.google.com/")
+        ]
+    ),
+    BusinessCourse(
+        id: "finance", title: "Pénzügyi tudatosság alapjai", category: "Pénzügy",
+        description: "Cash-flow, költségek és a könyvelővel való hatékony együttműködés.",
+        duration: "Magyar videó", level: "Kezdő", icon: "building.columns.fill",
+        videoTitle: "NAV Online Számlázó Program bemutatása", videoSource: "Nemzeti Adó- és Vámhivatal",
+        videoURL: "https://www.youtube.com/watch?v=U5s2bXrgnHc",
+        modules: [
+            CourseModule(id: "finance-profit", title: "Bevétel, költség és nyereség", summary: "Külön kezeld a beérkezett pénzt, az áfát, a fizetendő adót, a költségeket és a tulajdonosi kivétet.", resourceTitle: "NAV vállalkozói élethelyzetek", resourceURL: "https://nav.gov.hu/Elethelyzetek-adozasa/vallalkozas"),
+            CourseModule(id: "finance-cashflow", title: "13 hetes cash-flow", summary: "Hetente vezesd a várható be- és kifizetéseket, és jelöld a bizonytalan tételeket.", resourceTitle: "Pénziránytű", resourceURL: "https://penziranytu.hu/"),
+            CourseModule(id: "finance-invoice", title: "Számlázás és adatszolgáltatás", summary: "Ellenőrizd a NAV-kapcsolatot, a számlaadatokat és azt, hogy ki figyeli a hibás adatszolgáltatást.", resourceTitle: "NAV Online Számla", resourceURL: "https://onlineszamla.nav.gov.hu/"),
+            CourseModule(id: "finance-close", title: "Havi zárás a könyvelővel", summary: "Legyen fix határidő a bizonylatokra, kintlévőségekre, adókra és a következő három hónap pénzigényére.", resourceTitle: "NAV ONYA", resourceURL: "https://onya.nav.gov.hu/")
+        ]
+    )
+]
+
+private let toolkitGuides = [
+    ToolkitGuide(
+        id: "launch", title: "Vállalkozás indítása",
+        description: "Az ötlettől a jogszerű indulásig, kihagyott kötelező lépések nélkül.",
+        result: "Működő vállalkozói státusz és rendezett alapadatok.", icon: "storefront.fill",
+        steps: [
+            "Írd le a tevékenységet és ellenőrizd, kell-e képesítés vagy engedély.",
+            "Könyvelővel válassz vállalkozási formát és adózást még a bejelentés előtt.",
+            "Indítsd el az egyéni vállalkozást a NAV Vállalkozói Ügysegédjén vagy intézd a cégalapítást szakértővel.",
+            "Jelentkezz be az illetékes gazdasági kamarához a NAV által jelzett határidőn belül.",
+            "Állíts be számlázást, vállalkozói bankszámlát és iratmegőrzési rendet."
+        ],
+        links: [
+            GuideLink(id: "launch-nav", title: "NAV indítási útmutató", description: "Hivatalos, naprakész lépések és feltételek.", url: "https://nav.gov.hu/Elethelyzetek-adozasa/vallalkozas/Egyeni-vallalkozas-inditasa"),
+            GuideLink(id: "launch-upo", title: "NAV Vállalkozói Ügysegéd", description: "Az online bejelentés belépési pontja.", url: "https://ugyfelportal.nav.gov.hu/"),
+            GuideLink(id: "launch-mkik", title: "MKIK", description: "Kamarai információk és területi kamarák.", url: "https://mkik.hu/")
+        ]
+    ),
+    ToolkitGuide(
+        id: "billing", title: "Számlázás és NAV-ügyintézés",
+        description: "A számla kiállításától a bevallási feladatok követéséig.",
+        result: "Ellenőrizhető számlázási folyamat és kevesebb adminisztrációs hiba.", icon: "building.columns.fill",
+        steps: [
+            "Regisztrálj a NAV Online Számla rendszerébe és rögzíts technikai felhasználót, ha a program kéri.",
+            "Válassz NAV-kapcsolatos számlázót, majd állíts ki és ellenőrizz egy tesztszámlát.",
+            "Rögzíts heti rutint a hibás adatszolgáltatások és a kintlévőségek ellenőrzésére.",
+            "Egyeztess a könyvelővel dokumentumleadási határidőt és felelőst."
+        ],
+        links: [
+            GuideLink(id: "billing-online", title: "NAV Online Számla", description: "Regisztráció, számlák és adatszolgáltatási hibák.", url: "https://onlineszamla.nav.gov.hu/"),
+            GuideLink(id: "billing-onya", title: "NAV ONYA", description: "Online nyomtatványok és bejelentések.", url: "https://onya.nav.gov.hu/"),
+            GuideLink(id: "billing-report", title: "e-Beszámoló", description: "Közzétett éves beszámolók hivatalos keresője.", url: "https://e-beszamolo.im.gov.hu/")
+        ]
+    ),
+    ToolkitGuide(
+        id: "office", title: "Digitális iroda kialakítása",
+        description: "Céges e-mail, közös dokumentumok és világos hozzáférések.",
+        result: "Egy helyen megtalálható fájlok és átadható működés.", icon: "cloud.fill",
+        steps: [
+            "Használj saját domaines céges e-mail-címet, ne közös jelszóval használt postafiókot.",
+            "Hozz létre egységes mappaszerkezetet ügyfelekre, pénzügyre és belső működésre.",
+            "Adj személyenként jogosultságot, és távozáskor azonnal vond vissza.",
+            "Kapcsold be a verziókövetést, mentést és teszteld egy fájl visszaállítását."
+        ],
+        links: [
+            GuideLink(id: "office-m365", title: "Microsoft 365 vállalkozásoknak", description: "Outlook, Teams, OneDrive és irodai alkalmazások.", url: "https://www.microsoft.com/hu-hu/microsoft-365/business"),
+            GuideLink(id: "office-google", title: "Google Workspace", description: "Céges Gmail, Drive, Meet és közös munka.", url: "https://workspace.google.com/intl/hu/"),
+            GuideLink(id: "office-mkik", title: "Vállalkozz digitálisan", description: "MKIK digitális megoldások és segítség.", url: "https://vallalkozzdigitalisan.mkik.hu/")
+        ]
+    ),
+    ToolkitGuide(
+        id: "security", title: "Biztonság és adatvédelem",
+        description: "A leggyakoribb fiók-, adat- és csalási kockázatok kezelése.",
+        result: "Védett fiókok, működő mentés és leírt incidensfolyamat.", icon: "lock.shield.fill",
+        steps: [
+            "Kapcsold be a többtényezős azonosítást az e-mailen, bankon, közösségi és adminfiókokon.",
+            "Használj jelszókezelőt, és szüntesd meg a közös vagy újrahasznált jelszavakat.",
+            "Készíts automatikus mentést külön helyre, majd próbáld visszaállítani.",
+            "Írd le, ki mit tesz csalás, elveszett eszköz vagy adatszivárgás esetén.",
+            "Tarts naprakész adatkezelési tájékoztatót, és csak szükséges ügyféladatot gyűjts."
+        ],
+        links: [
+            GuideLink(id: "security-kiberpajzs", title: "KiberPajzs", description: "Magyar csalásmegelőzési és digitális biztonsági tippek.", url: "https://kiberpajzs.hu/hasznos-tippeket-olvasnek"),
+            GuideLink(id: "security-nki", title: "Nemzeti Kibervédelmi Intézet", description: "Riasztások, tudásanyag és incidensbejelentés.", url: "https://nki.gov.hu/"),
+            GuideLink(id: "security-naih", title: "NAIH", description: "Hivatalos adatvédelmi tájékoztatók és ügyintézés.", url: "https://www.naih.hu/")
+        ]
+    ),
+    ToolkitGuide(
+        id: "sales", title: "Online jelenlét és ügyfélszerzés",
+        description: "Megtalálható profilok, egyértelmű ajánlat és mérhető érdeklődők.",
+        result: "Friss online jelenlét és követhető ügyfélszerzési tölcsér.", icon: "megaphone.fill",
+        steps: [
+            "Fogalmazd meg egy mondatban, kinek milyen eredményt adsz.",
+            "Igényeld és töltsd ki a Google Cégprofilt, ha helyi vagy személyes szolgáltatást végzel.",
+            "Válassz legfeljebb két aktív közösségi csatornát, és legyen minden felületen egyértelmű kapcsolatfelvétel.",
+            "Rögzítsd minden érdeklődő forrását és a következő lépését.",
+            "Havonta értékeld az érdeklődő, ajánlat és vásárlás számát."
+        ],
+        links: [
+            GuideLink(id: "sales-google", title: "Google Cégprofil létrehozása", description: "Ingyenes megjelenés a Google Keresőben és Térképen.", url: "https://support.google.com/business/answer/2911778?hl=hu"),
+            GuideLink(id: "sales-meta", title: "Meta Business Suite", description: "Facebook- és Instagram-oldalak kezelése.", url: "https://business.facebook.com/"),
+            GuideLink(id: "sales-analytics", title: "Google Analytics", description: "Webes forgalom és konverziók mérése.", url: "https://analytics.google.com/")
+        ]
+    ),
+    ToolkitGuide(
+        id: "growth", title: "Mentor, digitalizáció és fejlődés",
+        description: "Hiteles segítség, partnerkapcsolatok és fejlesztési programok keresése.",
+        result: "Kiválasztott fejlesztési cél és konkrét jelentkezési következő lépés.", icon: "rocket.fill",
+        steps: [
+            "Válassz egy 90 napos fejlesztési célt: értékesítés, digitalizáció, export vagy működés.",
+            "Készíts egyoldalas helyzetképet a számokról, problémáról és elvárt eredményről.",
+            "Keress hozzá szakmai szervezetet, mentort vagy minősített digitális szolgáltatót.",
+            "Jelölj ki felelőst, határidőt és egy mérőszámot."
+        ],
+        links: [
+            GuideLink(id: "growth-vosz", title: "VOSZ", description: "Érdekképviselet, tanácsadás, programok és vállalkozói hírek.", url: "https://www.vosz.hu/hu"),
+            GuideLink(id: "growth-mentor", title: "MKIK Mentorprogram", description: "Gyakorlati mentorálás növekedéshez és külpiachoz.", url: "https://vallalkozztudatosan.mkik.hu/"),
+            GuideLink(id: "growth-digital", title: "Vállalkozz digitálisan", description: "Digitális fejlesztési tudás és megoldások.", url: "https://vallalkozzdigitalisan.mkik.hu/")
+        ]
+    )
 ]
 
 struct BusinessHubScreen: View {
@@ -899,7 +1101,7 @@ private struct CourseCard: View {
                 Text(course.category.uppercased()).vizitOverline().foregroundStyle(VizitColor.primary)
                 Text(course.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
                 Text(course.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary).lineLimit(2)
-                Text("\(course.duration)  ·  \(course.level)  ·  \(course.modules.count) lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                Text("\(course.duration)  ·  \(course.level)  ·  \(course.modules.count) modul").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(VizitColor.textMuted)
@@ -912,7 +1114,8 @@ private struct CourseCard: View {
 
 private struct CourseDetailScreen: View {
     let course: BusinessCourse
-    @State private var completed = Set<Int>()
+    @Environment(\.openURL) private var openURL
+    @State private var completed = Set<String>()
     var body: some View {
         PortalScroll(title: course.title, subtitle: course.description) {
             VizitPanel {
@@ -920,33 +1123,60 @@ private struct CourseDetailScreen: View {
                     VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle)
                     VStack(alignment: .leading) {
                         Text("\(course.duration) · \(course.level)").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                        Text("\(course.modules.count) rövid, egymásra épülő lecke").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                        Text("\(course.modules.count) rövid, egymásra épülő modul").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
                     }
                 }
             }
             ProgressView(value: Double(completed.count), total: Double(course.modules.count)).tint(VizitColor.primary)
-            VizitSectionHeader(title: "Kurzus tartalma")
-            ForEach(Array(course.modules.enumerated()), id: \.offset) { index, module in
-                Button {
-                    if completed.contains(index) { completed.remove(index) } else { completed.insert(index) }
-                } label: {
-                    HStack(spacing: VizitSpace.sm) {
-                        Image(systemName: completed.contains(index) ? "checkmark.circle.fill" : "play.circle")
-                            .foregroundStyle(completed.contains(index) ? VizitColor.success : VizitColor.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(index + 1). lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
-                            Text(module).font(VizitFont.body).foregroundStyle(VizitColor.textPrimary)
-                        }
-                        Spacer()
-                        Text(completed.contains(index) ? "Kész" : "Megnyitás").font(VizitFont.caption)
-                            .foregroundStyle(completed.contains(index) ? VizitColor.success : VizitColor.primary)
-                    }
-                    .padding(VizitSpace.md).background(VizitColor.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
-                    .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
-                }.buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: VizitSpace.sm) {
+                Image(systemName: "play.circle.fill").font(.system(size: 44)).foregroundStyle(.white)
+                Text("MAGYAR VIDEÓ").vizitOverline().foregroundStyle(Color.white.opacity(0.7))
+                Text(course.videoTitle).font(VizitFont.h3).foregroundStyle(.white)
+                Text(course.videoSource).font(VizitFont.bodySmall).foregroundStyle(Color.white.opacity(0.72))
+                VizitButton(
+                    title: "Videó megnyitása",
+                    systemImage: "play.fill",
+                    containerOverride: .white,
+                    contentOverride: VizitColor.ink
+                ) {
+                    guard let url = SafeLink.https(course.videoURL) else { return }
+                    openURL(url)
+                }
             }
-            Text("A 6.0 bétában a tanulási felület és a haladás kipróbálható; a teljes videótananyagok fokozatosan érkeznek.")
+            .padding(VizitSpace.lg).frame(maxWidth: .infinity, alignment: .leading)
+            .background(VizitColor.ink).clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous).stroke(VizitColor.borderStrong, lineWidth: 1) }
+
+            VizitSectionHeader(title: "Kurzusmodulok")
+            ForEach(Array(course.modules.enumerated()), id: \.element.id) { index, module in
+                let isComplete = completed.contains(module.id)
+                VStack(alignment: .leading, spacing: VizitSpace.sm) {
+                    HStack(spacing: VizitSpace.sm) {
+                        Image(systemName: isComplete ? "checkmark.circle.fill" : "play.circle")
+                            .foregroundStyle(isComplete ? VizitColor.success : VizitColor.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(index + 1). modul").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                            Text(module.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                        }
+                    }
+                    Text(module.summary).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                    VizitButton(title: module.resourceTitle, systemImage: "link", kind: .secondary) {
+                        guard let url = SafeLink.https(module.resourceURL) else { return }
+                        openURL(url)
+                    }
+                    VizitButton(
+                        title: isComplete ? "Kész" : "Modul késznek jelölése",
+                        systemImage: "checkmark.circle",
+                        kind: .tertiary
+                    ) {
+                        if isComplete { completed.remove(module.id) } else { completed.insert(module.id) }
+                    }
+                }
+                .padding(VizitSpace.md).background(VizitColor.surface)
+                .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+            }
+            Text("A videók és segédanyagok külső, magyar nyelvű forrásoknál nyílnak meg. A jogi és adózási lépéseket indulás előtt egyeztesd szakértővel.")
                 .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
         }
     }
@@ -977,7 +1207,7 @@ private struct DigitalHelpScreen: View {
             .padding(VizitSpace.lg).frame(maxWidth: .infinity, minHeight: 500)
             .background(VizitColor.ink).clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
             if !inCall { VizitButton(title: "Próbahívás indítása", systemImage: "video.fill") { inCall = true } }
-            Text("Ez a 6.0 verzió interaktív bemutatója: nem kapcsol valódi tanácsadóhoz és nem továbbít hangot vagy videót.")
+            Text("Ez a 6.1 verzió interaktív bemutatója: nem kapcsol valódi tanácsadóhoz és nem továbbít hangot vagy videót.")
                 .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
         }
     }
@@ -1000,45 +1230,89 @@ private struct CallControl: View {
 }
 
 private struct BusinessToolkitScreen: View {
-    private let steps = ["Van professzionális céges e-mail-címem", "Minden fontos fiókon bekapcsoltam a kétlépcsős belépést", "Rendszeres biztonsági mentésem van", "Az ügyféladataimat egy helyen kezelem", "Mérem, honnan érkeznek az érdeklődők", "Van leírt heti és havi munkafolyamatom"]
-    @State private var checked = Set<Int>()
-    private var score: Int { checked.count * 100 / steps.count }
+    @Environment(\.openURL) private var openURL
+    @State private var completedGuideIDs = Set<String>()
+    private var score: Int { completedGuideIDs.count * 100 / toolkitGuides.count }
     var body: some View {
-        PortalScroll(title: "Vállalkozói eszköztár", subtitle: "Jelöld, ami már rendben van, és kapsz egy gyors következő lépést.") {
+        PortalScroll(
+            title: "Vállalkozói eszköztár",
+            subtitle: "Válassz célt, hajtsd végre a lépéseket, majd nyisd meg közvetlenül a szükséges hivatalos szolgáltatást."
+        ) {
             VizitPanel {
                 HStack(spacing: VizitSpace.md) {
                     Text("\(score)%").font(VizitFont.h3).foregroundStyle(VizitColor.onPrimary)
                         .frame(width: 68, height: 68).background(VizitColor.primary).clipShape(Circle())
                     VStack(alignment: .leading) {
-                        Text("Digitális felkészültség").font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
-                        Text("\(checked.count)/\(steps.count) alap rendben").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                        Text("Megvalósítási állapot").font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                        Text("\(completedGuideIDs.count)/\(toolkitGuides.count) útmutató teljesítve")
+                            .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
                     }
                 }
             }
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                Button {
-                    if checked.contains(index) { checked.remove(index) } else { checked.insert(index) }
-                } label: {
-                    HStack(spacing: VizitSpace.sm) {
-                        Image(systemName: checked.contains(index) ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(checked.contains(index) ? VizitColor.success : VizitColor.textMuted)
-                        Text(step).font(VizitFont.body).foregroundStyle(VizitColor.textPrimary).frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(toolkitGuides) { guide in
+                let completed = completedGuideIDs.contains(guide.id)
+                VStack(alignment: .leading, spacing: VizitSpace.md) {
+                    HStack(alignment: .top, spacing: VizitSpace.sm) {
+                        VizitIconChip(systemImage: guide.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle)
+                        VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                            Text(guide.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                            Text(guide.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                        }
+                        Spacer(minLength: 0)
+                        if completed { Image(systemName: "checkmark.circle.fill").foregroundStyle(VizitColor.success) }
                     }
-                    .padding(VizitSpace.md).background(VizitColor.surface)
+                    VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                        Text("ELÉRENDŐ EREDMÉNY").vizitOverline().foregroundStyle(VizitColor.primary)
+                        Text(guide.result).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textPrimary)
+                    }
+                    .padding(VizitSpace.sm).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(VizitColor.primarySubtle)
                     .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
-                    .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
-                }.buttonStyle(.plain)
+
+                    Text("Lépések").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                    ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
+                        HStack(alignment: .top, spacing: VizitSpace.sm) {
+                            Text("\(index + 1)").font(VizitFont.caption).foregroundStyle(VizitColor.textSecondary)
+                                .frame(width: 24, height: 24).background(VizitColor.controlTrack).clipShape(Circle())
+                            Text(step).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
+                    Text("Közvetlen linkek").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                    VizitGroup {
+                        ForEach(Array(guide.links.enumerated()), id: \.element.id) { index, link in
+                            if index > 0 { VizitDivider() }
+                            VizitRow(label: link.title, systemImage: "link", supporting: link.description) {
+                                guard let url = SafeLink.https(link.url) else { return }
+                                openURL(url)
+                            }
+                        }
+                    }
+                    VizitButton(
+                        title: completed ? "Teljesítve" : "Útmutató teljesítve",
+                        systemImage: "checkmark.circle",
+                        kind: completed ? .tertiary : .secondary
+                    ) {
+                        if completed { completedGuideIDs.remove(guide.id) } else { completedGuideIDs.insert(guide.id) }
+                    }
+                }
+                .padding(VizitSpace.md).background(VizitColor.surface)
+                .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
             }
             VizitPanel {
                 HStack(alignment: .top, spacing: VizitSpace.sm) {
                     VizitIconChip(systemImage: "rocket.fill", tint: VizitColor.primary, background: VizitColor.primarySubtle)
                     VStack(alignment: .leading, spacing: VizitSpace.xxs) {
-                        Text(score < 50 ? "Következő lépés: biztos alapok" : "Következő lépés: automatizálás").font(VizitFont.label)
-                        Text(score < 50 ? "Kezdd a fiókvédelemmel és a mentéssel, majd haladj tovább." : "Válassz egy ismétlődő folyamatot, és készíts hozzá egyszerű sablont.")
+                        Text(score < 50 ? "Következő lépés: válassz egy útmutatót" : "Következő lépés: mérd az eredményt").font(VizitFont.label)
+                        Text(score < 50 ? "Ne mindent egyszerre: kezdd azzal, amelyik most a legtöbb hibát vagy elveszett időt okozza." : "Harminc nap múlva ellenőrizd, csökkent-e a hiba, az átfutási idő vagy a költség.")
                             .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
                     }
                 }
             }
+            Text("A linkek hivatalos vagy széles körben használt külső szolgáltatásokhoz vezetnek. Az adózási és jogi döntést egyeztesd könyvelővel vagy jogi szakértővel.")
+                .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
         }
     }
 }
