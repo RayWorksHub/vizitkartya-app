@@ -35,15 +35,15 @@ final class ProfilePhotoTests: XCTestCase {
             XCTAssertNil(ProfilePhoto.trustedStorageURL(url, origin: origin))
         }
     }
-    func testPhotoContactQRIsShortAndContainsNoPrivatePayload() throws {
-        let url = try XCTUnwrap(URL(string: "https://vizit-kartya.hu/p/teszt-elek"))
-        let link = try XCTUnwrap(ContactQRLink.make(publicURL: url))
-        XCTAssertEqual(link.absoluteString, "https://vizit-kartya.hu/p/teszt-elek/vcard")
-        XCTAssertFalse(link.absoluteString.contains("PHOTO"))
-        XCTAssertLessThan(link.absoluteString.utf8.count, 100)
-        XCTAssertNil(ContactQRLink.make(publicURL: try XCTUnwrap(
-            URL(string: "https://vizit-kartya.hu/p/teszt-elek?contact=1")
-        )))
+    func testPhotoContactQRPayloadIsAContactNotAWebLink() throws {
+        var profile = ContactProfile()
+        profile.fullName = "Teszt Elek"
+        profile.phone = "+36 20 123 4567"
+        profile.photoBase64 = Data([0xff, 0xd8, 0xff]).base64EncodedString()
+        let payload = try VCard.qrPayload(profile, includePhoto: true)
+        XCTAssertTrue(payload.hasPrefix("BEGIN:VCARD\r\n"))
+        XCTAssertTrue(payload.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
+        XCTAssertFalse(payload.hasPrefix("https://"))
     }
     func testViewCounterTimestampDoesNotConflictWithUnchangedContent() {
         let id = UUID()
