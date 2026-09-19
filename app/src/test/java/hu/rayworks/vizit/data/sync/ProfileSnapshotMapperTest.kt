@@ -21,8 +21,13 @@ class ProfileSnapshotMapperTest {
             website = " https://example.com ",
             address = " Budapest ",
             linkedIn = " https://linkedin.com/in/elek ",
+            facebook = " https://facebook.com/elek ",
+            instagram = " https://instagram.com/elek ",
+            tiktok = " https://tiktok.com/@elek ",
+            youtube = " https://youtube.com/@elek ",
             photoBase64 = "local-photo",
             publicSlug = " teszt-elek ",
+            customDomain = " HTTPS://Nevjegy.Example.HU/ ",
             isPublic = true,
         )
         val snapshot = ProfileSnapshotMapper.toLocalSnapshot(
@@ -33,9 +38,19 @@ class ProfileSnapshotMapperTest {
         assertEquals("Teszt Elek", snapshot.profile.displayName)
         assertEquals("local-photo", snapshot.profile.localContactPhotoBase64)
         assertEquals(listOf("phone", "email"), snapshot.contacts.map { it.kind })
-        assertEquals(listOf("website", "linkedin"), snapshot.links.map { it.kind })
+        assertEquals(
+            listOf("website", "linkedin", "facebook", "instagram", "tiktok", "youtube"),
+            snapshot.links.map { it.kind },
+        )
+        val restored = ProfileSnapshotMapper.toContactProfile(snapshot)
+        assertEquals("https://facebook.com/elek", restored.facebook)
+        assertEquals("https://instagram.com/elek", restored.instagram)
+        assertEquals("https://tiktok.com/@elek", restored.tiktok)
+        assertEquals("https://youtube.com/@elek", restored.youtube)
         assertTrue(snapshot.profile.pendingSync)
         assertTrue(payload.isPublic)
+        assertEquals("nevjegy.example.hu", payload.customDomain)
+        assertFalse(payload.customDomainVerified)
         assertTrue(payload.contacts.all { !it.isPublic })
         assertTrue(payload.links.all { !it.isPublic })
         assertTrue(payload.addresses.all { !it.isPublic })

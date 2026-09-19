@@ -16,7 +16,9 @@ public enum VCard {
         add("TEL;TYPE=CELL", p.phone)
         add("EMAIL;TYPE=INTERNET", p.email)
         add("URL", p.website)
-        add("URL;TYPE=WORK", p.linkedIn)
+        for profile in p.socialProfiles where !profile.url.isEmpty {
+            add("X-SOCIALPROFILE;TYPE=\(profile.platform.rawValue)", profile.url)
+        }
         if !p.address.isEmpty { lines.append("ADR;TYPE=WORK:;;\(escape(p.address));;;;") }
         if includePhoto && !p.photoBase64.isEmpty {
             lines.append("PHOTO;ENCODING=b;TYPE=JPEG:\(p.photoBase64)")
@@ -25,11 +27,11 @@ public enum VCard {
         return lines.map(fold).joined(separator: "\r\n") + "\r\n"
     }
 
-    public static func qrPayload(_ profile: ContactProfile) throws -> String {
-        let payload = try encode(profile)
+    public static func qrPayload(_ profile: ContactProfile, includePhoto: Bool = false) throws -> String {
+        let payload = try encode(profile, includePhoto: includePhoto)
         // Keep enough module headroom for reliable camera decoding on a
         // handheld screen; the .vcf share route remains available for denser data.
-        guard payload.utf8.count <= 1400 else { throw ProfileError.oversizedQR }
+        guard payload.utf8.count <= 2200 else { throw ProfileError.oversizedQR }
         return payload
     }
 

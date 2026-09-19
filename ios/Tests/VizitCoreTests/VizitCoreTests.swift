@@ -46,6 +46,24 @@ final class VizitCoreTests: XCTestCase {
         var p = sample(); p.website = "example.com"
         XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .invalidURL) }
     }
+    func testSocialProfilesRoundTripAndVCardExport() throws {
+        var p = sample()
+        p.linkedIn = "https://linkedin.com/in/teszt"
+        p.facebook = "https://facebook.com/teszt"
+        p.instagram = "https://instagram.com/teszt"
+        p.tiktok = "https://tiktok.com/@teszt"
+        p.youtube = "https://youtube.com/@teszt"
+        let restored = try JSONDecoder().decode(ContactProfile.self, from: JSONEncoder().encode(p))
+        XCTAssertEqual(restored, p)
+        let card = try VCard.encode(restored)
+        for platform in SocialPlatform.allCases {
+            XCTAssertTrue(card.contains("X-SOCIALPROFILE;TYPE=\(platform.rawValue):"))
+        }
+    }
+    func testInsecureSocialProfileFailsValidation() {
+        var p = sample(); p.instagram = "http://instagram.com/teszt"
+        XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .invalidURL) }
+    }
     func testSafeLinksRejectExecutableAndCredentialURLs() {
         for value in ["javascript:alert(1)", "file:///etc/passwd", "http://example.com", "https://user:password@example.com", "https:///", "https://exa mple.com", "https://example.com\n"] {
             XCTAssertNil(SafeLink.https(value), value)
@@ -73,9 +91,10 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertTrue(card.contains("ADR;TYPE=WORK:;;Budapest\\, Teszt utca 1.;;;;\r\n"))
         XCTAssertTrue(card.hasSuffix("END:VCARD\r\n"))
     }
-    func testQRDoesNotIncludePhoto() throws {
+    func testStandardQRDoesNotIncludePhotoButExplicitPhotoQRDoes() throws {
         var p = sample(); p.photoBase64 = Data([0xff, 0xd8, 0xff]).base64EncodedString()
         XCTAssertFalse(try VCard.qrPayload(p).contains("PHOTO"))
+        XCTAssertTrue(try VCard.qrPayload(p, includePhoto: true).contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
         XCTAssertTrue(try VCard.encode(p, includePhoto: true).contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
     }
     func testOversizedQRIsNotSilentlyTruncated() {
@@ -92,6 +111,10 @@ final class VizitCoreTests: XCTestCase {
             + String(repeating: "n", count: 63) + ".hu"
         p.website = "https://example.com/" + String(repeating: "w", count: 280)
         p.linkedIn = "https://linkedin.com/in/" + String(repeating: "x", count: 276)
+        p.facebook = "https://facebook.com/" + String(repeating: "y", count: 279)
+        p.instagram = "https://instagram.com/" + String(repeating: "z", count: 278)
+        p.tiktok = "https://tiktok.com/@" + String(repeating: "t", count: 279)
+        p.youtube = "https://youtube.com/@" + String(repeating: "u", count: 279)
         XCTAssertNoThrow(try p.validate(), "The profile itself must stay inside every database field limit")
         XCTAssertThrowsError(try VCard.qrPayload(p)) { XCTAssertEqual($0 as? ProfileError, .oversizedQR) }
     }
@@ -159,6 +182,12 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertEqual(profile.fullName, "Teszt Elek")
         XCTAssertEqual(profile.publicSlug, "")
         XCTAssertFalse(profile.isPublic)
+        XCTAssertEqual(profile.facebook, "")
+        XCTAssertEqual(profile.instagram, "")
+        XCTAssertEqual(profile.tiktok, "")
+        XCTAssertEqual(profile.youtube, "")
+        XCTAssertEqual(profile.customDomain, "")
+        XCTAssertFalse(profile.customDomainVerified)
     }
 
     func testPublicProfileURLRequiresHTTPSAndStrictSlug() {
@@ -181,6 +210,32 @@ final class VizitCoreTests: XCTestCase {
         ])
         XCTAssertTrue(values.allSatisfy { PublicProfileLink.isValidSlug($0) })
         XCTAssertTrue(values.allSatisfy { $0.count <= 50 })
+    }
+
+    func testProfileCreationGeneratesReadableHungarianIdentifier() {
+        let owner = UUID(uuidString: "E4B43DA4-4717-4E69-B945-7BF454CA9E34")!
+        let values = ProfileSlug.creationCandidates(requested: "", displayName: "Csukárdi Rajmund", ownerID: owner)
+        XCTAssertEqual(values.first, "csukardi-rajmund")
+        XCTAssertTrue(values.allSatisfy { PublicProfileLink.isValidSlug($0) })
+    }
+
+    func testVerifiedCustomDomainOverridesCanonicalAddress() {
+        let base = URL(string: "https://e-nevjegy.vercel.app/p")!
+        XCTAssertEqual(
+            PublicProfileLink.preferred(
+                baseURL: base, slug: "teszt-elek", customDomain: "nevjegy.example.hu",
+                customDomainVerified: true
+            )?.absoluteString,
+            "https://nevjegy.example.hu"
+        )
+        XCTAssertEqual(
+            PublicProfileLink.preferred(
+                baseURL: base, slug: "teszt-elek", customDomain: "nevjegy.example.hu",
+                customDomainVerified: false
+            )?.absoluteString,
+            "https://e-nevjegy.vercel.app/p/teszt-elek"
+        )
+        XCTAssertFalse(CustomProfileDomain.isValid("https://example.hu/path"))
     }
 
     func testUnknownFirstUploadRevisionRequiresExplicitConflictResolution() {

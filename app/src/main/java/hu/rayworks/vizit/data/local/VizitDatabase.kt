@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProfileSyncMetadataEntity::class,
         ProfileSyncOutboxEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class VizitDatabase : RoomDatabase() {
@@ -84,12 +84,21 @@ abstract class VizitDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE profiles ADD COLUMN customDomain TEXT DEFAULT NULL")
+                database.execSQL(
+                    "ALTER TABLE profiles ADD COLUMN customDomainVerified INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun get(context: Context): VizitDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 VizitDatabase::class.java,
                 "vizit.db",
-            ).addMigrations(MIGRATION_1_2)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }

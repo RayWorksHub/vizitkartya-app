@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        Launch-window chrome only. Everything after the first frame is drawn by
+        VizitTheme in Compose, which also takes over the system bar icon colours
+        at runtime via WindowCompat.
+    -->
     <style name="Theme.Vizit" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/vizit_canvas</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

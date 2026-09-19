@@ -7,6 +7,7 @@ import hu.rayworks.vizit.data.local.ProfileContactEntity
 import hu.rayworks.vizit.data.local.ProfileEntity
 import hu.rayworks.vizit.data.local.ProfileFieldSettingsEntity
 import hu.rayworks.vizit.data.local.ProfileLinkEntity
+import hu.rayworks.vizit.qr.PublicProfileUrlFactory
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
@@ -70,47 +71,32 @@ object ProfileSnapshotMapper {
         }.sortedWith(compareBy(ProfileContactEntity::sortOrder, ProfileContactEntity::id))
 
         val previousLinks = previous?.links.orEmpty()
-        val primaryWebsite = previousLinks.firstOrNull { it.kind == "website" }
-        val primaryLinkedIn = previousLinks.firstOrNull { it.kind == "linkedin" }
-        val handledLinkIds = setOfNotNull(primaryWebsite?.id, primaryLinkedIn?.id)
+        val managedLinks = canonical.managedLinks()
+        val primaryLinks = managedLinks.associateWith { definition ->
+            previousLinks.firstOrNull { it.kind == definition.kind }
+        }
+        val handledLinkIds = primaryLinks.values.mapNotNull { it?.id }.toSet()
         val links = buildList {
-            canonical.website.takeIf(String::isNotBlank)?.let { value ->
-                add(
-                    primaryWebsite?.copy(
-                        url = value,
-                        updatedAtEpochMs = updatedAtEpochMs,
-                        pendingSync = pendingSync,
-                    ) ?: ProfileLinkEntity(
-                        id = stableId(userId, "link", "website", "primary"),
-                        profileOwnerId = userId,
-                        kind = "website",
-                        label = "Weboldal",
-                        url = value,
-                        sortOrder = 0,
-                        isPublic = false,
-                        updatedAtEpochMs = updatedAtEpochMs,
-                        pendingSync = pendingSync,
-                    ),
-                )
-            }
-            canonical.linkedIn.takeIf(String::isNotBlank)?.let { value ->
-                add(
-                    primaryLinkedIn?.copy(
-                        url = value,
-                        updatedAtEpochMs = updatedAtEpochMs,
-                        pendingSync = pendingSync,
-                    ) ?: ProfileLinkEntity(
-                        id = stableId(userId, "link", "linkedin", "primary"),
-                        profileOwnerId = userId,
-                        kind = "linkedin",
-                        label = "LinkedIn",
-                        url = value,
-                        sortOrder = 1,
-                        isPublic = false,
-                        updatedAtEpochMs = updatedAtEpochMs,
-                        pendingSync = pendingSync,
-                    ),
-                )
+            managedLinks.forEach { definition ->
+                definition.value.takeIf(String::isNotBlank)?.let { value ->
+                    add(
+                        primaryLinks[definition]?.copy(
+                            url = value,
+                            updatedAtEpochMs = updatedAtEpochMs,
+                            pendingSync = pendingSync,
+                        ) ?: ProfileLinkEntity(
+                            id = stableId(userId, "link", definition.kind, "primary"),
+                            profileOwnerId = userId,
+                            kind = definition.kind,
+                            label = definition.label,
+                            url = value,
+                            sortOrder = definition.sortOrder,
+                            isPublic = false,
+                            updatedAtEpochMs = updatedAtEpochMs,
+                            pendingSync = pendingSync,
+                        ),
+                    )
+                }
             }
             addAll(
                 previousLinks
@@ -161,6 +147,10 @@ object ProfileSnapshotMapper {
                 contactImagePath = previous?.profile?.contactImagePath,
                 logoPath = previous?.profile?.logoPath,
                 publicSlug = canonical.publicSlug.ifBlank { null },
+                customDomain = canonical.customDomain.ifBlank { null },
+                customDomainVerified = previous?.profile?.let {
+                    it.customDomain == canonical.customDomain.ifBlank { null } && it.customDomainVerified
+                } ?: false,
                 isPublic = canonical.isPublic,
                 updatedAtEpochMs = updatedAtEpochMs,
                 pendingSync = pendingSync,
@@ -199,6 +189,8 @@ object ProfileSnapshotMapper {
             contactImagePath = payload.contactImagePath,
             logoPath = payload.logoPath,
             publicSlug = payload.publicSlug,
+            customDomain = payload.customDomain,
+            customDomainVerified = payload.customDomainVerified,
             isPublic = payload.isPublic,
             updatedAtEpochMs = updatedAtEpochMs,
             pendingSync = false,
@@ -263,6 +255,8 @@ object ProfileSnapshotMapper {
         contactImagePath = snapshot.profile.contactImagePath,
         logoPath = snapshot.profile.logoPath,
         publicSlug = snapshot.profile.publicSlug,
+        customDomain = snapshot.profile.customDomain,
+        customDomainVerified = snapshot.profile.customDomainVerified,
         isPublic = snapshot.profile.isPublic,
         fieldOrder = snapshot.fieldSettings?.fieldOrderJson
             ?.let { runCatching { ProfilePayloadCodec.decodeFieldOrder(it) }.getOrNull() }
@@ -307,6 +301,10 @@ object ProfileSnapshotMapper {
         val email = snapshot.contacts.firstOrNull { it.kind == "email" }?.value.orEmpty()
         val website = snapshot.links.firstOrNull { it.kind == "website" }?.url.orEmpty()
         val linkedIn = snapshot.links.firstOrNull { it.kind == "linkedin" }?.url.orEmpty()
+        val facebook = snapshot.links.firstOrNull { it.kind == "facebook" }?.url.orEmpty()
+        val instagram = snapshot.links.firstOrNull { it.kind == "instagram" }?.url.orEmpty()
+        val tiktok = snapshot.links.firstOrNull { it.kind == "tiktok" }?.url.orEmpty()
+        val youtube = snapshot.links.firstOrNull { it.kind == "youtube" }?.url.orEmpty()
         return ContactProfile(
             fullName = snapshot.profile.displayName,
             firstName = snapshot.profile.firstName,
@@ -318,8 +316,14 @@ object ProfileSnapshotMapper {
             website = website,
             address = snapshot.addresses.firstOrNull()?.formattedAddress.orEmpty(),
             linkedIn = linkedIn,
+            facebook = facebook,
+            instagram = instagram,
+            tiktok = tiktok,
+            youtube = youtube,
             photoBase64 = snapshot.profile.localContactPhotoBase64,
             publicSlug = snapshot.profile.publicSlug.orEmpty(),
+            customDomain = snapshot.profile.customDomain.orEmpty(),
+            customDomainVerified = snapshot.profile.customDomainVerified,
             isPublic = snapshot.profile.isPublic,
         )
     }
@@ -335,7 +339,29 @@ object ProfileSnapshotMapper {
         website = website.trim(),
         address = address.trim(),
         linkedIn = linkedIn.trim(),
+        facebook = facebook.trim(),
+        instagram = instagram.trim(),
+        tiktok = tiktok.trim(),
+        youtube = youtube.trim(),
         publicSlug = publicSlug.trim(),
+        customDomain = customDomain.trim().takeIf(String::isNotBlank)
+            ?.let(PublicProfileUrlFactory::normalizeCustomDomain).orEmpty(),
+    )
+
+    private fun ContactProfile.managedLinks(): List<ManagedLink> = listOf(
+        ManagedLink("website", "Weboldal", 0, website),
+        ManagedLink("linkedin", "LinkedIn", 1, linkedIn),
+        ManagedLink("facebook", "Facebook", 2, facebook),
+        ManagedLink("instagram", "Instagram", 3, instagram),
+        ManagedLink("tiktok", "TikTok", 4, tiktok),
+        ManagedLink("youtube", "YouTube", 5, youtube),
+    )
+
+    private data class ManagedLink(
+        val kind: String,
+        val label: String,
+        val sortOrder: Int,
+        val value: String,
     )
 
     private fun stableId(vararg components: String): String = UUID.nameUUIDFromBytes(

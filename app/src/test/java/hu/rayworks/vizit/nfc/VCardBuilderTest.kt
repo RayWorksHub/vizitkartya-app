@@ -15,6 +15,11 @@ class VCardBuilderTest {
             phone = "+36 30 123 4567",
             email = "teszt@example.com",
             website = "https://vizit.hu",
+            linkedIn = "https://linkedin.com/in/teszt",
+            facebook = "https://facebook.com/teszt",
+            instagram = "https://instagram.com/teszt",
+            tiktok = "https://tiktok.com/@teszt",
+            youtube = "https://youtube.com/@teszt",
         )
 
         val result = VCardBuilder.build(profile)
@@ -23,6 +28,11 @@ class VCardBuilderTest {
         assertTrue(result.contains("FN:Teszt Elek\r\n"))
         assertTrue(result.contains("TEL;TYPE=CELL:+36 30 123 4567\r\n"))
         assertTrue(result.contains("EMAIL;TYPE=INTERNET:teszt@example.com\r\n"))
+        assertTrue(result.contains("X-SOCIALPROFILE;TYPE=linkedin:https://linkedin.com/in/teszt"))
+        assertTrue(result.contains("X-SOCIALPROFILE;TYPE=facebook:https://facebook.com/teszt"))
+        assertTrue(result.contains("X-SOCIALPROFILE;TYPE=instagram:https://instagram.com/teszt"))
+        assertTrue(result.contains("X-SOCIALPROFILE;TYPE=tiktok:https://tiktok.com/@teszt"))
+        assertTrue(result.contains("X-SOCIALPROFILE;TYPE=youtube:https://youtube.com/@teszt"))
         assertTrue(result.endsWith("END:VCARD\r\n"))
     }
 

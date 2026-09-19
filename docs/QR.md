@@ -4,11 +4,19 @@ Két mód készül ugyanabból a lokális profilból.
 
 ## Kontakt QR
 
-`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, Base64 profilkép nélkül, legfeljebb 1800 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor M hibajavítást és 4 modul quiet zone-t használ; a magyar szöveg determinisztikus round-trip unit tesztje a 9. Android CI-futásban sikeres. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on, ezért még nem `DEVICE TESTED` vagy `SUPPORTED`.
+`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, legfeljebb 2200 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor M hibajavítást, 4 modul quiet zone-t és középre helyezett, fehér alapon megjelenő VIZIT V-logót használ. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on.
 
 ## VIZIT profil QR
 
 `PARTIALLY SUPPORTED`: validált, normalizált HTTPS URL `https://<profile-host>/p/{slug}` generálása és az Android App Link intent elkészült. A publikus profiloldal és a domain `assetlinks.json` még szükséges a teljes end-to-end működéshez.
+
+## Fényképes kontakt QR
+
+A QR-kód maga tartalmazza a `BEGIN:VCARD` névjegyet és az erősen optimalizált
+JPEG profilképet. Nem tartalmaz `https://` hivatkozást, mert azt a rendszerkamerák
+weboldalként osztályozzák még a szerver válasza előtt. Ha a kép az optimalizálás
+után sem fér el biztonságosan, az alkalmazás hagyományos Kontakt QR-t jelenít meg,
+és nem nevezi fényképesnek.
 
 ## UX
 

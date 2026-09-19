@@ -19,7 +19,7 @@ object PhotoProcessor {
     private const val MAX_SOURCE_SIZE = 1_200
     private const val MAX_ENCODED_BYTES = 60_000
     private const val NFC_START_SIZE = 192
-    private const val NFC_MIN_SIZE = 48
+    private const val NFC_MIN_SIZE = 32
 
     fun loadSquareJpegBase64(context: Context, uri: Uri): String {
         val source = ImageDecoder.createSource(context.contentResolver, uri)
@@ -98,7 +98,7 @@ object PhotoProcessor {
             }
 
             quality = 78
-            while (quality >= 38) {
+            while (quality >= 22) {
                 val candidate = compressJpeg(flattened, quality)
                 if (candidate.size <= maxJpegBytes) {
                     result = candidate

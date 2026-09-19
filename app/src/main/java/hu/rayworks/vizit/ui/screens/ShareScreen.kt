@@ -6,18 +6,23 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -25,21 +30,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.Nfc
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,18 +49,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import hu.rayworks.vizit.NfcStatus
+import hu.rayworks.vizit.R
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.qr.QrCodeGenerator
 import hu.rayworks.vizit.qr.QrMode
 import hu.rayworks.vizit.qr.QrPayloadFactory
 import hu.rayworks.vizit.qr.QrShareHelper
+import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
+import hu.rayworks.vizit.ui.design.components.VizitButton
+import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
+import hu.rayworks.vizit.ui.design.components.VizitEmptyState
+import hu.rayworks.vizit.ui.design.components.VizitSectionHeader
+import hu.rayworks.vizit.ui.design.components.VizitSegmentedControl
+import hu.rayworks.vizit.ui.design.components.VizitStatusPill
+import hu.rayworks.vizit.ui.design.components.VizitTone
+import kotlinx.coroutines.launch
 
+/**
+ * Every hand-off route in one place, with the two that matter — NFC and QR —
+ * front and centre rather than buried.
+ *
+ * The QR surface is an "always-light island": it stays pure #FFFFFF with a
+ * generous quiet zone in both themes, and the caption inside it uses fixed dark
+ * ink, because a tinted or low-contrast code is a code that does not scan.
+ */
 @Composable
 fun ShareScreen(
     profile: ContactProfile,
@@ -67,202 +90,233 @@ fun ShareScreen(
     onStartNfcShare: () -> String?,
     modifier: Modifier = Modifier,
 ) {
+    val colors = Vizit.colors
     val context = LocalContext.current
+    val qrLogo = remember(context) {
+        BitmapFactory.decodeResource(context.resources, R.drawable.vizit_logo_mark)
+    }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var qrMode by rememberSaveable { mutableStateOf(QrMode.CONTACT) }
-    var message by rememberSaveable { mutableStateOf<String?>(null) }
-    var showFullScreenQr by rememberSaveable { mutableStateOf(false) }
+    var fullScreen by rememberSaveable { mutableStateOf(false) }
 
-    val publicProfileUrl = remember(profile, synchronized) { QrPayloadFactory.profileUrl(profile, synchronized) }
-    val photoContactUrl = publicProfileUrl?.takeIf { profile.photoBase64.isNotBlank() }?.plus("?contact=1")
+    val publicProfileUrl = remember(profile, synchronized) {
+        QrPayloadFactory.profileUrl(profile, synchronized)
+    }
     val contactPayload = remember(profile, publicProfileUrl) {
         QrPayloadFactory.contact(profile, publicProfileUrl)
     }
-    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, photoContactUrl) {
+    val photoContactPayload = remember(profile, publicProfileUrl) {
+        profile.photoBase64.takeIf(String::isNotBlank)
+            ?.let { QrPayloadFactory.photoContact(profile, publicProfileUrl).getOrNull() }
+    }
+    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, photoContactPayload) {
         when (qrMode) {
             QrMode.PROFILE -> publicProfileUrl
-            QrMode.CONTACT -> photoContactUrl ?: contactPayload.getOrNull()
+            QrMode.CONTACT -> photoContactPayload ?: contactPayload.getOrNull()
         }
     }
-    val qrBitmap = remember(qrPayload) {
-        qrPayload?.takeIf(String::isNotBlank)?.let { runCatching { QrCodeGenerator.create(it) }.getOrNull() }
+    val qrBitmap = remember(qrPayload, qrLogo) {
+        qrPayload?.takeIf(String::isNotBlank)?.let {
+            runCatching { QrCodeGenerator.create(it, logo = qrLogo) }.getOrNull()
+        }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Text(
-            text = "Átadás",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "Add át a névjegyed NFC-vel Androidra, vagy használj QR-kódot bármely kompatibilis telefonon.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
+    fun toast(message: String) {
+        scope.launch { snackbarHostState.showSnackbar(message) }
+    }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    Box(modifier = modifier.fillMaxSize().background(colors.canvas)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = Vizit.space.md),
+            verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Icon(Icons.Outlined.Nfc, contentDescription = null)
-                    Text("NFC", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                }
-                Text(
-                    if (nfcStatus.isReady) {
-                        "Android fogadó telefonon VIZIT telepítése nélkül próbálja megnyitni a kontaktimportot. iPhone-nál a QR/HTTPS fallback az elsődleges."
-                    } else {
-                        "Az NFC jelenleg nem áll készen ezen a készüléken. A QR-megosztás ettől függetlenül használható."
+            Spacer(Modifier.height(Vizit.space.xs))
+            VizitBrandHeader(style = VizitBrandHeaderStyle.Compact)
+
+            Text("Megosztás", style = Vizit.type.h1, color = colors.textPrimary)
+            Text(
+                text = "Érintsd össze a telefonokat, vagy mutasd a QR-kódot. A fogadó félnek nem kell VIZIT.",
+                style = Vizit.type.body,
+                color = colors.textSecondary,
+            )
+
+            VizitSegmentedControl(
+                options = listOf(
+                    if (photoContactPayload != null) "Fényképes QR" else "Kontakt QR",
+                    "Profil QR",
+                ),
+                selectedIndex = if (qrMode == QrMode.CONTACT) 0 else 1,
+                onSelect = { qrMode = if (it == 0) QrMode.CONTACT else QrMode.PROFILE },
+            )
+
+            if (qrBitmap != null) {
+                QrIsland(
+                    bitmap = qrBitmap,
+                    caption = when {
+                        qrMode == QrMode.PROFILE ->
+                            "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
+                        photoContactPayload != null ->
+                            "Beolvasás után közvetlenül megnyílik a profilképes névjegy mentése."
+                        else ->
+                            "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
                     },
                 )
-                Button(
-                    onClick = { message = onStartNfcShare() },
-                    enabled = nfcStatus.isReady,
+
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
                 ) {
-                    Text("NFC kontaktátadás")
-                }
-            }
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Text("QR", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilterChip(
-                        selected = qrMode == QrMode.CONTACT,
-                        onClick = { qrMode = QrMode.CONTACT },
-                        label = { Text(if (photoContactUrl != null) "Fényképes QR" else "Offline Kontakt QR") },
+                    VizitButton(
+                        text = "Teljes képernyő",
+                        onClick = { fullScreen = true },
+                        icon = Icons.Outlined.Fullscreen,
+                        style = VizitButtonStyle.Secondary,
+                        modifier = Modifier.weight(1f),
                     )
-                    FilterChip(
-                        selected = qrMode == QrMode.PROFILE,
-                        onClick = { qrMode = QrMode.PROFILE },
-                        label = { Text("VIZIT profil QR") },
+                    VizitButton(
+                        text = "Megosztás",
+                        onClick = { QrShareHelper.share(context, qrBitmap) },
+                        icon = Icons.Outlined.Share,
+                        style = VizitButtonStyle.Secondary,
+                        modifier = Modifier.weight(1f),
                     )
                 }
-
-                if (qrBitmap != null) {
-                    Box(
-                        modifier = Modifier
-                            .background(Color.White, RoundedCornerShape(18.dp))
-                            .padding(12.dp),
-                    ) {
-                        Image(
-                            bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = "VIZIT QR-kód",
-                            modifier = Modifier.size(260.dp),
-                        )
-                    }
-                    Text(
-                        if (qrMode == QrMode.PROFILE) {
-                            "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
-                        } else if (photoContactUrl != null) {
-                            "Beolvasás után a profilképpel együtt menthető a névjegy. Internetkapcsolat szükséges."
-                        } else {
-                            "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
-                        },
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-
-                    OutlinedButton(
-                        onClick = { showFullScreenQr = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Outlined.Fullscreen, contentDescription = null)
-                        Text("Teljes képernyő", modifier = Modifier.padding(start = 8.dp))
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = { QrShareHelper.share(context, qrBitmap) },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Outlined.Share, contentDescription = null)
-                            Text("Megosztás", modifier = Modifier.padding(start = 6.dp))
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                message = if (QrShareHelper.saveToPictures(context, qrBitmap)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                ) {
+                    VizitButton(
+                        text = "Mentés",
+                        onClick = {
+                            toast(
+                                if (QrShareHelper.saveToPictures(context, qrBitmap)) {
                                     "A QR-kód mentve a Képek/VIZIT mappába."
                                 } else {
                                     "A QR-kód mentése nem sikerült."
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Outlined.SaveAlt, contentDescription = null)
-                            Text("Mentés", modifier = Modifier.padding(start = 6.dp))
-                        }
-                    }
-                    if (qrMode == QrMode.PROFILE && publicProfileUrl != null) {
-                        OutlinedButton(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("VIZIT profil", publicProfileUrl))
-                                message = "A profil-link a vágólapra került."
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = null)
-                            Text("Profil-link másolása", modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-                } else {
-                    Text(
-                        text = when (qrMode) {
-                            QrMode.PROFILE ->
-                                "A VIZIT profil QR-hez előbb nyilvános profilt, érvényes profilazonosítót és sikeres szinkront kell létrehozni. A Kontakt QR addig is használható offline."
-
-                            QrMode.CONTACT -> contactPayload.exceptionOrNull()?.message
-                                ?: "A Kontakt QR most nem állítható elő."
+                                },
+                            )
                         },
-                        textAlign = TextAlign.Center,
+                        icon = Icons.Outlined.SaveAlt,
+                        style = VizitButtonStyle.Secondary,
+                        modifier = Modifier.weight(1f),
                     )
-                    if (qrMode == QrMode.PROFILE) {
-                        OutlinedButton(onClick = { qrMode = QrMode.CONTACT }) {
-                            Text("Kontakt QR megnyitása")
-                        }
+                    if (qrMode == QrMode.PROFILE && publicProfileUrl != null) {
+                        VizitButton(
+                            text = "Link másolása",
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    ClipData.newPlainText("VIZIT profil", publicProfileUrl),
+                                )
+                                toast("A profil-link a vágólapra került.")
+                            },
+                            icon = Icons.Outlined.ContentCopy,
+                            style = VizitButtonStyle.Secondary,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
                 }
+            } else {
+                VizitEmptyState(
+                    icon = Icons.Outlined.QrCode2,
+                    title = if (qrMode == QrMode.PROFILE) "Nincs még publikus profil" else "A Kontakt QR nem állítható elő",
+                    message = when (qrMode) {
+                        QrMode.PROFILE ->
+                            "A Profil QR-hez engedélyezd a publikus profilt, adj meg profilazonosítót, és várd meg a sikeres szinkront."
+                        QrMode.CONTACT ->
+                            contactPayload.exceptionOrNull()?.message
+                                ?: "Előbb töltsd ki a névjegyed alapadatait."
+                    },
+                    actionLabel = if (qrMode == QrMode.PROFILE) "Kontakt QR megnyitása" else null,
+                    onAction = if (qrMode == QrMode.PROFILE) {
+                        { qrMode = QrMode.CONTACT }
+                    } else {
+                        null
+                    },
+                )
             }
+
+            VizitSectionHeader("Közvetlen átadás")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.surface, RoundedCornerShape(Vizit.radius.lg))
+                    .border(1.dp, colors.border, RoundedCornerShape(Vizit.radius.lg))
+                    .padding(Vizit.space.md),
+                verticalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+            ) {
+                VizitStatusPill(
+                    text = if (nfcStatus.isReady) "NFC használatra kész" else "NFC nem érhető el",
+                    tone = if (nfcStatus.isReady) VizitTone.Success else VizitTone.Warning,
+                )
+                Text(
+                    text = if (nfcStatus.isReady) {
+                        "Android fogadó telefonon a kontaktimport VIZIT telepítése nélkül indul. iPhone-nál a QR a biztos út."
+                    } else {
+                        "Kapcsold be az NFC-t a rendszerbeállításokban. A QR-megosztás ettől függetlenül működik."
+                    },
+                    style = Vizit.type.bodySmall,
+                    color = colors.textSecondary,
+                )
+                VizitButton(
+                    text = "NFC kontaktátadás",
+                    onClick = { onStartNfcShare()?.let(::toast) },
+                    icon = Icons.Outlined.Nfc,
+                    enabled = nfcStatus.isReady,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Spacer(Modifier.height(Vizit.space.xl))
         }
 
-        message?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Spacer(Modifier.height(12.dp))
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(Vizit.space.md),
+        )
     }
 
-    if (showFullScreenQr && qrBitmap != null) {
-        FullScreenQrDialog(
-            bitmap = qrBitmap,
-            onDismiss = { showFullScreenQr = false },
+    if (fullScreen && qrBitmap != null) {
+        FullScreenQrDialog(bitmap = qrBitmap, onDismiss = { fullScreen = false })
+    }
+}
+
+/** Fixed ink used inside the always-white QR island, in both themes. */
+private val QrCaptionInk = Color(0xFF4A5568)
+
+@Composable
+private fun QrIsland(bitmap: Bitmap, caption: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White, RoundedCornerShape(Vizit.radius.xl))
+            .border(1.dp, Vizit.colors.border, RoundedCornerShape(Vizit.radius.xl))
+            .padding(Vizit.space.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
+    ) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "VIZIT QR-kód",
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .aspectRatio(1f)
+                .background(Color.White)
+                .padding(Vizit.space.md),
+        )
+        Text(
+            text = caption,
+            style = Vizit.type.bodySmall,
+            color = QrCaptionInk,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -271,16 +325,16 @@ fun ShareScreen(
 private fun FullScreenQrDialog(bitmap: Bitmap, onDismiss: () -> Unit) {
     val activity = LocalContext.current.findActivity()
     DisposableEffect(activity) {
-        val originalBrightness = activity?.window?.attributes?.screenBrightness
+        val original = activity?.window?.attributes?.screenBrightness
         if (activity != null) {
             val attributes = activity.window.attributes
             attributes.screenBrightness = 1f
             activity.window.attributes = attributes
         }
         onDispose {
-            if (activity != null && originalBrightness != null) {
+            if (activity != null && original != null) {
                 val attributes = activity.window.attributes
-                attributes.screenBrightness = originalBrightness
+                attributes.screenBrightness = original
                 activity.window.attributes = attributes
             }
         }
@@ -288,28 +342,24 @@ private fun FullScreenQrDialog(bitmap: Bitmap, onDismiss: () -> Unit) {
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.White)
-                .padding(24.dp),
+                .padding(Vizit.space.xl)
+                .semantics { contentDescription = "VIZIT QR-kód teljes képernyőn" },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             Image(
                 bitmap = bitmap.asImageBitmap(),
-                contentDescription = "VIZIT QR-kód teljes képernyőn",
-                modifier = Modifier.fillMaxWidth(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(Vizit.space.lg),
             )
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onDismiss) {
-                Text("Bezárás")
-            }
+            Spacer(Modifier.height(Vizit.space.xl))
+            VizitButton(text = "Bezárás", onClick = onDismiss, style = VizitButtonStyle.Secondary)
         }
     }
 }
