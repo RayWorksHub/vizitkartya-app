@@ -27,4 +27,20 @@ object PublicProfileUrlFactory {
 
         "$normalizedBase/$normalizedSlug"
     }
+
+    fun createVCardUrl(profileUrl: String): Result<String> = runCatching {
+        val normalizedProfileUrl = profileUrl.trim().trimEnd('/')
+        val profileUri = URI(normalizedProfileUrl)
+        require(profileUri.scheme.equals("https", ignoreCase = true)) {
+            "A kontaktfájl URL-jének HTTPS-címnek kell lennie."
+        }
+        require(!profileUri.host.isNullOrBlank() && profileUri.userInfo == null) {
+            "A kontaktfájl alap URL-je nem érvényes."
+        }
+        require(profileUri.query == null && profileUri.fragment == null) {
+            "A kontaktfájl alap URL-je nem tartalmazhat queryt vagy fragmentet."
+        }
+
+        "$normalizedProfileUrl/vcard"
+    }
 }
