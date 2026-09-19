@@ -269,7 +269,10 @@ public enum ContactQRLink {
     public static func make(publicURL: URL) -> URL? {
         guard SafeLink.https(publicURL.absoluteString) != nil else { return nil }
         var parts = URLComponents(url: publicURL, resolvingAgainstBaseURL: false)
-        parts?.queryItems = [URLQueryItem(name: "contact", value: "1")]
+        guard parts?.query == nil, parts?.fragment == nil else { return nil }
+        let basePath = parts?.path ?? ""
+        parts?.path = basePath.hasSuffix("/") ? basePath + "vcard" : basePath + "/vcard"
+        parts?.queryItems = nil
         parts?.fragment = nil
         return parts?.url
     }
