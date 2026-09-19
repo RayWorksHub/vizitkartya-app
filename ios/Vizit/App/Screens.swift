@@ -475,18 +475,65 @@ private struct FullScreenQRView: View {
 
 enum QRImage {
     private static let context = CIContext(options: [.useSoftwareRenderer: true])
+    private static let logo: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "VizitLogoMark", withExtension: "png") else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }()
 
     static func make(_ payload: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(payload.utf8)
-        filter.correctionLevel = "L"
+        filter.correctionLevel = "M"
         guard let code = filter.outputImage else { return nil }
         let scale: CGFloat = 10
         let scaled = code.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let quietZone = CIImage(color: .white).cropped(to: scaled.extent.insetBy(dx: -4 * scale, dy: -4 * scale))
         let output = scaled.composited(over: quietZone)
         guard let cg = context.createCGImage(output, from: output.extent) else { return nil }
-        return UIImage(cgImage: cg)
+        return addingLogo(to: UIImage(cgImage: cg))
+    }
+
+    private static func addingLogo(to qr: UIImage) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: qr.size, format: format).image { _ in
+            qr.draw(in: CGRect(origin: .zero, size: qr.size))
+
+            let plateSize = min(qr.size.width, qr.size.height) * 0.14
+            let plate = CGRect(
+                x: (qr.size.width - plateSize) / 2,
+                y: (qr.size.height - plateSize) / 2,
+                width: plateSize,
+                height: plateSize
+            )
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: plate, cornerRadius: plateSize * 0.18).fill()
+
+            if let logo {
+                let content = plateSize * 0.78
+                let scale = min(content / logo.size.width, content / logo.size.height)
+                let logoSize = CGSize(width: logo.size.width * scale, height: logo.size.height * scale)
+                logo.draw(in: CGRect(
+                    x: (qr.size.width - logoSize.width) / 2,
+                    y: (qr.size.height - logoSize.height) / 2,
+                    width: logoSize.width,
+                    height: logoSize.height
+                ))
+            } else {
+                let text = "V" as NSString
+                let font = UIFont.systemFont(ofSize: plateSize * 0.62, weight: .black)
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: UIColor(red: 0.04, green: 0.34, blue: 0.91, alpha: 1),
+                ]
+                let size = text.size(withAttributes: attributes)
+                text.draw(at: CGPoint(
+                    x: (qr.size.width - size.width) / 2,
+                    y: (qr.size.height - size.height) / 2
+                ), withAttributes: attributes)
+            }
+        }
     }
 }
 
