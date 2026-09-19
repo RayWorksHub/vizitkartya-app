@@ -1,4 +1,4 @@
-# VIZIT 7.0.0 — Vállalkozói Portál és saját domain
+# VIZIT 7.1.0 — Vállalkozói Portál és saját domain
 
 ## Elkészült funkciók
 
@@ -32,7 +32,16 @@ pillantásra olvasható legyen, és a sor nem tolja le a képernyőről a portá
 többi részét. A sor a képernyő széléig fut, így a félig látszó következő
 kártya jelzi, hogy tovább lehet húzni.
 
+## Kurzus-lejátszó
+
+A kurzus képernyője videós tanulófelület, nem szövegoldal: a videó a képernyő
+tetején, teljes szélességben ül, alatta a kurzus címe és forrása, majd három
+lap — Leckék, Anyagok, A kurzusról. A leckelista modulokra bontva, sorszámozva
+fut, az éppen játszó lecke kiemelve. A képernyő a saját sötét színvilágát
+használja az alkalmazás témájától függetlenül, mert minden elem a videó mellett
+áll.
+
 ## Verzió
 
-- Android: `7.0.0` (`7000000`)
-- iOS: `7.0.0`
+- Android: `7.1.0` (`7010000`)
+- iOS: `7.1.0`

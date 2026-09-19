@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,6 +46,8 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MicOff
@@ -63,7 +67,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -93,10 +96,10 @@ import hu.rayworks.vizit.ui.design.components.VizitRow
 private enum class PortalPage { Home, Vosz, Education, Course, Help, Toolkit }
 
 /** Carousel card metrics: wide enough to read, narrow enough to hint at the next card. */
-private val PORTAL_CARD_WIDTH = 268.dp
-private val PORTAL_CARD_HEIGHT = 244.dp
-private val COURSE_CARD_WIDTH = 264.dp
-private val COURSE_CARD_HEIGHT = 268.dp
+private val PORTAL_CARD_WIDTH = 300.dp
+private val PORTAL_CARD_HEIGHT = 300.dp
+private val COURSE_CARD_WIDTH = 296.dp
+private val COURSE_CARD_HEIGHT = 330.dp
 
 private data class PortalCard(
     val page: PortalPage,
@@ -154,28 +157,28 @@ private val portalCards = listOf(
     PortalCard(
         PortalPage.Vosz,
         "VOSZ",
-        "Hírek, videók és vállalkozói szolgáltatások egy helyen.",
+        "A Vállalkozók és Munkáltatók Országos Szövetségének hírei, videói és tanácsadói szolgáltatásai — egy helyen, magyarul.",
         "PARTNERI FORRÁSOK",
         Icons.Outlined.BusinessCenter,
     ),
     PortalCard(
         PortalPage.Education,
         "Vállalkozói Edukáció",
-        "Gyakorlati kurzusok AI-ról, Microsoft 365-ről és cégépítésről.",
-        "6 KURZUS",
+        "Rövid videóleckék AI-ról, Microsoft 365-ről, cégépítésről, biztonságról, marketingről és pénzügyről. Saját tempóban.",
+        "6 KURZUS · 24 LECKE",
         Icons.Outlined.School,
     ),
     PortalCard(
         PortalPage.Help,
         "Digitális segítség",
-        "Próbáld ki, hogyan indul majd egy videós szakértői konzultáció.",
+        "Nézd meg, hogyan indul majd egy videós konzultáció digitalizációs szakértővel, mielőtt időpontot foglalnál.",
         "BEMUTATÓ MÓD",
         Icons.Outlined.VideoCall,
     ),
     PortalCard(
         PortalPage.Toolkit,
         "Vállalkozói eszköztár",
-        "Gyors digitális állapotfelmérés és személyre szabott következő lépések.",
+        "Négy kérdés a digitális felkészültségedről, és egy konkrét következő lépés, amit még ma elkezdhetsz.",
         "INTERAKTÍV",
         Icons.Outlined.Checklist,
     ),
@@ -207,7 +210,7 @@ private val courses = listOf(
         "ai",
         "AI a mindennapi vállalkozásban",
         "Mesterséges intelligencia",
-        "Használható promptok, automatizálási ötletek és felelős AI-használat.",
+        "Használható promptok, automatizálási ötletek és felelős AI-használat. Megtanulod, mely feladatokat érdemes AI-ra bízni, és melyeket soha.",
         "Magyar videó",
         "Kezdő",
         Icons.Outlined.SmartToy,
@@ -245,7 +248,7 @@ private val courses = listOf(
         "m365",
         "Microsoft 365 kisvállalkozásoknak",
         "Digitális munka",
-        "Teams, Outlook, OneDrive és SharePoint egyszerű, biztonságos rendszerben.",
+        "Teams, Outlook, OneDrive és SharePoint egyetlen, biztonságos rendszerben. Fiókok, jogosultságok, közös fájlkezelés és automatizmusok.",
         "Magyar videók",
         "Kezdő",
         Icons.Outlined.Cloud,
@@ -283,7 +286,7 @@ private val courses = listOf(
         "basics",
         "Vállalkozói alapismeretek",
         "Cégépítés",
-        "Üzleti modell, célpiac, árazás és az első 90 nap terve.",
+        "Üzleti modell, célpiac, árazás és az első 90 nap terve. Az indítás kötelező lépéseitől a heti mérőszámokig.",
         "Magyar videó",
         "Kezdő",
         Icons.Outlined.Storefront,
@@ -321,7 +324,7 @@ private val courses = listOf(
         "security",
         "Kiberbiztonság emberi nyelven",
         "Biztonság",
-        "Fiókvédelem, mentés, adathalászat és egy egyszerű incidens-terv.",
+        "Fiókvédelem, mentés, adathalászat és egy egyszerű incidens-terv. A legnagyobb védelem a legkisebb munkáért.",
         "Magyar videó",
         "Kezdő",
         Icons.Outlined.Security,
@@ -359,7 +362,7 @@ private val courses = listOf(
         "marketing",
         "Online jelenlét és ügyfélszerzés",
         "Marketing",
-        "Egyszerű pozicionálás, tartalomterv és mérhető kampányalapok.",
+        "Pozicionálás, Google Cégprofil, négyhetes tartalomterv és mérés. Ügyfélszerzés követhető lépésekben, nem követőszámban.",
         "Magyar videók",
         "Középhaladó",
         Icons.Outlined.Campaign,
@@ -397,7 +400,7 @@ private val courses = listOf(
         "finance",
         "Pénzügyi tudatosság alapjai",
         "Pénzügy",
-        "Cash-flow, költségek és a könyvelővel való hatékony együttműködés.",
+        "Cash-flow, költségek, számlázás és együttműködés a könyvelővel. Hogy a bevétel és a nyereség ne csússzon össze.",
         "Magyar videó",
         "Kezdő",
         Icons.Outlined.AccountBalance,
@@ -674,9 +677,9 @@ private fun PortalFeatureCard(card: PortalCard, onClick: () -> Unit, modifier: M
             )
             Text(
                 card.description,
-                style = Vizit.type.bodySmall,
+                style = Vizit.type.body,
                 color = colors.textSecondary,
-                maxLines = 4,
+                maxLines = 6,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.weight(1f))
@@ -826,9 +829,9 @@ private fun CourseCard(
             )
             Text(
                 course.description,
-                style = Vizit.type.bodySmall,
+                style = Vizit.type.body,
                 color = colors.textSecondary,
-                maxLines = 3,
+                maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.weight(1f))
@@ -841,9 +844,28 @@ private fun CourseCard(
     }
 }
 
+/**
+ * Course player chrome. The screen keeps its own dark palette whatever the app
+ * theme is, because the video is the surface everything else has to sit against.
+ */
+private object CoursePlayerColors {
+    val canvas = Color(0xFF0B0B0F)
+    val surface = Color(0xFF16161C)
+    val divider = Color(0xFF26262E)
+    val text = Color(0xFFFFFFFF)
+    val secondary = Color(0xFFA7A7B2)
+    val muted = Color(0xFF6E6E78)
+    val accent = Color(0xFF4E9BFF)
+}
+
+private enum class CourseTab(val title: String) {
+    Lessons("Leckék"),
+    Resources("Anyagok"),
+    About("A kurzusról"),
+}
+
 @Composable
 private fun CourseDetail(course: BusinessCourse, onBack: () -> Unit, modifier: Modifier) {
-    val colors = Vizit.colors
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val preferences = remember { context.applicationContext.getSharedPreferences("vizit_education", 0) }
@@ -851,11 +873,13 @@ private fun CourseDetail(course: BusinessCourse, onBack: () -> Unit, modifier: M
         mutableStateOf(preferences.getStringSet("completed_lessons", emptySet())?.toSet() ?: emptySet())
     }
     var selectedLessonIndex by rememberSaveable(course.id) { mutableStateOf(0) }
+    var tab by rememberSaveable(course.id) { mutableStateOf(CourseTab.Lessons) }
     val selectedLesson = course.modules[selectedLessonIndex]
     val learningModules = course.modules.chunked(2)
-    val courseCompleted = completed.intersect(course.modules.indices.map { "${course.id}:$it" }.toSet()).size
 
     fun lessonKey(index: Int) = "${course.id}:$index"
+    val doneCount = course.modules.indices.count { lessonKey(it) in completed }
+
     fun markSelectedComplete() {
         val next = completed + lessonKey(selectedLessonIndex)
         completed = next
@@ -867,167 +891,241 @@ private fun CourseDetail(course: BusinessCourse, onBack: () -> Unit, modifier: M
     } else {
         course.videoUrl
     }
+
     Column(
-        modifier = modifier.fillMaxSize().background(colors.canvas)
-            .windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = Vizit.space.md),
+        modifier = modifier.fillMaxSize().background(CoursePlayerColors.canvas)
+            .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        VizitBrandHeader(style = VizitBrandHeaderStyle.Compact, onBack = onBack)
-        Spacer(Modifier.height(Vizit.space.xs))
-        Text(course.category.uppercase(), style = Vizit.type.overline, color = colors.primary)
-        Text(
-            course.title,
-            style = Vizit.type.h3,
-            color = colors.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(Vizit.space.sm))
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = colors.surface),
-            shape = RoundedCornerShape(Vizit.radius.lg),
-            border = BorderStroke(1.dp, colors.border),
-        ) {
-            Column(Modifier.fillMaxWidth()) {
+        // The video owns the top of the screen; the only way back sits on it.
+        Box(Modifier.fillMaxWidth().background(Color.Black)) {
+            key(selectedLessonIndex) {
                 YouTubeLessonPlayer(selectedVideoUrl, selectedLessonIndex) { markSelectedComplete() }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(Vizit.space.sm),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("AKTUÁLIS LECKE", style = Vizit.type.overline, color = colors.primary)
-                        Text(
-                            selectedLesson.title,
-                            style = Vizit.type.h3,
-                            color = colors.textPrimary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            selectedLesson.summary,
-                            style = Vizit.type.bodySmall,
-                            color = colors.textSecondary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    val isComplete = lessonKey(selectedLessonIndex) in completed
-                    Icon(
-                        if (isComplete) Icons.Outlined.CheckCircle else Icons.Outlined.PlayCircleOutline,
-                        contentDescription = if (isComplete) "Lecke teljesítve" else "Lecke folyamatban",
-                        tint = if (isComplete) colors.success else colors.primary,
-                    )
-                }
             }
-        }
-        Spacer(Modifier.height(Vizit.space.sm))
-
-        Column(
-            modifier = Modifier.fillMaxWidth().background(colors.surface)
-                .border(1.dp, colors.border, RoundedCornerShape(Vizit.radius.sm))
-                .padding(Vizit.space.sm),
-            verticalArrangement = Arrangement.spacedBy(Vizit.space.xs),
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("TANANYAG", style = Vizit.type.overline, color = colors.primary)
-                    Text(
-                        "${learningModules.size} modul · ${course.modules.size} lecke",
-                        style = Vizit.type.bodySmall,
-                        color = colors.textSecondary,
-                    )
-                }
-                Text("$courseCompleted/${course.modules.size}", style = Vizit.type.label, color = colors.textPrimary)
-            }
-            LinearProgressIndicator(
-                progress = { courseCompleted.toFloat() / course.modules.size },
-                modifier = Modifier.fillMaxWidth(),
-                color = colors.primary,
-                trackColor = colors.controlTrack,
-            )
-        }
-        Spacer(Modifier.height(Vizit.space.xs))
-
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            verticalArrangement = Arrangement.spacedBy(Vizit.space.sm),
-        ) {
-        if (selectedLesson.resourceUrl != selectedVideoUrl) {
-            item {
-                VizitButton(
-                    selectedLesson.resourceTitle,
-                    { runCatching { uriHandler.openUri(selectedLesson.resourceUrl) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    style = VizitButtonStyle.Secondary,
-                    icon = Icons.Outlined.Language,
+            Box(
+                modifier = Modifier.padding(Vizit.space.xs).size(44.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = "Vissza a kurzusokhoz",
+                    tint = Color.White,
                 )
             }
         }
-        items(learningModules.indices.toList()) { moduleIndex ->
-            val moduleLessons = learningModules[moduleIndex]
-            val firstLessonIndex = moduleIndex * 2
-            val moduleComplete = moduleLessons.indices.all { lessonKey(firstLessonIndex + it) in completed }
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = colors.surface),
-                border = BorderStroke(1.dp, colors.border),
-            ) {
+
+        Column(
+            Modifier.fillMaxWidth().padding(
+                start = Vizit.space.md, end = Vizit.space.md,
+                top = Vizit.space.md, bottom = Vizit.space.sm,
+            ),
+            verticalArrangement = Arrangement.spacedBy(Vizit.space.xxs),
+        ) {
+            Text(course.title, style = Vizit.type.h2, color = CoursePlayerColors.text)
+            Text(course.videoSource, style = Vizit.type.bodySmall, color = CoursePlayerColors.secondary)
+        }
+
+        Row(Modifier.fillMaxWidth().padding(horizontal = Vizit.space.md)) {
+            CourseTab.entries.forEach { item ->
+                val active = item == tab
                 Column(
-                    Modifier.padding(Vizit.space.md),
-                    verticalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp)
+                        .clickable { tab = item },
+                    verticalArrangement = Arrangement.Bottom,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
-                    ) {
-                        Icon(
-                            if (moduleComplete) Icons.Outlined.CheckCircle else Icons.Outlined.School,
-                            null,
-                            tint = if (moduleComplete) colors.success else colors.primary,
-                        )
-                        Column(Modifier.weight(1f)) {
-                            Text("${moduleIndex + 1}. MODUL", style = Vizit.type.overline, color = colors.textMuted)
-                            Text(
-                                if (moduleIndex == 0) "Alapok és felkészülés" else "Gyakorlati alkalmazás",
-                                style = Vizit.type.h3,
-                                color = colors.textPrimary,
-                            )
-                        }
-                        Text(
-                            "${moduleLessons.indices.count { lessonKey(firstLessonIndex + it) in completed }}/${moduleLessons.size}",
-                            style = Vizit.type.caption,
-                            color = colors.textMuted,
-                        )
-                    }
-                    moduleLessons.forEachIndexed { lessonIndex, lesson ->
-                        if (lessonIndex > 0) VizitDivider()
-                        val absoluteIndex = firstLessonIndex + lessonIndex
-                        val isComplete = lessonKey(absoluteIndex) in completed
-                        VizitRow(
-                            label = lesson.title,
-                            modifier = Modifier.background(
-                                if (selectedLessonIndex == absoluteIndex) colors.primarySubtle else Color.Transparent,
-                                RoundedCornerShape(Vizit.radius.sm),
-                            ),
-                            icon = if (isComplete) Icons.Outlined.CheckCircle else Icons.Outlined.PlayCircleOutline,
-                            supporting = "${moduleIndex + 1}.${lessonIndex + 1} · Videólecke",
-                            value = if (selectedLessonIndex == absoluteIndex) "Lejátszás" else null,
-                            onClick = { selectedLessonIndex = absoluteIndex },
-                        )
-                    }
+                    Text(
+                        item.title,
+                        style = if (active) Vizit.type.label else Vizit.type.body,
+                        color = if (active) CoursePlayerColors.text else CoursePlayerColors.secondary,
+                    )
+                    Spacer(Modifier.height(Vizit.space.xs))
+                    Box(
+                        Modifier.fillMaxWidth().height(3.dp)
+                            .background(if (active) CoursePlayerColors.accent else Color.Transparent),
+                    )
                 }
             }
         }
-        item {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(CoursePlayerColors.divider))
+
+        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            when (tab) {
+                CourseTab.Lessons -> {
+                    learningModules.forEachIndexed { moduleIndex, moduleLessons ->
+                        val firstLessonIndex = moduleIndex * 2
+                        val moduleDone = moduleLessons.indices.count { lessonKey(firstLessonIndex + it) in completed }
+                        item(key = "module-$moduleIndex") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(
+                                    start = Vizit.space.md, end = Vizit.space.md,
+                                    top = Vizit.space.lg, bottom = Vizit.space.xs,
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "${moduleIndex + 1}. modul · " +
+                                        if (moduleIndex == 0) "Alapok és felkészülés" else "Gyakorlati alkalmazás",
+                                    style = Vizit.type.label,
+                                    color = CoursePlayerColors.secondary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    "$moduleDone/${moduleLessons.size}",
+                                    style = Vizit.type.caption,
+                                    color = if (moduleDone == moduleLessons.size) {
+                                        CoursePlayerColors.accent
+                                    } else {
+                                        CoursePlayerColors.muted
+                                    },
+                                )
+                            }
+                        }
+                        moduleLessons.forEachIndexed { lessonIndex, lesson ->
+                            val absoluteIndex = firstLessonIndex + lessonIndex
+                            item(key = "lesson-$absoluteIndex") {
+                                CourseLessonRow(
+                                    number = "${moduleIndex + 1}.${lessonIndex + 1}",
+                                    title = lesson.title,
+                                    isDone = lessonKey(absoluteIndex) in completed,
+                                    isCurrent = absoluteIndex == selectedLessonIndex,
+                                    onClick = { selectedLessonIndex = absoluteIndex },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                CourseTab.Resources -> {
+                    item(key = "resources-intro") {
+                        Text(
+                            "A leckékhez tartozó hiteles külső anyagok. A telefon böngészőjében nyílnak meg.",
+                            style = Vizit.type.bodySmall,
+                            color = CoursePlayerColors.secondary,
+                            modifier = Modifier.padding(Vizit.space.md),
+                        )
+                    }
+                    itemsIndexed(course.modules) { _, lesson ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .clickable { runCatching { uriHandler.openUri(lesson.resourceUrl) } }
+                                .padding(horizontal = Vizit.space.md, vertical = Vizit.space.sm)
+                                .defaultMinSize(minHeight = 48.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                        ) {
+                            Icon(
+                                Icons.Outlined.Description,
+                                null,
+                                tint = CoursePlayerColors.accent,
+                                modifier = Modifier.size(22.dp),
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(lesson.resourceTitle, style = Vizit.type.body, color = CoursePlayerColors.text)
+                                Text(lesson.title, style = Vizit.type.caption, color = CoursePlayerColors.muted)
+                            }
+                            Icon(
+                                Icons.Outlined.ArrowForward,
+                                null,
+                                tint = CoursePlayerColors.muted,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+
+                CourseTab.About -> {
+                    item(key = "about") {
+                        Column(
+                            Modifier.padding(Vizit.space.md),
+                            verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
+                        ) {
+                            Text(course.description, style = Vizit.type.body, color = CoursePlayerColors.secondary)
+                            Column(verticalArrangement = Arrangement.spacedBy(Vizit.space.sm)) {
+                                CourseFactRow("Szint", course.level)
+                                CourseFactRow("Terjedelem", "${learningModules.size} modul · ${course.modules.size} lecke")
+                                CourseFactRow("Nyelv", course.duration)
+                                CourseFactRow("Forrás", course.videoSource)
+                                CourseFactRow("Haladásod", "$doneCount / ${course.modules.size} lecke")
+                            }
+                            Text(
+                                "A kész állapotot az alkalmazás akkor rögzíti, ha a videó legalább 90%-a " +
+                                    "ténylegesen lejátszódott. Kézzel nem módosítható, és ezen a készüléken tárolódik.",
+                                style = Vizit.type.caption,
+                                color = CoursePlayerColors.muted,
+                            )
+                        }
+                    }
+                }
+            }
+            item(key = "tail") { Spacer(Modifier.height(Vizit.space.xxl)) }
+        }
+    }
+}
+
+@Composable
+private fun CourseLessonRow(
+    number: String,
+    title: String,
+    isDone: Boolean,
+    isCurrent: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .background(if (isCurrent) CoursePlayerColors.surface else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = Vizit.space.md, vertical = Vizit.space.sm)
+            .defaultMinSize(minHeight = 48.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+    ) {
+        Text(
+            number,
+            style = Vizit.type.body,
+            color = CoursePlayerColors.muted,
+            modifier = Modifier.defaultMinSize(minWidth = 30.dp),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "A kész állapotot az alkalmazás automatikusan rögzíti a videó legalább 90%-ának tényleges lejátszása után. Kézzel nem módosítható.",
-                style = Vizit.type.bodySmall,
-                color = colors.textMuted,
+                title,
+                style = if (isCurrent) Vizit.type.label else Vizit.type.body,
+                color = CoursePlayerColors.text,
+            )
+            Text(
+                when {
+                    isCurrent -> "Videólecke · most játszik"
+                    isDone -> "Videólecke · elvégezve"
+                    else -> "Videólecke"
+                },
+                style = Vizit.type.caption,
+                color = if (isCurrent) CoursePlayerColors.accent else CoursePlayerColors.muted,
             )
         }
-        item { Spacer(Modifier.height(Vizit.space.xl)) }
-        }
+        Icon(
+            when {
+                isDone -> Icons.Outlined.CheckCircle
+                isCurrent -> Icons.Outlined.PlayArrow
+                else -> Icons.Outlined.PlayCircleOutline
+            },
+            contentDescription = null,
+            tint = if (isDone || isCurrent) CoursePlayerColors.accent else CoursePlayerColors.muted,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+@Composable
+private fun CourseFactRow(label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm)) {
+        Text(
+            label,
+            style = Vizit.type.bodySmall,
+            color = CoursePlayerColors.muted,
+            modifier = Modifier.defaultMinSize(minWidth = 96.dp),
+        )
+        Text(value, style = Vizit.type.bodySmall, color = CoursePlayerColors.text, modifier = Modifier.weight(1f))
     }
 }
 
