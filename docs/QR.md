@@ -4,7 +4,7 @@ Két mód készül ugyanabból a lokális profilból.
 
 ## Kontakt QR
 
-`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, legfeljebb 2400 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor L hibajavítást és 4 modul quiet zone-t használ. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on.
+`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, legfeljebb 2200 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor M hibajavítást, 4 modul quiet zone-t és középre helyezett, fehér alapon megjelenő VIZIT V-logót használ. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on.
 
 ## VIZIT profil QR
 
