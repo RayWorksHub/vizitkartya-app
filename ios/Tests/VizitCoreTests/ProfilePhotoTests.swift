@@ -38,9 +38,12 @@ final class ProfilePhotoTests: XCTestCase {
     func testPhotoContactQRIsShortAndContainsNoPrivatePayload() throws {
         let url = try XCTUnwrap(URL(string: "https://vizit-kartya.hu/p/teszt-elek"))
         let link = try XCTUnwrap(ContactQRLink.make(publicURL: url))
-        XCTAssertEqual(link.absoluteString, "https://vizit-kartya.hu/p/teszt-elek?contact=1")
+        XCTAssertEqual(link.absoluteString, "https://vizit-kartya.hu/p/teszt-elek/vcard")
         XCTAssertFalse(link.absoluteString.contains("PHOTO"))
         XCTAssertLessThan(link.absoluteString.utf8.count, 100)
+        XCTAssertNil(ContactQRLink.make(publicURL: try XCTUnwrap(
+            URL(string: "https://vizit-kartya.hu/p/teszt-elek?contact=1")
+        )))
     }
     func testViewCounterTimestampDoesNotConflictWithUnchangedContent() {
         let id = UUID()
