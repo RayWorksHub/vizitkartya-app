@@ -91,9 +91,10 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertTrue(card.contains("ADR;TYPE=WORK:;;Budapest\\, Teszt utca 1.;;;;\r\n"))
         XCTAssertTrue(card.hasSuffix("END:VCARD\r\n"))
     }
-    func testQRDoesNotIncludePhoto() throws {
+    func testStandardQRDoesNotIncludePhotoButExplicitPhotoQRDoes() throws {
         var p = sample(); p.photoBase64 = Data([0xff, 0xd8, 0xff]).base64EncodedString()
         XCTAssertFalse(try VCard.qrPayload(p).contains("PHOTO"))
+        XCTAssertTrue(try VCard.qrPayload(p, includePhoto: true).contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
         XCTAssertTrue(try VCard.encode(p, includePhoto: true).contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
     }
     func testOversizedQRIsNotSilentlyTruncated() {
