@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.nfc.NfcAdapter
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +17,8 @@ import hu.rayworks.vizit.nfc.HcePayloadStore
 import hu.rayworks.vizit.nfc.NfcPayloadFactory
 import hu.rayworks.vizit.nfc.NfcShareEvent
 import hu.rayworks.vizit.nfc.NfcShareEvents
+import hu.rayworks.vizit.qr.PublicProfileUrlFactory
+import hu.rayworks.vizit.ui.design.ThemeMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -43,6 +44,10 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     var automaticSyncEnabled by mutableStateOf(true)
         private set
 
+    /** User-selected appearance. Light is the product default. */
+    var themeMode by mutableStateOf(ThemeMode.LIGHT)
+        private set
+
     var hasOfflineProfileSession by mutableStateOf(false)
         private set
 
@@ -62,6 +67,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             settingsStore.settings.collect { settings ->
                 automaticSyncEnabled = settings.automaticSyncEnabled
+                themeMode = ThemeMode.fromStorage(settings.appearance)
             }
         }
         viewModelScope.launch {
@@ -140,6 +146,11 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.retrySync(userId) }
     }
 
+    fun updateThemeMode(mode: ThemeMode) {
+        themeMode = mode
+        viewModelScope.launch { settingsStore.setAppearance(mode.storageValue) }
+    }
+
     fun updateAutomaticSyncEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.setAutomaticSyncEnabled(enabled)
@@ -161,7 +172,14 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
 
         val fallbackUrl = profile.publicSlug
             .takeIf { profile.isPublic && it.isNotBlank() }
-            ?.let { "${BuildConfig.PUBLIC_PROFILE_BASE_URL}/${Uri.encode(it)}" }
+            ?.let {
+                PublicProfileUrlFactory.createPreferred(
+                    baseUrl = BuildConfig.PUBLIC_PROFILE_BASE_URL,
+                    slug = it,
+                    customDomain = profile.customDomain,
+                    customDomainVerified = profile.customDomainVerified,
+                ).getOrNull()
+            }
 
         val prepared = runCatching {
             NfcPayloadFactory.create(profile.copy(photoBase64 = ""), fallbackUrl)

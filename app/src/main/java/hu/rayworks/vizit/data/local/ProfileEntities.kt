@@ -20,6 +20,8 @@ data class ProfileEntity(
     val contactImagePath: String?,
     val logoPath: String?,
     val publicSlug: String?,
+    @ColumnInfo(defaultValue = "NULL") val customDomain: String? = null,
+    @ColumnInfo(defaultValue = "0") val customDomainVerified: Boolean = false,
     val isPublic: Boolean,
     val updatedAtEpochMs: Long,
     val pendingSync: Boolean,

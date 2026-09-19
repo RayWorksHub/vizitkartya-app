@@ -40,6 +40,8 @@ data class ProfileSyncPayload(
     val contactImagePath: String? = null,
     val logoPath: String? = null,
     val publicSlug: String? = null,
+    val customDomain: String? = null,
+    val customDomainVerified: Boolean = false,
     val isPublic: Boolean = false,
     val fieldOrder: List<String> = emptyList(),
     val fieldVisibility: Map<String, Boolean> = emptyMap(),

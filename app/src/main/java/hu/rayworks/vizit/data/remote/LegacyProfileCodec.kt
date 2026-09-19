@@ -25,6 +25,8 @@ data class LegacyProfileRecord(
     val address: String = "",
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("is_public") val isPublic: Boolean = false,
+    @SerialName("custom_domain") val customDomain: String? = null,
+    @SerialName("custom_domain_verified") val customDomainVerified: Boolean = false,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("social_links") val socialLinks: List<LegacySocialLink> = emptyList(),
 ) {
@@ -32,6 +34,7 @@ data class LegacyProfileRecord(
     fun payload(photo: String? = null): ProfileSyncPayload = ProfileSyncPayload(
         displayName = displayName, company = company, jobTitle = jobTitle, bio = bio,
         displayImagePath = avatarUrl.orEmpty(), publicSlug = slug, isPublic = isPublic,
+        customDomain = customDomain, customDomainVerified = customDomainVerified,
         photoBase64 = photo,
         contacts = listOfNotNull(
             phone.takeIf(String::isNotBlank)?.let { ProfileContactPayload(stableId(ownerId,"phone"),"phone","Telefon",it,0,true) },
@@ -65,7 +68,8 @@ object LegacyProfileCodec {
 
     fun fingerprint(payload: ProfileSyncPayload): String {
         val fields = listOf(payload.displayName, payload.company, payload.jobTitle, payload.bio,
-            payload.publicSlug.orEmpty(), payload.isPublic.toString(), avatar(payload).orEmpty(),
+            payload.publicSlug.orEmpty(), payload.customDomain.orEmpty(),
+            payload.customDomainVerified.toString(), payload.isPublic.toString(), avatar(payload).orEmpty(),
             payload.contacts.firstOrNull { it.kind == "phone" }?.value.orEmpty(),
             payload.contacts.firstOrNull { it.kind == "email" }?.value.orEmpty(),
             payload.addresses.firstOrNull()?.formattedAddress.orEmpty(),
@@ -89,12 +93,18 @@ object LegacyProfileCodec {
             require(bytes.size in 3..262144 && bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte() && bytes[2] == 0xff.toByte())
             require(java.util.Base64.getEncoder().encodeToString(bytes) == it)
         }
-        val slug = payload.publicSlug?.takeIf { it.isNotBlank() } ?: current?.slug ?: "vizit-${ownerId.replace("-", "").take(12)}"
+        val slug = payload.publicSlug?.takeIf { it.isNotBlank() }
+            ?: current?.slug
+            ?: PublicProfileUrlFactory.automaticSlug(payload.displayName, ownerId)
         require(PublicProfileUrlFactory.isValidSlug(slug))
+        val customDomain = payload.customDomain?.takeIf(String::isNotBlank)
+            ?.let(PublicProfileUrlFactory::normalizeCustomDomain)
+        require(customDomain == null || PublicProfileUrlFactory.isValidCustomDomain(customDomain))
         return buildJsonObject {
             if (current == null) { put("id", stableId(ownerId,"profile")); put("owner_id",ownerId) }
             put("slug",slug); put("display_name",payload.displayName); put("company",payload.company)
             put("job_title",payload.jobTitle); put("bio",payload.bio); put("is_public",payload.isPublic)
+            put("custom_domain", customDomain)
             put("phone",payload.contacts.firstOrNull { it.kind == "phone" }?.value.orEmpty())
             put("public_email",payload.contacts.firstOrNull { it.kind == "email" }?.value.orEmpty())
             put("website",payload.links.firstOrNull { it.kind == "website" }?.url.orEmpty())

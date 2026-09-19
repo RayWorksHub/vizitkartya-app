@@ -2,7 +2,7 @@ name: iOS secure IPA
 
 on:
   push:
-    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability]
+    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj]
     paths: ['ios/**', 'config/**', '.github/workflows/ios.yml']
   pull_request:
     branches: [main, develop]
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ios-${{ github.head_ref || github.ref_name }}
+  group: ios-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -163,7 +163,7 @@ jobs:
           failed = result.get('failedTests')
           passed = result.get('passedTests')
           skipped = result.get('skippedTests', 0)
-          expected = 16
+          expected = 18
           if failed != 0 or passed != expected or skipped != 0:
               raise SystemExit(f'Invalid test summary: passed={passed}, failed={failed}, skipped={skipped}')
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
