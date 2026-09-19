@@ -26,7 +26,6 @@ struct ProfileEditor: View {
                         contactSection
                         socialSection
                         sharingSection
-                        storageNote
                     }
                     .padding(.horizontal, VizitSpace.md)
                     .padding(.vertical, VizitSpace.lg)
@@ -318,7 +317,7 @@ struct ProfileEditor: View {
                     text: $draft.publicSlug,
                     placeholder: "pl. kovacs-anna",
                     helper: draft.publicSlug.isEmpty
-                        ? "Az első felhőmentés biztonságos, egyedi azonosítót készít. Ezután itt módosíthatod."
+                        ? "Mentés után automatikusan kapsz egy egyedi címet, amit itt módosíthatsz."
                         : "A nyilvános cím megváltoztatása a korábban megosztott hivatkozásokat érvénytelenné teheti.",
                     autocapitalization: .never,
                     submitLabel: .done
@@ -327,11 +326,4 @@ struct ProfileEditor: View {
         }
     }
 
-    private var storageNote: some View {
-        Text("Először titkosított helyi fájlba mentünk, majd bejelentkezve szinkronizálunk. Mások QR-kódon, megosztott fájlon vagy az általad engedélyezett nyilvános profilon kapják meg az adatokat.")
-            .font(VizitFont.bodySmall)
-            .foregroundStyle(VizitColor.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, VizitSpace.xxs)
-    }
 }

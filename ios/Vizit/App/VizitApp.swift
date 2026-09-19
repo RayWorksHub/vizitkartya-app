@@ -29,7 +29,7 @@ enum SyncStatus: Equatable {
     var label: String {
         switch self {
         case .localOnly: return "Csak ezen a készüléken"
-        case .syncing: return "Biztonságos szinkron folyamatban…"
+        case .syncing: return "Szinkronizálás…"
         case .synced: return "Szinkronizálva"
         case .pending: return "Helyben mentve – feltöltésre vár"
         case .conflict: return "Szinkronütközés – a helyi példányt megőriztük"
@@ -217,7 +217,7 @@ final class AppStore: ObservableObject {
                           defaultError: "A jelszó módosítása nem sikerült.") {
             try await self.cloud?.changePassword(password)
             self.authStatus = .authenticated
-            self.message = "A jelszavadat biztonságosan módosítottuk."
+            self.message = "A jelszavad megváltozott."
             await self.synchronize()
         }
     }
@@ -487,7 +487,7 @@ final class AppStore: ObservableObject {
         } catch {
             guard userID == id else { return }
             syncStatus = .failed
-            let text = "A névjegyet helyben megőriztük, de a felhőszinkron most nem sikerült."
+            let text = "A névjegy mentve. A szinkron később folytatódik."
             syncFailureMessage = text
             message = text
         }
@@ -653,9 +653,6 @@ private struct LaunchScreen: View {
                 ProgressView()
                     .controlSize(.large)
                     .tint(Color(uiColor: UIColor(hex: 0x0FBEE6)))
-                Text("Biztonságos munkamenet ellenőrzése…")
-                    .font(VizitFont.bodySmall)
-                    .foregroundStyle(.white.opacity(0.72))
             }
             .padding(VizitSpace.xl)
         }

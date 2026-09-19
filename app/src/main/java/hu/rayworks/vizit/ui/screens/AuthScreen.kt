@@ -440,7 +440,7 @@ private fun AuthScreenMode.description(): String? = when (this) {
         "Megerősítő e-mailt küldtünk. Ellenőrizd a postafiókodat, majd nyisd meg a levélben kapott linket."
 
     AuthScreenMode.PASSWORD_RESET_SENT ->
-        "A helyreállító linkkel biztonságosan beállíthatod az új jelszavadat."
+        "A helyreállító linkkel beállíthatod az új jelszavadat."
 
     AuthScreenMode.NEW_PASSWORD -> "Adj meg egy új, legalább 8 karakteres jelszót."
     AuthScreenMode.LEGAL_ACCEPTANCE ->

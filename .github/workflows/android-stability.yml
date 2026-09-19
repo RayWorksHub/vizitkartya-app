@@ -75,7 +75,7 @@ jobs:
           printf 'source=%s\nphysical_device_test=NOT_RUN\ngoogle_auth=NOT_VERIFIED\n' "$GITHUB_SHA" > release-evidence/release-status.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: VIZIT-5.0.0-DEV-APK
+          name: VIZIT-5.1.0-DEV-APK
           path: |
             app/build/outputs/apk/dev/debug/app-dev-debug.apk
             release-evidence

@@ -18,8 +18,15 @@ struct HomeScreen: View {
         NavigationStack {
             VizitScreen {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: VizitSpace.xl) {
-                        header
+                    VStack(alignment: .leading, spacing: VizitSpace.lg) {
+                        VizitBrandHeader(style: .full)
+                            .padding(.top, VizitSpace.xs)
+                            .padding(.bottom, VizitSpace.xs)
+
+                        VizitUserBadge(
+                            profile: store.profile,
+                            nameIdentifier: store.hasProfile ? "card.name" : nil
+                        ) { selectedTab = .card }
 
                         VizitDigitalCard(profile: store.profile)
                             .onTapGesture { selectedTab = .card }
@@ -70,39 +77,6 @@ struct HomeScreen: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Üdv újra,")
-                    .font(VizitFont.bodySmall)
-                    .foregroundStyle(VizitColor.textMuted)
-                if store.hasProfile {
-                    Text(store.profile.displayName)
-                        .font(VizitFont.h2)
-                        .foregroundStyle(VizitColor.textPrimary)
-                        .lineLimit(1)
-                        .accessibilityIdentifier("card.name")
-                } else {
-                    Text("VIZIT")
-                        .font(VizitFont.h2)
-                        .foregroundStyle(VizitColor.textPrimary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer()
-            Button { selectedTab = .card } label: {
-                Text(store.profile.initials.isEmpty ? "V" : store.profile.initials)
-                    .font(VizitFont.label)
-                    .foregroundStyle(VizitColor.primary)
-                    .frame(width: 40, height: 40)
-                    .background(VizitColor.primarySubtle)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Névjegyem megnyitása")
-        }
-        .padding(.top, VizitSpace.md)
-    }
 }
 
 private struct QuickTile: View {
@@ -167,6 +141,8 @@ struct CardScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.lg) {
+                        VizitBrandHeader(style: .compact)
+
                         Text("Névjegyem")
                             .font(VizitFont.h1)
                             .foregroundStyle(VizitColor.textPrimary)
@@ -282,6 +258,8 @@ struct ShareScreen: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
                         VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                            VizitBrandHeader(style: .compact)
+
                             Text("Megosztás")
                                 .font(VizitFont.h1)
                                 .foregroundStyle(VizitColor.textPrimary)
@@ -696,11 +674,13 @@ struct BusinessHubScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        VizitBrandHeader(style: .compact)
+                            .padding(.top, VizitSpace.xs)
+
                         Text("Hasznos külső források hírekhez, fejlődéshez és ügyintézéshez.")
                             .font(VizitFont.body)
                             .foregroundStyle(VizitColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, VizitSpace.xs)
 
                         VizitGroup {
                             ForEach(Array(resources.enumerated()), id: \.element.id) { index, resource in
@@ -767,6 +747,8 @@ struct SettingsScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        VizitBrandHeader(style: .compact)
+
                         Text("Beállítások")
                             .font(VizitFont.h1)
                             .foregroundStyle(VizitColor.textPrimary)
@@ -823,13 +805,9 @@ struct SettingsScreen: View {
                         VizitSectionHeader(title: "Adatvédelem")
                         VizitPanel {
                             VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                                Text("A helyi névjegy teljes fájlvédelemmel, a munkamenet pedig az iPhone kulcstárában tárolódik.")
+                                Text("A megosztott vagy Kontaktokba mentett példányokat a helyi törlés nem vonja vissza.")
                                     .font(VizitFont.bodySmall)
                                     .foregroundStyle(VizitColor.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Text("A megosztott vagy Kontaktokba mentett példányokat a helyi törlés nem vonja vissza.")
-                                    .font(VizitFont.caption)
-                                    .foregroundStyle(VizitColor.textMuted)
                                     .fixedSize(horizontal: false, vertical: true)
                                 if let issue = store.storageError {
                                     VizitBanner(text: issue, tone: .error)

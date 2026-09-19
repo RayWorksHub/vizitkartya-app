@@ -45,6 +45,9 @@ import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
+import hu.rayworks.vizit.ui.design.components.VizitUserBadge
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitDigitalCard
 import hu.rayworks.vizit.ui.design.components.VizitIconChip
@@ -89,34 +92,14 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.height(Vizit.space.xs))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Üdv újra,", style = Vizit.type.bodySmall, color = colors.textMuted)
-                    Text(
-                        text = profile.resolvedDisplayName.ifBlank { "VIZIT" },
-                        style = Vizit.type.h2,
-                        color = colors.textPrimary,
-                        maxLines = 1,
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(colors.primarySubtle, RoundedCornerShape(Vizit.radius.full))
-                        .clickable(role = Role.Button, onClick = onOpenCard),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = profile.initials.ifBlank { "V" },
-                        style = Vizit.type.label,
-                        color = colors.primary,
-                    )
-                }
-            }
+            VizitBrandHeader(style = VizitBrandHeaderStyle.Full)
+
+            VizitUserBadge(
+                displayName = profile.resolvedDisplayName,
+                initials = profile.initials,
+                photoBase64 = profile.photoBase64,
+                onClick = onOpenCard,
+            )
 
             Box(modifier = Modifier.clickable(role = Role.Button, onClick = onOpenCard)) {
                 VizitDigitalCard(

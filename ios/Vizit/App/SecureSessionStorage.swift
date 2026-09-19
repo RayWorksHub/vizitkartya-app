@@ -60,8 +60,8 @@ enum KeychainError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .status(let code): return "A biztonságos munkamenet-tároló nem érhető el (\(code))."
-        case .unexpectedData: return "A biztonságos munkamenet-tároló sérült adatot tartalmaz."
+        case .status(let code): return "A bejelentkezés nem menthető el (\(code))."
+        case .unexpectedData: return "A mentett bejelentkezés sérült. Jelentkezz be újra."
         }
     }
 }

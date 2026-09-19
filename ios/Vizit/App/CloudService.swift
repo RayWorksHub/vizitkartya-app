@@ -501,12 +501,12 @@ enum CloudError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidCallback: return "A bejelentkezési hivatkozás nem a VIZIT biztonságos visszahívási címe."
+        case .invalidCallback: return "A bejelentkezési hivatkozás érvénytelen."
         case .profileConflict: return "A profil közben másik eszközön megváltozott. Válaszd ki a megtartandó változatot."
-        case .invalidRequest: return "A kiszolgáló kérése nem állítható össze biztonságosan."
+        case .invalidRequest: return "A kérés most nem küldhető el. Próbáld újra."
         case .emptyResponse: return "A kiszolgáló nem adott vissza mentett profilt."
         case .emailConfirmationDisabled: return "A kiszolgálón nincs kötelező e-mail-megerősítés. A munkamenetet biztonsági okból megszakítottuk."
-        case .providerUnavailable: return "A Google-bejelentkezés ezen a biztonságos builden nincs engedélyezve."
+        case .providerUnavailable: return "A Google-bejelentkezés ebben a verzióban nem érhető el."
         case .passwordResetCooldown(let seconds):
             return "Már kértél visszaállító levelet. Várj még \(seconds) másodpercet, vagy nyisd meg a legutóbbi levelet."
         case .server(let status, let code):

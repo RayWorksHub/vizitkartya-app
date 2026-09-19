@@ -227,10 +227,6 @@ struct AuthScreen: View {
 
     private var footer: some View {
         VStack(spacing: VizitSpace.xs) {
-            Label("Titkosított munkamenet az iPhone-kulcstárban", systemImage: "lock.shield")
-                .font(VizitFont.caption)
-                .foregroundStyle(VizitColor.textMuted)
-                .multilineTextAlignment(.center)
             Text(buildVersionLabel)
                 .font(VizitFont.caption.monospacedDigit())
                 .foregroundStyle(VizitColor.textMuted)
@@ -278,7 +274,7 @@ struct AuthScreen: View {
                             Text("Új jelszó kérése")
                                 .font(VizitFont.h2)
                                 .foregroundStyle(VizitColor.textPrimary)
-                            Text("Add meg az e-mail-címed, és elküldjük a biztonságos jelszó-visszaállító hivatkozást.")
+                            Text("Add meg az e-mail-címed, és elküldjük a jelszó-visszaállító hivatkozást.")
                                 .font(VizitFont.body)
                                 .foregroundStyle(VizitColor.textSecondary)
                                 .multilineTextAlignment(.center)

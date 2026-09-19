@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
 import hu.rayworks.vizit.ui.design.components.VizitDigitalCard
@@ -79,6 +81,8 @@ fun CardScreen(
         verticalArrangement = Arrangement.spacedBy(Vizit.space.lg),
     ) {
         Spacer(Modifier.height(Vizit.space.xs))
+        VizitBrandHeader(style = VizitBrandHeaderStyle.Compact)
+
         Text("Névjegyem", style = Vizit.type.h1, color = Vizit.colors.textPrimary)
 
         VizitDigitalCard(

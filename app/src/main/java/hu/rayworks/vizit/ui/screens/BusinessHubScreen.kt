@@ -35,6 +35,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
 import hu.rayworks.vizit.ui.design.components.VizitDivider
 import hu.rayworks.vizit.ui.design.components.VizitGroup
 import hu.rayworks.vizit.ui.design.components.VizitIconButton
@@ -82,19 +84,16 @@ fun BusinessHubScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .padding(horizontal = Vizit.space.md),
         verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            VizitIconButton(
-                icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Vissza",
-                onClick = onBack,
-            )
-            Text(
-                text = "Tudástár",
-                style = Vizit.type.h3,
-                color = colors.textPrimary,
-                modifier = Modifier.padding(start = Vizit.space.xs),
-            )
-        }
+        VizitBrandHeader(
+            style = VizitBrandHeaderStyle.Compact,
+            onBack = onBack,
+        )
+
+        Text(
+            text = "Tudástár",
+            style = Vizit.type.h2,
+            color = colors.textPrimary,
+        )
 
         Text(
             text = "Hasznos külső források hírekhez, fejlődéshez és ügyintézéshez.",

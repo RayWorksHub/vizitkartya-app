@@ -85,7 +85,7 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
                 Booting("Névjegy betöltése…")
             }
 
-        AuthSessionState.Initializing -> Booting("Biztonságos munkamenet ellenőrzése…")
+        AuthSessionState.Initializing -> Booting("Betöltés…")
 
         AuthSessionState.BackendUnavailable -> Screen {
             VizitEmptyState(

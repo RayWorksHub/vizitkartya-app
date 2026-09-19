@@ -61,6 +61,8 @@ import hu.rayworks.vizit.qr.QrMode
 import hu.rayworks.vizit.qr.QrPayloadFactory
 import hu.rayworks.vizit.qr.QrShareHelper
 import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
 import hu.rayworks.vizit.ui.design.components.VizitEmptyState
@@ -128,6 +130,8 @@ fun ShareScreen(
             verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
         ) {
             Spacer(Modifier.height(Vizit.space.xs))
+            VizitBrandHeader(style = VizitBrandHeaderStyle.Compact)
+
             Text("Megosztás", style = Vizit.type.h1, color = colors.textPrimary)
             Text(
                 text = "Érintsd össze a telefonokat, vagy mutasd a QR-kódot. A fogadó félnek nem kell VIZIT.",

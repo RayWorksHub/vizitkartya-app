@@ -54,8 +54,8 @@ android {
         applicationId = "hu.rayworks.vizit"
         minSdk = 29
         targetSdk = 36
-        versionCode = 5000000
-        versionName = "5.0.0"
+        versionCode = 5010000
+        versionName = "5.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

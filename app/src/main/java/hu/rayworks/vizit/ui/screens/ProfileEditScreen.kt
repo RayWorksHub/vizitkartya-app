@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.PhotoProcessor
 import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
+import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
 import hu.rayworks.vizit.ui.design.components.VizitDivider
@@ -104,19 +106,16 @@ fun ProfileEditScreen(
                 .padding(horizontal = Vizit.space.md),
             verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                VizitIconButton(
-                    icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Vissza",
-                    onClick = onClose,
-                )
-                Text(
-                    text = "Névjegy szerkesztése",
-                    style = Vizit.type.h3,
-                    color = colors.textPrimary,
-                    modifier = Modifier.padding(start = Vizit.space.xs),
-                )
-            }
+            VizitBrandHeader(
+                style = VizitBrandHeaderStyle.Compact,
+                onBack = onClose,
+            )
+
+            Text(
+                text = "Névjegy szerkesztése",
+                style = Vizit.type.h2,
+                color = colors.textPrimary,
+            )
 
             // --- Photo
             VizitSectionHeader("Profilkép")
