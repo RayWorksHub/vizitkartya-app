@@ -4,7 +4,7 @@ Két mód készül ugyanabból a lokális profilból.
 
 ## Kontakt QR
 
-`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, Base64 profilkép nélkül, legfeljebb 1800 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor M hibajavítást és 4 modul quiet zone-t használ; a magyar szöveg determinisztikus round-trip unit tesztje a 9. Android CI-futásban sikeres. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on, ezért még nem `DEVICE TESTED` vagy `SUPPORTED`.
+`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, legfeljebb 2400 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor L hibajavítást és 4 modul quiet zone-t használ. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on.
 
 ## VIZIT profil QR
 
@@ -12,10 +12,11 @@ Két mód készül ugyanabból a lokális profilból.
 
 ## Fényképes kontakt QR
 
-Szinkronizált, nyilvános és profilképpel rendelkező névjegynél a Kontakt QR a
-`https://<profile-host>/p/{slug}/vcard` végpontot kódolja. A kamera így közvetlenül
-a `text/vcard` névjegyfájlt nyitja meg; a profiloldali `?contact=1` köztes lépés
-nem használható ehhez a módhoz.
+A QR-kód maga tartalmazza a `BEGIN:VCARD` névjegyet és az erősen optimalizált
+JPEG profilképet. Nem tartalmaz `https://` hivatkozást, mert azt a rendszerkamerák
+weboldalként osztályozzák még a szerver válasza előtt. Ha a kép az optimalizálás
+után sem fér el biztonságosan, az alkalmazás hagyományos Kontakt QR-t jelenít meg,
+és nem nevezi fényképesnek.
 
 ## UX
 
