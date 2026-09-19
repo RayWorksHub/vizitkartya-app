@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import hu.rayworks.vizit.NfcStatus
+import hu.rayworks.vizit.R
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.qr.QrCodeGenerator
 import hu.rayworks.vizit.qr.QrMode
@@ -90,6 +92,9 @@ fun ShareScreen(
 ) {
     val colors = Vizit.colors
     val context = LocalContext.current
+    val qrLogo = remember(context) {
+        BitmapFactory.decodeResource(context.resources, R.drawable.vizit_logo_mark)
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var qrMode by rememberSaveable { mutableStateOf(QrMode.CONTACT) }
@@ -111,9 +116,9 @@ fun ShareScreen(
             QrMode.CONTACT -> photoContactPayload ?: contactPayload.getOrNull()
         }
     }
-    val qrBitmap = remember(qrPayload) {
+    val qrBitmap = remember(qrPayload, qrLogo) {
         qrPayload?.takeIf(String::isNotBlank)?.let {
-            runCatching { QrCodeGenerator.create(it) }.getOrNull()
+            runCatching { QrCodeGenerator.create(it, logo = qrLogo) }.getOrNull()
         }
     }
 
