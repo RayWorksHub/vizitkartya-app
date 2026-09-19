@@ -10,6 +10,13 @@ Két mód készül ugyanabból a lokális profilból.
 
 `PARTIALLY SUPPORTED`: validált, normalizált HTTPS URL `https://<profile-host>/p/{slug}` generálása és az Android App Link intent elkészült. A publikus profiloldal és a domain `assetlinks.json` még szükséges a teljes end-to-end működéshez.
 
+## Fényképes kontakt QR
+
+Szinkronizált, nyilvános és profilképpel rendelkező névjegynél a Kontakt QR a
+`https://<profile-host>/p/{slug}/vcard` végpontot kódolja. A kamera így közvetlenül
+a `text/vcard` névjegyfájlt nyitja meg; a profiloldali `?contact=1` köztes lépés
+nem használható ehhez a módhoz.
+
 ## UX
 
 Megvalósítva:
