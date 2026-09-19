@@ -367,7 +367,7 @@ struct ShareScreen: View {
             return "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
         }
         if photoContactURL != nil {
-            return "Beolvasás után a profilképpel együtt menthető a névjegy."
+            return "Beolvasás után közvetlenül megnyílik a profilképes névjegy mentése."
         }
         return "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
     }
