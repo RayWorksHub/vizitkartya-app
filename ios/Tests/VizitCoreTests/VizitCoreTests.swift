@@ -111,6 +111,10 @@ final class VizitCoreTests: XCTestCase {
             + String(repeating: "n", count: 63) + ".hu"
         p.website = "https://example.com/" + String(repeating: "w", count: 280)
         p.linkedIn = "https://linkedin.com/in/" + String(repeating: "x", count: 276)
+        p.facebook = "https://facebook.com/" + String(repeating: "y", count: 279)
+        p.instagram = "https://instagram.com/" + String(repeating: "z", count: 278)
+        p.tiktok = "https://tiktok.com/@" + String(repeating: "t", count: 279)
+        p.youtube = "https://youtube.com/@" + String(repeating: "u", count: 279)
         XCTAssertNoThrow(try p.validate(), "The profile itself must stay inside every database field limit")
         XCTAssertThrowsError(try VCard.qrPayload(p)) { XCTAssertEqual($0 as? ProfileError, .oversizedQR) }
     }
