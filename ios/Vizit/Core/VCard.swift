@@ -27,11 +27,11 @@ public enum VCard {
         return lines.map(fold).joined(separator: "\r\n") + "\r\n"
     }
 
-    public static func qrPayload(_ profile: ContactProfile) throws -> String {
-        let payload = try encode(profile)
+    public static func qrPayload(_ profile: ContactProfile, includePhoto: Bool = false) throws -> String {
+        let payload = try encode(profile, includePhoto: includePhoto)
         // Keep enough module headroom for reliable camera decoding on a
         // handheld screen; the .vcf share route remains available for denser data.
-        guard payload.utf8.count <= 1400 else { throw ProfileError.oversizedQR }
+        guard payload.utf8.count <= 2400 else { throw ProfileError.oversizedQR }
         return payload
     }
 
