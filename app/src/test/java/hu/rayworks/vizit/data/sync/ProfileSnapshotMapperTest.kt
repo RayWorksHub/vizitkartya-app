@@ -27,6 +27,7 @@ class ProfileSnapshotMapperTest {
             youtube = " https://youtube.com/@elek ",
             photoBase64 = "local-photo",
             publicSlug = " teszt-elek ",
+            customDomain = " HTTPS://Nevjegy.Example.HU/ ",
             isPublic = true,
         )
         val snapshot = ProfileSnapshotMapper.toLocalSnapshot(
@@ -48,6 +49,8 @@ class ProfileSnapshotMapperTest {
         assertEquals("https://youtube.com/@elek", restored.youtube)
         assertTrue(snapshot.profile.pendingSync)
         assertTrue(payload.isPublic)
+        assertEquals("nevjegy.example.hu", payload.customDomain)
+        assertFalse(payload.customDomainVerified)
         assertTrue(payload.contacts.all { !it.isPublic })
         assertTrue(payload.links.all { !it.isPublic })
         assertTrue(payload.addresses.all { !it.isPublic })

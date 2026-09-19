@@ -268,15 +268,43 @@ fun ProfileEditScreen(
                 )
                 if (draft.isPublic) {
                     VizitDivider()
-                    Box(modifier = Modifier.padding(Vizit.space.md)) {
+                    Column(
+                        modifier = Modifier.padding(Vizit.space.md),
+                        verticalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                    ) {
+                        Text(
+                            text = "Automatikus profilcím",
+                            style = Vizit.type.label,
+                            color = colors.textSecondary,
+                        )
+                        Text(
+                            text = draft.publicSlug.takeIf(String::isNotBlank)
+                                ?.let { "e-nevjegy.vercel.app/p/$it" }
+                                ?: "Az egyedi azonosítót az első mentéskor a nevedből hozzuk létre.",
+                            style = Vizit.type.bodySmall,
+                            color = colors.textMuted,
+                        )
                         VizitTextField(
-                            value = draft.publicSlug,
-                            onValueChange = { draft = draft.copy(publicSlug = it.lowercase()) },
-                            label = "Profilazonosító",
-                            placeholder = "csukardi-rajmund",
+                            value = draft.customDomain,
+                            onValueChange = {
+                                draft = draft.copy(customDomain = it, customDomainVerified = false)
+                            },
+                            label = "Egyedi domain (opcionális)",
+                            placeholder = "nevjegy.cegem.hu",
                             keyboardType = KeyboardType.Uri,
                             imeAction = ImeAction.Done,
                         )
+                        if (draft.customDomain.isNotBlank()) {
+                            Text(
+                                text = if (draft.customDomainVerified) {
+                                    "Ellenőrzött domain · ezt használja a QR és az NFC."
+                                } else {
+                                    "Beállításra vár · addig a biztos VIZIT-cím marad aktív."
+                                },
+                                style = Vizit.type.bodySmall,
+                                color = if (draft.customDomainVerified) colors.success else colors.warning,
+                            )
+                        }
                     }
                 }
             }

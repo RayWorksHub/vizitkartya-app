@@ -10,9 +10,11 @@ object QrPayloadFactory {
 
     fun profileUrl(profile: ContactProfile, synchronized: Boolean = false): String? {
         if (!synchronized || !profile.isPublic || profile.publicSlug.isBlank()) return null
-        return PublicProfileUrlFactory.create(
+        return PublicProfileUrlFactory.createPreferred(
             baseUrl = BuildConfig.PUBLIC_PROFILE_BASE_URL,
             slug = profile.publicSlug,
+            customDomain = profile.customDomain,
+            customDomainVerified = profile.customDomainVerified,
         ).getOrNull()
     }
 

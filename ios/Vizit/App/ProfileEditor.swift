@@ -312,16 +312,39 @@ struct ProfileEditor: View {
                     .tint(VizitColor.primary)
                 }
 
-                VizitTextField(
-                    label: "Profilazonosító",
-                    text: $draft.publicSlug,
-                    placeholder: "pl. kovacs-anna",
-                    helper: draft.publicSlug.isEmpty
-                        ? "Mentés után automatikusan kapsz egy egyedi címet, amit itt módosíthatsz."
-                        : "A nyilvános cím megváltoztatása a korábban megosztott hivatkozásokat érvénytelenné teheti.",
-                    autocapitalization: .never,
-                    submitLabel: .done
-                )
+                if draft.isPublic {
+                    VizitPanel {
+                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                            Text("Automatikus profilcím")
+                                .font(VizitFont.label)
+                                .foregroundStyle(VizitColor.textSecondary)
+                            Text(draft.publicSlug.isEmpty
+                                 ? "Az egyedi azonosítót az első mentéskor a nevedből hozzuk létre."
+                                 : "e-nevjegy.vercel.app/p/\(draft.publicSlug)")
+                                .font(VizitFont.bodySmall)
+                                .foregroundStyle(VizitColor.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    VizitTextField(
+                        label: "Egyedi domain (opcionális)",
+                        text: Binding(
+                            get: { draft.customDomain },
+                            set: {
+                                draft.customDomain = $0
+                                draft.customDomainVerified = false
+                            }
+                        ),
+                        placeholder: "nevjegy.cegem.hu",
+                        helper: draft.customDomain.isEmpty ? nil : (draft.customDomainVerified
+                            ? "Ellenőrzött domain · ezt használja a QR és az NFC."
+                            : "Beállításra vár · addig a biztos VIZIT-cím marad aktív."),
+                        keyboard: .URL,
+                        autocapitalization: .never,
+                        submitLabel: .done
+                    )
+                }
             }
         }
     }

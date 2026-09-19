@@ -174,8 +174,8 @@ fun HomeScreen(
 
             VizitGroup {
                 VizitRow(
-                    label = "Tudástár",
-                    supporting = "Tippek a digitális névjegyhez",
+                    label = "Vállalkozói Portál",
+                    supporting = "VOSZ, edukáció, digitális segítség és eszköztár",
                     icon = Icons.AutoMirrored.Outlined.MenuBook,
                     onClick = onOpenKnowledgeHub,
                 )

@@ -61,6 +61,10 @@ class LegacyProfileRemoteDataSource(private val client: SupabaseClient?) : Profi
                     "job_title" -> value.jsonPrimitive.content == before.jobTitle
                     "bio" -> value.jsonPrimitive.content == before.bio
                     "is_public" -> value.jsonPrimitive.boolean == before.isPublic
+                    "custom_domain" -> value.let {
+                        if (it is JsonNull) before.customDomain == null
+                        else it.jsonPrimitive.content == before.customDomain.orEmpty()
+                    }
                     "phone" -> value.jsonPrimitive.content == before.phone
                     "public_email" -> value.jsonPrimitive.content == before.publicEmail
                     "website" -> value.jsonPrimitive.content == before.website
@@ -115,6 +119,7 @@ class LegacyProfileRemoteDataSource(private val client: SupabaseClient?) : Profi
         val result = snapshot(verified)
         // Never announce success after a concurrent edit of the just-written primary fields.
         val expected = mutation.payload.copy(publicSlug = saved.slug,
+            customDomain = saved.customDomain, customDomainVerified = saved.customDomainVerified,
             displayImagePath = saved.avatarUrl.orEmpty(), photoBase64 = mutation.payload.photoBase64)
         if (LegacyProfileCodec.fingerprint(expected) != LegacyProfileCodec.fingerprint(result.payload)) {
             return RemoteProfileSyncResult.Conflict(result.serverVersion,result.payload)

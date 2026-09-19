@@ -410,6 +410,8 @@ final class AppStore: ObservableObject {
                         var latest = profile
                         if latest.publicSlug == localProfile.publicSlug {
                             latest.publicSlug = remote.slug
+                            latest.customDomain = remote.customDomain ?? ""
+                            latest.customDomainVerified = remote.customDomainVerified == true
                             try storage.save(latest)
                             profile = latest
                         }
@@ -421,6 +423,8 @@ final class AppStore: ObservableObject {
                     }
                     var local = localProfile
                     local.publicSlug = remote.slug
+                    local.customDomain = remote.customDomain ?? ""
+                    local.customDomainVerified = remote.customDomainVerified == true
                     try storage.save(local)
                     profile = local
                     try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
@@ -444,6 +448,9 @@ final class AppStore: ObservableObject {
                 metadata.remoteFingerprint = verified.0.fingerprint
                 var photoSynced = profile
                 photoSynced.photoSyncInitialized = true
+                photoSynced.publicSlug = verified.1.publicSlug
+                photoSynced.customDomain = verified.1.customDomain
+                photoSynced.customDomainVerified = verified.1.customDomainVerified
                 try storage.save(photoSynced)
                 profile = photoSynced
                 metadata.pendingUpload = false

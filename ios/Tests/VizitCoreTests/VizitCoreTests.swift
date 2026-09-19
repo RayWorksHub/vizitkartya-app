@@ -186,6 +186,8 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertEqual(profile.instagram, "")
         XCTAssertEqual(profile.tiktok, "")
         XCTAssertEqual(profile.youtube, "")
+        XCTAssertEqual(profile.customDomain, "")
+        XCTAssertFalse(profile.customDomainVerified)
     }
 
     func testPublicProfileURLRequiresHTTPSAndStrictSlug() {
@@ -208,6 +210,32 @@ final class VizitCoreTests: XCTestCase {
         ])
         XCTAssertTrue(values.allSatisfy { PublicProfileLink.isValidSlug($0) })
         XCTAssertTrue(values.allSatisfy { $0.count <= 50 })
+    }
+
+    func testProfileCreationGeneratesReadableHungarianIdentifier() {
+        let owner = UUID(uuidString: "E4B43DA4-4717-4E69-B945-7BF454CA9E34")!
+        let values = ProfileSlug.creationCandidates(requested: "", displayName: "Csukárdi Rajmund", ownerID: owner)
+        XCTAssertEqual(values.first, "csukardi-rajmund")
+        XCTAssertTrue(values.allSatisfy { PublicProfileLink.isValidSlug($0) })
+    }
+
+    func testVerifiedCustomDomainOverridesCanonicalAddress() {
+        let base = URL(string: "https://e-nevjegy.vercel.app/p")!
+        XCTAssertEqual(
+            PublicProfileLink.preferred(
+                baseURL: base, slug: "teszt-elek", customDomain: "nevjegy.example.hu",
+                customDomainVerified: true
+            )?.absoluteString,
+            "https://nevjegy.example.hu"
+        )
+        XCTAssertEqual(
+            PublicProfileLink.preferred(
+                baseURL: base, slug: "teszt-elek", customDomain: "nevjegy.example.hu",
+                customDomainVerified: false
+            )?.absoluteString,
+            "https://e-nevjegy.vercel.app/p/teszt-elek"
+        )
+        XCTAssertFalse(CustomProfileDomain.isValid("https://example.hu/path"))
     }
 
     func testUnknownFirstUploadRevisionRequiresExplicitConflictResolution() {

@@ -17,6 +17,8 @@ struct RemoteProfile: Decodable, Sendable {
     let website: String
     let address: String
     let isPublic: Bool
+    let customDomain: String?
+    let customDomainVerified: Bool?
     let updatedAt: String
     let avatarURL: String?
     var linkedIn = ""
@@ -27,7 +29,8 @@ struct RemoteProfile: Decodable, Sendable {
 
     var fingerprint: String {
         let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company,
-                      publicEmail, phone, website, address, String(isPublic), avatarURL ?? ""]
+                      publicEmail, phone, website, address, String(isPublic), customDomain ?? "",
+                      String(customDomainVerified == true), avatarURL ?? ""]
             + SocialPlatform.allCases.map { socialURL(for: $0) }
         let bytes = (try? JSONEncoder().encode(values)) ?? Data()
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
@@ -38,6 +41,7 @@ struct RemoteProfile: Decodable, Sendable {
         return displayName == p.displayName && slug == p.publicSlug && jobTitle == p.jobTitle &&
             company == p.company && publicEmail == p.email && phone == p.phone && website == p.website &&
             address == p.address && isPublic == p.isPublic &&
+            (customDomain ?? "") == p.customDomain &&
             SocialPlatform.allCases.allSatisfy { socialURL(for: $0) == p.socialURL(for: $0) } &&
             (avatarURL ?? "") == ((try? ProfilePhoto.inlineURL(p.photoBase64)) ?? "invalid-photo")
     }
@@ -76,6 +80,8 @@ struct RemoteProfile: Decodable, Sendable {
         case company
         case publicEmail = "public_email"
         case isPublic = "is_public"
+        case customDomain = "custom_domain"
+        case customDomainVerified = "custom_domain_verified"
         case avatarURL = "avatar_url"
         case updatedAt = "updated_at"
     }
@@ -99,6 +105,7 @@ private struct ProfileWrite: Encodable {
     let website: String
     let address: String
     let isPublic: Bool
+    let customDomain: String?
     let avatarURL: String
 
     enum CodingKeys: String, CodingKey {
@@ -108,6 +115,7 @@ private struct ProfileWrite: Encodable {
         case jobTitle = "job_title"
         case publicEmail = "public_email"
         case isPublic = "is_public"
+        case customDomain = "custom_domain"
         case avatarURL = "avatar_url"
     }
 }
@@ -287,7 +295,7 @@ final class CloudService: @unchecked Sendable {
     func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
         let query = [
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at,avatar_url"),
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url"),
             URLQueryItem(name: "limit", value: "1")
         ]
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
@@ -311,6 +319,8 @@ final class CloudService: @unchecked Sendable {
         }
         profile.publicSlug = remote.slug
         profile.isPublic = remote.isPublic
+        profile.customDomain = remote.customDomain ?? ""
+        profile.customDomainVerified = remote.customDomainVerified == true
         if loadPhoto, let avatar = remote.avatarURL {
             profile.photoBase64 = try await readProfilePhoto(avatar)
             profile.photoSyncInitialized = true
@@ -322,7 +332,11 @@ final class CloudService: @unchecked Sendable {
     }
 
     func createProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile) async throws -> RemoteProfile {
-        let candidates = ProfileSlug.creationCandidates(requested: profile.publicSlug, ownerID: ownerID)
+        let candidates = ProfileSlug.creationCandidates(
+            requested: profile.publicSlug,
+            displayName: profile.displayName,
+            ownerID: ownerID
+        )
         for (index, slug) in candidates.enumerated() {
             do {
                 return try await insertProfile(ownerID: ownerID, profileID: profileID,
@@ -338,7 +352,7 @@ final class CloudService: @unchecked Sendable {
                                profile: ContactProfile, slug: String) async throws -> RemoteProfile {
         let payload = try write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
-            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at,avatar_url")],
+            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")],
             body: payload, prefer: "return=representation")
         guard let remote = rows.first else { throw CloudError.emptyResponse }
         return remote
@@ -351,7 +365,7 @@ final class CloudService: @unchecked Sendable {
             URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
             URLQueryItem(name: "updated_at", value: "eq.\(expectedUpdatedAt)"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,updated_at,avatar_url")
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")
         ], body: payload, prefer: "return=representation")
         guard let remote = rows.first else { return nil }
         return remote
@@ -362,7 +376,9 @@ final class CloudService: @unchecked Sendable {
         return ProfileWrite(id: profileID, ownerID: ownerID, slug: slug, displayName: p.displayName,
                             jobTitle: p.jobTitle, company: p.company, publicEmail: p.email,
                             phone: p.phone, website: p.website, address: p.address,
-                            isPublic: p.isPublic, avatarURL: try ProfilePhoto.inlineURL(p.photoBase64))
+                            isPublic: p.isPublic,
+                            customDomain: p.customDomain.isEmpty ? nil : p.customDomain,
+                            avatarURL: try ProfilePhoto.inlineURL(p.photoBase64))
     }
 
     func syncSocialProfiles(profileID: UUID, value: ContactProfile, expected: ContactProfile) async throws {

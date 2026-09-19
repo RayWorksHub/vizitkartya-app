@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.nfc.NfcAdapter
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +17,7 @@ import hu.rayworks.vizit.nfc.HcePayloadStore
 import hu.rayworks.vizit.nfc.NfcPayloadFactory
 import hu.rayworks.vizit.nfc.NfcShareEvent
 import hu.rayworks.vizit.nfc.NfcShareEvents
+import hu.rayworks.vizit.qr.PublicProfileUrlFactory
 import hu.rayworks.vizit.ui.design.ThemeMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -172,7 +172,14 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
 
         val fallbackUrl = profile.publicSlug
             .takeIf { profile.isPublic && it.isNotBlank() }
-            ?.let { "${BuildConfig.PUBLIC_PROFILE_BASE_URL}/${Uri.encode(it)}" }
+            ?.let {
+                PublicProfileUrlFactory.createPreferred(
+                    baseUrl = BuildConfig.PUBLIC_PROFILE_BASE_URL,
+                    slug = it,
+                    customDomain = profile.customDomain,
+                    customDomainVerified = profile.customDomainVerified,
+                ).getOrNull()
+            }
 
         val prepared = runCatching {
             NfcPayloadFactory.create(profile.copy(photoBase64 = ""), fallbackUrl)

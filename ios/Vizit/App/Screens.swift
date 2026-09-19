@@ -58,9 +58,9 @@ struct HomeScreen: View {
 
                         VizitGroup {
                             VizitRow(
-                                label: "Tudástár",
+                                label: "Vállalkozói Portál",
                                 systemImage: "book.closed",
-                                supporting: "Tippek és források a digitális névjegyhez"
+                                supporting: "VOSZ, edukáció, digitális segítség és eszköztár"
                             ) { showKnowledgeHub = true }
                         }
                     }
@@ -415,7 +415,12 @@ struct ShareScreen: View {
     private var publicURL: URL? {
         guard store.profile.isPublic, store.syncStatus == .synced,
               let base = store.configuration?.publicProfileBaseURL else { return nil }
-        return PublicProfileLink.make(baseURL: base, slug: store.profile.publicSlug)
+        return PublicProfileLink.preferred(
+            baseURL: base,
+            slug: store.profile.publicSlug,
+            customDomain: store.profile.customDomain,
+            customDomainVerified: store.profile.customDomainVerified
+        )
     }
 
     private func shareVCard() {
@@ -713,7 +718,18 @@ struct ScanFlow: View {
     }
 }
 
-// MARK: - Knowledge hub
+// MARK: - Business portal
+
+private enum PortalDestination { case vosz, education, help, toolkit }
+
+private struct PortalFeature: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let eyebrow: String
+    let icon: String
+    let destination: PortalDestination
+}
 
 private struct BusinessResource: Identifiable {
     let id: String
@@ -723,80 +739,333 @@ private struct BusinessResource: Identifiable {
     let icon: String
 }
 
+private struct BusinessCourse: Identifiable {
+    let id: String
+    let title: String
+    let category: String
+    let description: String
+    let duration: String
+    let level: String
+    let icon: String
+    let modules: [String]
+}
+
+private let portalFeatures = [
+    PortalFeature(id: "vosz", title: "VOSZ", description: "Hírek, videók és vállalkozói szolgáltatások egy helyen.", eyebrow: "PARTNERI FORRÁSOK", icon: "briefcase.fill", destination: .vosz),
+    PortalFeature(id: "education", title: "Vállalkozói Edukáció", description: "Gyakorlati kurzusok AI-ról, Microsoft 365-ről és cégépítésről.", eyebrow: "6 KURZUS", icon: "graduationcap.fill", destination: .education),
+    PortalFeature(id: "help", title: "Digitális segítség", description: "Próbáld ki, hogyan indul majd egy videós szakértői konzultáció.", eyebrow: "BEMUTATÓ MÓD", icon: "video.fill", destination: .help),
+    PortalFeature(id: "toolkit", title: "Vállalkozói eszköztár", description: "Gyors digitális állapotfelmérés és személyre szabott következő lépések.", eyebrow: "INTERAKTÍV", icon: "checklist", destination: .toolkit)
+]
+
+private let businessResources = [
+    BusinessResource(id: "vosz-youtube", title: "VOSZ videók", description: "Vállalkozói hírek, interjúk és gyakorlati videók.", url: "https://youtube.com/@vosz.?si=k2EmMlI8Q5ttlPZC", icon: "play.rectangle.fill"),
+    BusinessResource(id: "vosz", title: "VOSZ információk", description: "Érdekképviselet, tanácsadás, programok és aktuális hírek.", url: "https://www.vosz.hu/hu", icon: "briefcase.fill"),
+    BusinessResource(id: "voszport", title: "VOSZPort", description: "Digitális ügyintézési és tudásmegosztási felület.", url: "https://voszport.com/", icon: "globe.europe.africa.fill")
+]
+
+private let businessCourses = [
+    BusinessCourse(id: "ai", title: "AI a mindennapi vállalkozásban", category: "Mesterséges intelligencia", description: "Használható promptok, automatizálási ötletek és felelős AI-használat.", duration: "52 perc", level: "Kezdő", icon: "sparkles", modules: ["Hol teremt értéket az AI?", "Jó prompt 5 lépésben", "Ajánlat és e-mail gyorsítása", "Adatvédelem és ellenőrzés"]),
+    BusinessCourse(id: "m365", title: "Microsoft 365 kisvállalkozásoknak", category: "Digitális munka", description: "Teams, Outlook, OneDrive és SharePoint egyszerű, biztonságos rendszerben.", duration: "1 óra 18 perc", level: "Kezdő", icon: "cloud.fill", modules: ["Fiókok és jogosultságok", "Közös fájlkezelés", "Teams-együttműködés", "Naptár és automatizmusok"]),
+    BusinessCourse(id: "basics", title: "Vállalkozói alapismeretek", category: "Cégépítés", description: "Üzleti modell, célpiac, árazás és az első 90 nap terve.", duration: "1 óra 05 perc", level: "Kezdő", icon: "storefront.fill", modules: ["Üzleti modell egy oldalon", "Ideális ügyfél", "Árképzési alapok", "90 napos akcióterv"]),
+    BusinessCourse(id: "security", title: "Kiberbiztonság emberi nyelven", category: "Biztonság", description: "Fiókvédelem, mentés, adathalászat és egy egyszerű incidens-terv.", duration: "44 perc", level: "Kezdő", icon: "lock.shield.fill", modules: ["Többlépcsős belépés", "Biztonságos eszközök", "Adathalászat felismerése", "Mit tegyünk baj esetén?"]),
+    BusinessCourse(id: "marketing", title: "Online jelenlét és ügyfélszerzés", category: "Marketing", description: "Egyszerű pozicionálás, tartalomterv és mérhető kampányalapok.", duration: "58 perc", level: "Középhaladó", icon: "megaphone.fill", modules: ["Pozicionálási mondat", "Bizalmat építő profil", "4 hetes tartalomterv", "Mérés és javítás"]),
+    BusinessCourse(id: "finance", title: "Pénzügyi tudatosság alapjai", category: "Pénzügy", description: "Cash-flow, költségek és a könyvelővel való hatékony együttműködés.", duration: "49 perc", level: "Kezdő", icon: "building.columns.fill", modules: ["Bevétel nem egyenlő nyereség", "Cash-flow tábla", "Tartalék és tervezés", "Kérdések a könyvelőhöz"])
+]
+
 struct BusinessHubScreen: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
-
-    private let resources = [
-        BusinessResource(
-            id: "vosz-youtube",
-            title: "VOSZ videók",
-            description: "Vállalkozói hírek, interjúk és gyakorlati videók a VOSZ YouTube-csatornáján.",
-            url: "https://youtube.com/@vosz.?si=k2EmMlI8Q5ttlPZC",
-            icon: "play.rectangle.fill"
-        ),
-        BusinessResource(
-            id: "vosz",
-            title: "VOSZ vállalkozói információk",
-            description: "Érdekképviselet, tanácsadás, programok és aktuális vállalkozói hírek.",
-            url: "https://www.vosz.hu/hu",
-            icon: "briefcase.fill"
-        ),
-        BusinessResource(
-            id: "voszport",
-            title: "VOSZPort",
-            description: "Digitális ügyintézési és tudásmegosztási felület vállalkozásoknak.",
-            url: "https://voszport.com/",
-            icon: "globe.europe.africa.fill"
-        )
-    ]
+    private let columns = [GridItem(.flexible(), spacing: VizitSpace.sm), GridItem(.flexible(), spacing: VizitSpace.sm)]
 
     var body: some View {
         NavigationStack {
             VizitScreen {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: VizitSpace.md) {
-                        VizitBrandHeader(style: .compact)
-                            .padding(.top, VizitSpace.xs)
-
-                        Text("Hasznos külső források hírekhez, fejlődéshez és ügyintézéshez.")
-                            .font(VizitFont.body)
-                            .foregroundStyle(VizitColor.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        VizitGroup {
-                            ForEach(Array(resources.enumerated()), id: \.element.id) { index, resource in
-                                if index > 0 { VizitDivider() }
-                                VizitRow(
-                                    label: resource.title,
-                                    systemImage: resource.icon,
-                                    supporting: resource.description
-                                ) {
-                                    guard let url = SafeLink.https(resource.url) else { return }
-                                    openURL(url)
+                    VStack(alignment: .leading, spacing: VizitSpace.lg) {
+                        VizitBrandHeader(style: .compact).padding(.top, VizitSpace.xs)
+                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                            Text("Vállalkozói Portál").font(VizitFont.display).foregroundStyle(VizitColor.textPrimary)
+                            Text("Tanulás, hiteles források és digitális segítség a vállalkozásod következő lépéséhez.")
+                                .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
+                        }
+                        LazyVGrid(columns: columns, spacing: VizitSpace.sm) {
+                            ForEach(portalFeatures) { feature in
+                                NavigationLink { destination(for: feature.destination) } label: { PortalFeatureCard(feature: feature) }
+                                    .buttonStyle(.plain)
+                            }
+                        }
+                        VizitPanel {
+                            HStack(alignment: .top, spacing: VizitSpace.sm) {
+                                VizitIconChip(systemImage: "lightbulb.fill", tint: VizitColor.primary, background: VizitColor.primarySubtle)
+                                VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                                    Text("Heti fejlődési tipp").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                                    Text("Válassz ki egyetlen ismétlődő feladatot, és dokumentáld, mielőtt automatizálod.")
+                                        .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
                                 }
                             }
                         }
-
-                        Text("A hivatkozások külső oldalakra vezetnek. A VIZIT nem áll kapcsolatban ezek tartalmának üzemeltetésével.")
-                            .font(VizitFont.bodySmall)
-                            .foregroundStyle(VizitColor.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.horizontal, VizitSpace.md)
-                    .padding(.bottom, VizitSpace.xxl)
-                    .frame(maxWidth: 620)
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, VizitSpace.md).padding(.bottom, VizitSpace.xxl)
+                    .frame(maxWidth: 620).frame(maxWidth: .infinity)
                 }
             }
-            .navigationTitle("Tudástár")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Kész") { dismiss() }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kész") { dismiss() } } }
+        }
+    }
+
+    @ViewBuilder private func destination(for destination: PortalDestination) -> some View {
+        switch destination {
+        case .vosz: VoszCenterScreen()
+        case .education: EducationCatalogScreen()
+        case .help: DigitalHelpScreen()
+        case .toolkit: BusinessToolkitScreen()
+        }
+    }
+}
+
+private struct PortalFeatureCard: View {
+    let feature: PortalFeature
+    var body: some View {
+        VStack(alignment: .leading, spacing: VizitSpace.sm) {
+            VizitIconChip(systemImage: feature.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle, size: 44)
+            Text(feature.eyebrow).vizitOverline().foregroundStyle(VizitColor.primary)
+            Text(feature.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary).lineLimit(2)
+            Text(feature.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary).lineLimit(4)
+            Spacer(minLength: 0)
+            Image(systemName: "arrow.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(VizitColor.primary).frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(VizitSpace.md).frame(maxWidth: .infinity, minHeight: 222, alignment: .topLeading)
+        .background(VizitColor.surface).clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+    }
+}
+
+private struct VoszCenterScreen: View {
+    @Environment(\.openURL) private var openURL
+    var body: some View {
+        PortalScroll(title: "VOSZ forrásközpont", subtitle: "Hivatalos vállalkozói tartalmak és szolgáltatások.") {
+            VizitGroup {
+                ForEach(Array(businessResources.enumerated()), id: \.element.id) { index, resource in
+                    if index > 0 { VizitDivider() }
+                    VizitRow(label: resource.title, systemImage: resource.icon, supporting: resource.description) {
+                        guard let url = SafeLink.https(resource.url) else { return }
+                        openURL(url)
+                    }
+                }
+            }
+            Text("A hivatkozások külső oldalakra vezetnek; azok tartalmáért az adott szolgáltató felel.")
+                .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+        }
+    }
+}
+
+private struct EducationCatalogScreen: View {
+    @State private var selectedCategory = "Mind"
+    private let categories = ["Mind", "AI", "Digitális munka", "Cégépítés", "Biztonság"]
+    private var filtered: [BusinessCourse] {
+        businessCourses.filter { selectedCategory == "Mind" || (selectedCategory == "AI" && $0.id == "ai") || $0.category == selectedCategory }
+    }
+    var body: some View {
+        PortalScroll(title: "Vállalkozói Edukáció", subtitle: "Rövid, gyakorlatias tananyagok, saját tempóban.") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: VizitSpace.xs) {
+                    ForEach(categories, id: \.self) { category in
+                        Button { selectedCategory = category } label: {
+                            HStack(spacing: VizitSpace.xxs) {
+                                if category == selectedCategory { Image(systemName: "checkmark.circle.fill") }
+                                Text(category).font(VizitFont.label)
+                            }
+                            .foregroundStyle(category == selectedCategory ? VizitColor.primary : VizitColor.textSecondary)
+                            .padding(.horizontal, VizitSpace.sm).frame(minHeight: 40)
+                            .background(category == selectedCategory ? VizitColor.primarySubtle : VizitColor.surface)
+                            .clipShape(Capsule()).overlay { Capsule().stroke(VizitColor.border, lineWidth: 1) }
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+            ForEach(filtered) { course in
+                NavigationLink { CourseDetailScreen(course: course) } label: { CourseCard(course: course) }.buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct CourseCard: View {
+    let course: BusinessCourse
+    var body: some View {
+        HStack(alignment: .top, spacing: VizitSpace.md) {
+            VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle, size: 64)
+            VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                Text(course.category.uppercased()).vizitOverline().foregroundStyle(VizitColor.primary)
+                Text(course.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                Text(course.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary).lineLimit(2)
+                Text("\(course.duration)  ·  \(course.level)  ·  \(course.modules.count) lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(VizitColor.textMuted)
+        }
+        .padding(VizitSpace.md).background(VizitColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+    }
+}
+
+private struct CourseDetailScreen: View {
+    let course: BusinessCourse
+    @State private var completed = Set<Int>()
+    var body: some View {
+        PortalScroll(title: course.title, subtitle: course.description) {
+            VizitPanel {
+                HStack(spacing: VizitSpace.sm) {
+                    VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle)
+                    VStack(alignment: .leading) {
+                        Text("\(course.duration) · \(course.level)").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                        Text("\(course.modules.count) rövid, egymásra épülő lecke").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                    }
+                }
+            }
+            ProgressView(value: Double(completed.count), total: Double(course.modules.count)).tint(VizitColor.primary)
+            VizitSectionHeader(title: "Kurzus tartalma")
+            ForEach(Array(course.modules.enumerated()), id: \.offset) { index, module in
+                Button {
+                    if completed.contains(index) { completed.remove(index) } else { completed.insert(index) }
+                } label: {
+                    HStack(spacing: VizitSpace.sm) {
+                        Image(systemName: completed.contains(index) ? "checkmark.circle.fill" : "play.circle")
+                            .foregroundStyle(completed.contains(index) ? VizitColor.success : VizitColor.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(index + 1). lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                            Text(module).font(VizitFont.body).foregroundStyle(VizitColor.textPrimary)
+                        }
+                        Spacer()
+                        Text(completed.contains(index) ? "Kész" : "Megnyitás").font(VizitFont.caption)
+                            .foregroundStyle(completed.contains(index) ? VizitColor.success : VizitColor.primary)
+                    }
+                    .padding(VizitSpace.md).background(VizitColor.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+                }.buttonStyle(.plain)
+            }
+            Text("A 6.0 bétában a tanulási felület és a haladás kipróbálható; a teljes videótananyagok fokozatosan érkeznek.")
+                .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+        }
+    }
+}
+
+private struct DigitalHelpScreen: View {
+    @State private var inCall = false
+    @State private var microphone = true
+    @State private var camera = true
+    var body: some View {
+        PortalScroll(title: "Digitális segítség", subtitle: "Szakértői videókonzultáció élményének interaktív előnézete.") {
+            VStack(spacing: VizitSpace.lg) {
+                HStack { Text(inCall ? "KAPCSOLÓDVA · DEMÓ" : "BEMUTATÓ MÓD").vizitOverline(); Spacer(); Text(inCall ? "00:24" : "ELŐNÉZET").font(VizitFont.caption) }
+                    .foregroundStyle(Color.white.opacity(0.82))
+                Spacer()
+                ZStack { Circle().fill(VizitColor.primary).frame(width: 116, height: 116); Image(systemName: "person.fill").font(.system(size: 54)).foregroundStyle(.white) }
+                VStack(spacing: VizitSpace.xxs) {
+                    Text(inCall ? "VIZIT digitális tanácsadó" : "Próbahívás").font(VizitFont.h3).foregroundStyle(.white)
+                    Text(inCall ? "A kapcsolat bemutató módban fut" : "Ellenőrizd a kamerát és a mikrofont").font(VizitFont.bodySmall).foregroundStyle(Color.white.opacity(0.72))
+                }
+                Spacer()
+                HStack(spacing: VizitSpace.md) {
+                    CallControl(systemImage: microphone ? "mic.fill" : "mic.slash.fill", label: "Mikrofon") { microphone.toggle() }
+                    CallControl(systemImage: camera ? "video.fill" : "video.slash.fill", label: "Kamera") { camera.toggle() }
+                    if inCall { CallControl(systemImage: "phone.down.fill", label: "Befejezés", tint: VizitColor.error) { inCall = false } }
+                }
+            }
+            .padding(VizitSpace.lg).frame(maxWidth: .infinity, minHeight: 500)
+            .background(VizitColor.ink).clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
+            if !inCall { VizitButton(title: "Próbahívás indítása", systemImage: "video.fill") { inCall = true } }
+            Text("Ez a 6.0 verzió interaktív bemutatója: nem kapcsol valódi tanácsadóhoz és nem továbbít hangot vagy videót.")
+                .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+        }
+    }
+}
+
+private struct CallControl: View {
+    let systemImage: String
+    let label: String
+    var tint: Color = .white
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: VizitSpace.xxs) {
+                Image(systemName: systemImage).font(.system(size: 20, weight: .semibold)).foregroundStyle(tint)
+                    .frame(width: 52, height: 52).background(Color.white.opacity(0.14)).clipShape(Circle())
+                Text(label).font(VizitFont.caption).foregroundStyle(Color.white.opacity(0.8))
+            }
+        }.buttonStyle(.plain)
+    }
+}
+
+private struct BusinessToolkitScreen: View {
+    private let steps = ["Van professzionális céges e-mail-címem", "Minden fontos fiókon bekapcsoltam a kétlépcsős belépést", "Rendszeres biztonsági mentésem van", "Az ügyféladataimat egy helyen kezelem", "Mérem, honnan érkeznek az érdeklődők", "Van leírt heti és havi munkafolyamatom"]
+    @State private var checked = Set<Int>()
+    private var score: Int { checked.count * 100 / steps.count }
+    var body: some View {
+        PortalScroll(title: "Vállalkozói eszköztár", subtitle: "Jelöld, ami már rendben van, és kapsz egy gyors következő lépést.") {
+            VizitPanel {
+                HStack(spacing: VizitSpace.md) {
+                    Text("\(score)%").font(VizitFont.h3).foregroundStyle(VizitColor.onPrimary)
+                        .frame(width: 68, height: 68).background(VizitColor.primary).clipShape(Circle())
+                    VStack(alignment: .leading) {
+                        Text("Digitális felkészültség").font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                        Text("\(checked.count)/\(steps.count) alap rendben").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                    }
+                }
+            }
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                Button {
+                    if checked.contains(index) { checked.remove(index) } else { checked.insert(index) }
+                } label: {
+                    HStack(spacing: VizitSpace.sm) {
+                        Image(systemName: checked.contains(index) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(checked.contains(index) ? VizitColor.success : VizitColor.textMuted)
+                        Text(step).font(VizitFont.body).foregroundStyle(VizitColor.textPrimary).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(VizitSpace.md).background(VizitColor.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+                }.buttonStyle(.plain)
+            }
+            VizitPanel {
+                HStack(alignment: .top, spacing: VizitSpace.sm) {
+                    VizitIconChip(systemImage: "rocket.fill", tint: VizitColor.primary, background: VizitColor.primarySubtle)
+                    VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                        Text(score < 50 ? "Következő lépés: biztos alapok" : "Következő lépés: automatizálás").font(VizitFont.label)
+                        Text(score < 50 ? "Kezdd a fiókvédelemmel és a mentéssel, majd haladj tovább." : "Válassz egy ismétlődő folyamatot, és készíts hozzá egyszerű sablont.")
+                            .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                    }
                 }
             }
         }
+    }
+}
+
+private struct PortalScroll<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let content: Content
+
+    init(title: String, subtitle: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+    }
+
+    var body: some View {
+        VizitScreen {
+            ScrollView {
+                VStack(alignment: .leading, spacing: VizitSpace.md) {
+                    Text(subtitle).font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
+                    content
+                }
+                .padding(.horizontal, VizitSpace.md).padding(.bottom, VizitSpace.xxl)
+                .frame(maxWidth: 620).frame(maxWidth: .infinity)
+            }
+        }
+        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -28,4 +28,10 @@ class ContactProfileValidatorTest {
         assertEquals(message, ContactProfileValidator.validate(base.copy(instagram = "instagram.com/teszt")))
         assertEquals(message, ContactProfileValidator.validate(base.copy(youtube = "http://youtube.com/@teszt")))
     }
+
+    @Test
+    fun `public profile no longer requires a manually entered identifier`() {
+        val profile = ContactProfile(fullName = "Teszt Elek", phone = "+361234567", isPublic = true)
+        assertNull(ContactProfileValidator.validate(profile))
+    }
 }
