@@ -1,6 +1,7 @@
 import SwiftUI
 import Contacts
 import CoreImage.CIFilterBuiltins
+import WebKit
 
 // MARK: - Home
 
@@ -78,7 +79,6 @@ struct HomeScreen: View {
     }
 
 }
-
 private struct QuickTile: View {
     let systemImage: String
     let title: String
@@ -809,8 +809,8 @@ private let businessCourses = [
         id: "m365", title: "Microsoft 365 kisvállalkozásoknak", category: "Digitális munka",
         description: "Teams, Outlook, OneDrive és SharePoint egyszerű, biztonságos rendszerben.",
         duration: "Magyar videók", level: "Kezdő", icon: "cloud.fill",
-        videoTitle: "Microsoft 365 oktatóvideók magyarul", videoSource: "Microsoft 365 magyar találatok",
-        videoURL: "https://www.youtube.com/results?search_query=Microsoft+365+oktat%C3%A1s+magyar",
+        videoTitle: "Microsoft 365 bevezetés és csoportok", videoSource: "Sämling Üzleti Oktatási Központ",
+        videoURL: "https://www.youtube.com/watch?v=py9fGXyBZcE",
         modules: [
             CourseModule(id: "m365-accounts", title: "Fiókok és jogosultságok", summary: "Minden munkatársnak külön fiók, szerepkör szerinti hozzáférés és bekapcsolt többtényezős védelem kell.", resourceTitle: "Microsoft 365 Vállalati verzió", resourceURL: "https://www.microsoft.com/hu-hu/microsoft-365/business"),
             CourseModule(id: "m365-files", title: "Közös fájlkezelés OneDrive-val", summary: "Alakíts ki közös mappaszerkezetet, tulajdonost és visszaállítási rendet; ne e-mailben küldözgess fájlmásolatokat.", resourceTitle: "OneDrive magyar súgó", resourceURL: "https://support.microsoft.com/hu-hu/onedrive"),
@@ -848,8 +848,8 @@ private let businessCourses = [
         id: "marketing", title: "Online jelenlét és ügyfélszerzés", category: "Marketing",
         description: "Egyszerű pozicionálás, tartalomterv és mérhető kampányalapok.",
         duration: "Magyar videók", level: "Középhaladó", icon: "megaphone.fill",
-        videoTitle: "Google Cégprofil – magyar útmutatók", videoSource: "Magyar oktatóvideók",
-        videoURL: "https://www.youtube.com/results?search_query=Google+C%C3%A9gprofil+be%C3%A1ll%C3%ADt%C3%A1sa+magyar",
+        videoTitle: "Hogyan kerülhetsz fel a Google Térképre?", videoSource: "Jobbágy András",
+        videoURL: "https://www.youtube.com/watch?v=-4qATDuCWgU",
         modules: [
             CourseModule(id: "marketing-position", title: "Pozicionálási mondat", summary: "Ne szolgáltatást sorolj: mondd meg, kinek, milyen eredményt és mitől más módon adsz.", resourceTitle: "VOSZ videók", resourceURL: "https://www.youtube.com/@vosz."),
             CourseModule(id: "marketing-profile", title: "Bizalmat építő Google Cégprofil", summary: "Tölts ki minden adatot, adj képeket, szolgáltatásokat és rendszeresen válaszolj az értékelésekre.", resourceTitle: "Google Cégprofil hozzáadása", resourceURL: "https://support.google.com/business/answer/2911778?hl=hu"),
@@ -1101,7 +1101,7 @@ private struct CourseCard: View {
                 Text(course.category.uppercased()).vizitOverline().foregroundStyle(VizitColor.primary)
                 Text(course.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
                 Text(course.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary).lineLimit(2)
-                Text("\(course.duration)  ·  \(course.level)  ·  \(course.modules.count) modul").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                Text("\(course.duration)  ·  \(course.level)  ·  \((course.modules.count + 1) / 2) modul  ·  \(course.modules.count) lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(VizitColor.textMuted)
@@ -1115,7 +1115,26 @@ private struct CourseCard: View {
 private struct CourseDetailScreen: View {
     let course: BusinessCourse
     @Environment(\.openURL) private var openURL
-    @State private var completed = Set<String>()
+    @AppStorage("education.completedLessonIDs") private var completedLessonIDs = ""
+    @State private var selectedLessonID: String?
+
+    private var lessons: [CourseModule] { course.modules }
+    private var selectedLesson: CourseModule { lessons.first { $0.id == selectedLessonID } ?? lessons[0] }
+    private var completed: Set<String> { Set(completedLessonIDs.split(separator: "|").map(String.init)) }
+    private var learningModules: [[CourseModule]] {
+        stride(from: 0, to: lessons.count, by: 2).map { Array(lessons[$0..<min($0 + 2, lessons.count)]) }
+    }
+
+    private func markSelectedLessonComplete() {
+        var next = completed
+        next.insert(selectedLesson.id)
+        completedLessonIDs = next.sorted().joined(separator: "|")
+    }
+
+    private func videoURL(for lesson: CourseModule) -> String {
+        YouTubeVideoID.from(lesson.resourceURL) == nil ? course.videoURL : lesson.resourceURL
+    }
+
     var body: some View {
         PortalScroll(title: course.title, subtitle: course.description) {
             VizitPanel {
@@ -1123,61 +1142,161 @@ private struct CourseDetailScreen: View {
                     VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle)
                     VStack(alignment: .leading) {
                         Text("\(course.duration) · \(course.level)").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                        Text("\(course.modules.count) rövid, egymásra épülő modul").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                        Text("\(learningModules.count) modul · \(lessons.count) videólecke").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
                     }
                 }
             }
-            ProgressView(value: Double(completed.count), total: Double(course.modules.count)).tint(VizitColor.primary)
-            VStack(alignment: .leading, spacing: VizitSpace.sm) {
-                Image(systemName: "play.circle.fill").font(.system(size: 44)).foregroundStyle(.white)
-                Text("MAGYAR VIDEÓ").vizitOverline().foregroundStyle(Color.white.opacity(0.7))
-                Text(course.videoTitle).font(VizitFont.h3).foregroundStyle(.white)
-                Text(course.videoSource).font(VizitFont.bodySmall).foregroundStyle(Color.white.opacity(0.72))
-                VizitButton(
-                    title: "Videó megnyitása",
-                    systemImage: "play.fill",
-                    containerOverride: .white,
-                    contentOverride: VizitColor.ink
-                ) {
-                    guard let url = SafeLink.https(course.videoURL) else { return }
-                    openURL(url)
+            VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                HStack {
+                    Text("Kurzus haladása").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                    Spacer()
+                    Text("\(completed.intersection(Set(lessons.map(\.id))).count)/\(lessons.count) lecke")
+                        .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
                 }
+                ProgressView(value: Double(completed.intersection(Set(lessons.map(\.id))).count), total: Double(lessons.count))
+                    .tint(VizitColor.primary)
             }
-            .padding(VizitSpace.lg).frame(maxWidth: .infinity, alignment: .leading)
-            .background(VizitColor.ink).clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous).stroke(VizitColor.borderStrong, lineWidth: 1) }
 
-            VizitSectionHeader(title: "Kurzusmodulok")
-            ForEach(Array(course.modules.enumerated()), id: \.element.id) { index, module in
-                let isComplete = completed.contains(module.id)
-                VStack(alignment: .leading, spacing: VizitSpace.sm) {
-                    HStack(spacing: VizitSpace.sm) {
-                        Image(systemName: isComplete ? "checkmark.circle.fill" : "play.circle")
-                            .foregroundStyle(isComplete ? VizitColor.success : VizitColor.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(index + 1). modul").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
-                            Text(module.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
-                        }
-                    }
-                    Text(module.summary).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
-                    VizitButton(title: module.resourceTitle, systemImage: "link", kind: .secondary) {
-                        guard let url = SafeLink.https(module.resourceURL) else { return }
+            VStack(alignment: .leading, spacing: VizitSpace.sm) {
+                YouTubeLessonPlayer(url: videoURL(for: selectedLesson), onCompleted: markSelectedLessonComplete)
+                    .id(selectedLesson.id)
+                    .frame(maxWidth: .infinity).aspectRatio(16 / 9, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+                Text("AKTUÁLIS LECKE").vizitOverline().foregroundStyle(VizitColor.primary)
+                Text(selectedLesson.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                Text(selectedLesson.summary).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                HStack(spacing: VizitSpace.xs) {
+                    Image(systemName: completed.contains(selectedLesson.id) ? "checkmark.circle.fill" : "play.circle")
+                    Text(completed.contains(selectedLesson.id) ? "Lecke teljesítve" : "A lecke a videó legalább 90%-ának lejátszása után lesz kész")
+                        .font(VizitFont.caption)
+                }
+                .foregroundStyle(completed.contains(selectedLesson.id) ? VizitColor.success : VizitColor.textMuted)
+                if selectedLesson.resourceURL != videoURL(for: selectedLesson) {
+                    VizitButton(title: selectedLesson.resourceTitle, systemImage: "doc.text", kind: .secondary) {
+                        guard let url = SafeLink.https(selectedLesson.resourceURL) else { return }
                         openURL(url)
                     }
-                    VizitButton(
-                        title: isComplete ? "Kész" : "Modul késznek jelölése",
-                        systemImage: "checkmark.circle",
-                        kind: .tertiary
-                    ) {
-                        if isComplete { completed.remove(module.id) } else { completed.insert(module.id) }
+                }
+            }
+            .padding(VizitSpace.md).background(VizitColor.surface)
+            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+
+            VizitSectionHeader(title: "Tananyag")
+            ForEach(Array(learningModules.enumerated()), id: \.offset) { moduleIndex, moduleLessons in
+                let moduleComplete = moduleLessons.allSatisfy { completed.contains($0.id) }
+                VStack(alignment: .leading, spacing: VizitSpace.sm) {
+                    HStack(spacing: VizitSpace.sm) {
+                        Image(systemName: moduleComplete ? "checkmark.circle.fill" : "rectangle.stack.fill")
+                            .foregroundStyle(moduleComplete ? VizitColor.success : VizitColor.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(moduleIndex + 1). MODUL").vizitOverline().foregroundStyle(VizitColor.textMuted)
+                            Text(moduleIndex == 0 ? "Alapok és felkészülés" : "Gyakorlati alkalmazás")
+                                .font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                        }
+                        Spacer()
+                        Text("\(moduleLessons.filter { completed.contains($0.id) }.count)/\(moduleLessons.count)")
+                            .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                    }
+                    ForEach(Array(moduleLessons.enumerated()), id: \.element.id) { lessonIndex, lesson in
+                        if lessonIndex > 0 { VizitDivider() }
+                        Button { selectedLessonID = lesson.id } label: {
+                            HStack(spacing: VizitSpace.sm) {
+                                Image(systemName: completed.contains(lesson.id) ? "checkmark.circle.fill" : "play.circle")
+                                    .font(.system(size: 21)).foregroundStyle(completed.contains(lesson.id) ? VizitColor.success : VizitColor.primary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("\(moduleIndex + 1).\(lessonIndex + 1) · VIDEÓLECKE")
+                                        .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                                    Text(lesson.title).font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                                }
+                                Spacer()
+                                Image(systemName: selectedLesson.id == lesson.id ? "speaker.wave.2.fill" : "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(VizitColor.textMuted)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(VizitSpace.md).background(VizitColor.surface)
                 .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
             }
-            Text("A videók és segédanyagok külső, magyar nyelvű forrásoknál nyílnak meg. A jogi és adózási lépéseket indulás előtt egyeztesd szakértővel.")
+            Text("A kész állapotot az alkalmazás automatikusan rögzíti a videó legalább 90%-ának tényleges lejátszása után. Kézzel nem módosítható.")
                 .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+        }
+        .onAppear { if selectedLessonID == nil { selectedLessonID = lessons.first?.id } }
+    }
+}
+
+private enum YouTubeVideoID {
+    static func from(_ value: String) -> String? {
+        guard let components = URLComponents(string: value),
+              let host = components.host?.lowercased() else { return nil }
+        if host == "youtu.be" { return components.path.split(separator: "/").first.map(String.init) }
+        if host.hasSuffix("youtube.com") {
+            if components.path == "/watch" { return components.queryItems?.first(where: { $0.name == "v" })?.value }
+            let parts = components.path.split(separator: "/")
+            if parts.first == "embed", parts.count > 1 { return String(parts[1]) }
+        }
+        return nil
+    }
+}
+
+private struct YouTubeLessonPlayer: UIViewRepresentable {
+    let url: String
+    let onCompleted: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onCompleted: onCompleted) }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = [.video, .audio]
+        configuration.userContentController.add(context.coordinator, name: "lessonCompleted")
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.isOpaque = false
+        view.backgroundColor = .black
+        view.scrollView.isScrollEnabled = false
+        return view
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.onCompleted = onCompleted
+        guard let videoID = YouTubeVideoID.from(url), context.coordinator.videoID != videoID else { return }
+        context.coordinator.videoID = videoID
+        webView.loadHTMLString(Self.html(videoID: videoID), baseURL: URL(string: "https://www.youtube-nocookie.com"))
+    }
+
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "lessonCompleted")
+        webView.stopLoading()
+    }
+
+    private static func html(videoID: String) -> String {
+        let safeID = videoID.replacingOccurrences(of: "'", with: "")
+        return """
+        <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+        <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
+        <body><div id="player"></div><script src="https://www.youtube.com/iframe_api"></script><script>
+        var player, watched=0, tick=0;
+        function onYouTubeIframeAPIReady(){ player=new YT.Player('player',{videoId:'\(safeID)',playerVars:{playsinline:1,rel:0},events:{onStateChange:onState}}); }
+        function onState(e){
+          if(e.data===YT.PlayerState.PLAYING && !tick){ tick=setInterval(()=>{watched+=1;},1000); }
+          if(e.data!==YT.PlayerState.PLAYING && tick){clearInterval(tick);tick=0;}
+          if(e.data===YT.PlayerState.ENDED){ const d=player.getDuration(); if(d>0 && watched/d>=0.9){window.webkit.messageHandlers.lessonCompleted.postMessage('done');} }
+        }
+        </script></body></html>
+        """
+    }
+
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        var videoID: String?
+        var onCompleted: () -> Void
+        init(onCompleted: @escaping () -> Void) { self.onCompleted = onCompleted }
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "lessonCompleted" else { return }
+            DispatchQueue.main.async { self.onCompleted() }
         }
     }
 }
