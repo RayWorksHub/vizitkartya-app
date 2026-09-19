@@ -131,6 +131,23 @@ private struct PostgRESTErrorPayload: Decodable {
     let code: String?
 }
 
+enum RESTURLBuilder {
+    static func make(baseURL: URL, path: [String], query: [URLQueryItem]) -> URL? {
+        var url = baseURL
+        path.forEach { url.appendPathComponent($0) }
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        parts?.queryItems = query.isEmpty ? nil : query
+
+        // URLComponents keeps literal "+" characters in query values. Supabase's
+        // PostgREST layer decodes them as spaces, which corrupts timestamps such
+        // as "2026-09-18T17:12:04+00:00" and returns HTTP 400 / SQLSTATE 22007.
+        if let encodedQuery = parts?.percentEncodedQuery {
+            parts?.percentEncodedQuery = encodedQuery.replacingOccurrences(of: "+", with: "%2B")
+        }
+        return parts?.url
+    }
+}
+
 final class CloudService: @unchecked Sendable {
     private static let authStorageService = "hu.rayworks.vizit.ios.session"
     private static let authStorageKey = "vizit-auth-session"
@@ -435,11 +452,10 @@ final class CloudService: @unchecked Sendable {
                                               query: [URLQueryItem] = [], body: Encodable? = nil,
                                               prefer: String? = nil) async throws -> Response {
         let session = try await validSession()
-        var url = configuration.supabaseURL
-        path.forEach { url.appendPathComponent($0) }
-        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        parts?.queryItems = query.isEmpty ? nil : query
-        guard let finalURL = parts?.url else { throw CloudError.invalidRequest }
+        guard let finalURL = RESTURLBuilder.make(baseURL: configuration.supabaseURL,
+                                                 path: path, query: query) else {
+            throw CloudError.invalidRequest
+        }
         var request = URLRequest(url: finalURL)
         request.httpMethod = method
         request.setValue(configuration.publishableKey, forHTTPHeaderField: "apikey")
@@ -497,7 +513,8 @@ enum CloudError: LocalizedError {
             if status == 409, code == "23505" {
                 return "A választott nyilvános profilazonosító már foglalt. Válassz másikat."
             }
-            return "A VIZIT kiszolgáló elutasította a kérést (HTTP \(status))."
+            let diagnostic = code.map { ", kód: \($0)" } ?? ""
+            return "A VIZIT kiszolgáló elutasította a kérést (HTTP \(status)\(diagnostic))."
         }
     }
 }
