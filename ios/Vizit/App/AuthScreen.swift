@@ -243,7 +243,7 @@ struct AuthScreen: View {
     private var buildVersionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-        return "DEV \(version) (\(build))"
+        return "VIZIT \(version) (\(build))"
     }
 
     private func submit() {

@@ -15,6 +15,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -25,8 +26,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -88,6 +91,12 @@ import hu.rayworks.vizit.ui.design.components.VizitGroup
 import hu.rayworks.vizit.ui.design.components.VizitRow
 
 private enum class PortalPage { Home, Vosz, Education, Course, Help, Toolkit }
+
+/** Carousel card metrics: wide enough to read, narrow enough to hint at the next card. */
+private val PORTAL_CARD_WIDTH = 268.dp
+private val PORTAL_CARD_HEIGHT = 244.dp
+private val COURSE_CARD_WIDTH = 264.dp
+private val COURSE_CARD_HEIGHT = 268.dp
 
 private data class PortalCard(
     val page: PortalPage,
@@ -572,12 +581,21 @@ private fun PortalHome(onBack: () -> Unit, navigate: (PortalPage) -> Unit, modif
     val colors = Vizit.colors
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.canvas)
-            .windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = Vizit.space.md),
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
-        item { VizitBrandHeader(style = VizitBrandHeaderStyle.Compact, onBack = onBack) }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(Vizit.space.xs)) {
+            VizitBrandHeader(
+                style = VizitBrandHeaderStyle.Compact,
+                onBack = onBack,
+                modifier = Modifier.padding(horizontal = Vizit.space.md),
+            )
+        }
+        item {
+            Column(
+                modifier = Modifier.padding(horizontal = Vizit.space.md),
+                verticalArrangement = Arrangement.spacedBy(Vizit.space.xs),
+            ) {
                 Text("Vállalkozói Portál", style = Vizit.type.h1, color = colors.textPrimary)
                 Text(
                     "Tanulás, hiteles források és digitális segítség a vállalkozásod következő lépéséhez.",
@@ -586,17 +604,24 @@ private fun PortalHome(onBack: () -> Unit, navigate: (PortalPage) -> Unit, modif
                 )
             }
         }
-        items(portalCards.chunked(2)) { rowCards ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm)) {
-                rowCards.forEach { card ->
-                    PortalFeatureCard(card, { navigate(card.page) }, Modifier.weight(1f))
+        item {
+            // The four areas sit side by side so each one can be large enough to
+            // read at a glance; the row scrolls horizontally rather than pushing
+            // the rest of the portal off the screen.
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                contentPadding = PaddingValues(horizontal = Vizit.space.md),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                items(portalCards, key = { it.page.name }) { card ->
+                    PortalFeatureCard(card, { navigate(card.page) }, Modifier.width(PORTAL_CARD_WIDTH))
                 }
-                if (rowCards.size == 1) Spacer(Modifier.weight(1f))
             }
         }
         item {
             Box(
                 modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = Vizit.space.md)
                     .background(colors.primarySubtle, RoundedCornerShape(Vizit.radius.lg))
                     .padding(Vizit.space.md),
             ) {
@@ -625,7 +650,7 @@ private fun PortalFeatureCard(card: PortalCard, onClick: () -> Unit, modifier: M
     val colors = Vizit.colors
     Card(
         onClick = onClick,
-        modifier = modifier.height(214.dp),
+        modifier = modifier.height(PORTAL_CARD_HEIGHT),
         shape = RoundedCornerShape(Vizit.radius.lg),
         colors = CardDefaults.cardColors(containerColor = colors.surface),
         border = BorderStroke(1.dp, colors.border),
@@ -721,19 +746,22 @@ private fun EducationCatalog(onBack: () -> Unit, onCourse: (String) -> Unit, mod
     }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.canvas)
-            .windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = Vizit.space.md),
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
         item {
-            PortalHeader(
-                "Vállalkozói Edukáció",
-                "Rövid, gyakorlatias tananyagok, saját tempóban.",
-                onBack,
-            )
+            Box(Modifier.padding(horizontal = Vizit.space.md)) {
+                PortalHeader(
+                    "Vállalkozói Edukáció",
+                    "Rövid, gyakorlatias tananyagok, saját tempóban.",
+                    onBack,
+                )
+            }
         }
         item {
             Row(
-                Modifier.horizontalScroll(rememberScrollState()),
+                Modifier.horizontalScroll(rememberScrollState())
+                    .padding(horizontal = Vizit.space.md),
                 horizontalArrangement = Arrangement.spacedBy(Vizit.space.xs),
             ) {
                 categories.forEach { category ->
@@ -749,41 +777,66 @@ private fun EducationCatalog(onBack: () -> Unit, onCourse: (String) -> Unit, mod
                 }
             }
         }
-        items(filtered, key = { it.id }) { course -> CourseCard(course) { onCourse(course.id) } }
+        item {
+            // Topics run side by side, so the whole catalogue is reachable by
+            // swiping instead of scrolling past six full-width rows.
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                contentPadding = PaddingValues(horizontal = Vizit.space.md),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                items(filtered, key = { it.id }) { course ->
+                    CourseCard(course, Modifier.width(COURSE_CARD_WIDTH)) { onCourse(course.id) }
+                }
+            }
+        }
         item { Spacer(Modifier.height(Vizit.space.xxl)) }
     }
 }
 
 @Composable
-private fun CourseCard(course: BusinessCourse, onClick: () -> Unit) {
+private fun CourseCard(
+    course: BusinessCourse,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val colors = Vizit.colors
     Card(
         onClick = onClick,
+        modifier = modifier.height(COURSE_CARD_HEIGHT),
         colors = CardDefaults.cardColors(containerColor = colors.surface),
         shape = RoundedCornerShape(Vizit.radius.lg),
         border = BorderStroke(1.dp, colors.border),
     ) {
-        Row(Modifier.padding(Vizit.space.md), horizontalArrangement = Arrangement.spacedBy(Vizit.space.md)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(Vizit.space.md),
+            verticalArrangement = Arrangement.spacedBy(Vizit.space.xs),
+        ) {
             Box(
-                Modifier.size(64.dp).background(colors.primarySubtle, RoundedCornerShape(Vizit.radius.md)),
+                Modifier.size(56.dp).background(colors.primarySubtle, RoundedCornerShape(Vizit.radius.md)),
                 contentAlignment = Alignment.Center,
-            ) { Icon(course.icon, null, tint = colors.primary, modifier = Modifier.size(30.dp)) }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Vizit.space.xxs)) {
-                Text(course.category.uppercase(), style = Vizit.type.overline, color = colors.primary)
-                Text(course.title, style = Vizit.type.h3, color = colors.textPrimary)
-                Text(
-                    course.description,
-                    style = Vizit.type.bodySmall,
-                    color = colors.textSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    "${course.duration}  ·  ${course.level}  ·  ${(course.modules.size + 1) / 2} modul  ·  ${course.modules.size} lecke",
-                    style = Vizit.type.caption,
-                    color = colors.textMuted,
-                )
-            }
+            ) { Icon(course.icon, null, tint = colors.primary, modifier = Modifier.size(28.dp)) }
+            Text(course.category.uppercase(), style = Vizit.type.overline, color = colors.primary)
+            Text(
+                course.title,
+                style = Vizit.type.h3,
+                color = colors.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                course.description,
+                style = Vizit.type.bodySmall,
+                color = colors.textSecondary,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "${course.level}  ·  ${course.modules.size} lecke",
+                style = Vizit.type.caption,
+                color = colors.textMuted,
+            )
         }
     }
 }

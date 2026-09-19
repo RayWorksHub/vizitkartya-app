@@ -1,4 +1,4 @@
-# VIZIT 6.0.0 — Vállalkozói Portál és saját domain
+# VIZIT 7.0.0 — Vállalkozói Portál és saját domain
 
 ## Elkészült funkciók
 
@@ -24,7 +24,15 @@
 
 A domain megváltoztatása mindig törli az ellenőrzött állapotot. Mobil- vagy publikus API-kliens nem jelölhet domaint saját maga ellenőrzöttnek.
 
+## Elrendezés
+
+A portál négy területe és az edukáció témái egymás mellett, vízszintesen
+görgethető sorban állnak. Így mindegyik kártya elég nagy ahhoz, hogy egy
+pillantásra olvasható legyen, és a sor nem tolja le a képernyőről a portál
+többi részét. A sor a képernyő széléig fut, így a félig látszó következő
+kártya jelzi, hogy tovább lehet húzni.
+
 ## Verzió
 
-- Android: `6.0.0` (`6000000`)
-- iOS: `6.0.0`
+- Android: `7.0.0` (`7000000`)
+- iOS: `7.0.0`

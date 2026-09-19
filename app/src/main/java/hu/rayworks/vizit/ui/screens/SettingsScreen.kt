@@ -252,7 +252,7 @@ fun SettingsScreen(
             }
         } else {
             VizitBanner(
-                text = "A helyi DEV tesztprofilhoz nem tartozik felhőfiók.",
+                text = "A helyi próbaprofilhoz nem tartozik felhőfiók, ezért a szinkron és a nyilvános profil nem érhető el.",
                 tone = VizitTone.Info,
             )
         }

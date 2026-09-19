@@ -401,7 +401,7 @@ private fun AuthNavigation(
                 )
                 if (canUseDebugLocalProfile) {
                     VizitButton(
-                        text = "DEV: helyi tesztprofil",
+                        text = "Belépés helyi próbaprofillal",
                         onClick = onUseDebugLocalProfile,
                         style = VizitButtonStyle.Tertiary,
                     )

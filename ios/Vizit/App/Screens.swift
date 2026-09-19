@@ -722,6 +722,15 @@ struct ScanFlow: View {
 
 private enum PortalDestination { case vosz, education, help, toolkit }
 
+/// Carousel card metrics: wide enough to read, narrow enough that the next card
+/// peeks in and signals the row scrolls.
+private enum PortalMetrics {
+    static let cardWidth: CGFloat = 268
+    static let cardHeight: CGFloat = 244
+    static let courseWidth: CGFloat = 264
+    static let courseHeight: CGFloat = 268
+}
+
 private struct PortalFeature: Identifiable {
     let id: String
     let title: String
@@ -976,7 +985,6 @@ private let toolkitGuides = [
 
 struct BusinessHubScreen: View {
     @Environment(\.dismiss) private var dismiss
-    private let columns = [GridItem(.flexible(), spacing: VizitSpace.sm), GridItem(.flexible(), spacing: VizitSpace.sm)]
 
     var body: some View {
         NavigationStack {
@@ -989,12 +997,19 @@ struct BusinessHubScreen: View {
                             Text("Tanulás, hiteles források és digitális segítség a vállalkozásod következő lépéséhez.")
                                 .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
                         }
-                        LazyVGrid(columns: columns, spacing: VizitSpace.sm) {
-                            ForEach(portalFeatures) { feature in
-                                NavigationLink { destination(for: feature.destination) } label: { PortalFeatureCard(feature: feature) }
-                                    .buttonStyle(.plain)
+                        // The four areas sit side by side so each one can be large
+                        // enough to read at a glance. The row bleeds to the screen
+                        // edges so a partially visible card hints that it scrolls.
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: VizitSpace.sm) {
+                                ForEach(portalFeatures) { feature in
+                                    NavigationLink { destination(for: feature.destination) } label: { PortalFeatureCard(feature: feature) }
+                                        .buttonStyle(.plain)
+                                }
                             }
+                            .padding(.horizontal, VizitSpace.md)
                         }
+                        .padding(.horizontal, -VizitSpace.md)
                         VizitPanel {
                             HStack(alignment: .top, spacing: VizitSpace.sm) {
                                 VizitIconChip(systemImage: "lightbulb.fill", tint: VizitColor.primary, background: VizitColor.primarySubtle)
@@ -1036,7 +1051,8 @@ private struct PortalFeatureCard: View {
             Spacer(minLength: 0)
             Image(systemName: "arrow.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(VizitColor.primary).frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(VizitSpace.md).frame(maxWidth: .infinity, minHeight: 222, alignment: .topLeading)
+        .padding(VizitSpace.md)
+        .frame(width: PortalMetrics.cardWidth, height: PortalMetrics.cardHeight, alignment: .topLeading)
         .background(VizitColor.surface).clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
     }
@@ -1085,9 +1101,17 @@ private struct EducationCatalogScreen: View {
                     }
                 }
             }
-            ForEach(filtered) { course in
-                NavigationLink { CourseDetailScreen(course: course) } label: { CourseCard(course: course) }.buttonStyle(.plain)
+            // Topics run side by side, so the whole catalogue is reachable by
+            // swiping instead of scrolling past six full-width rows.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: VizitSpace.sm) {
+                    ForEach(filtered) { course in
+                        NavigationLink { CourseDetailScreen(course: course) } label: { CourseCard(course: course) }.buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, VizitSpace.md)
             }
+            .padding(.horizontal, -VizitSpace.md)
         }
     }
 }
@@ -1095,18 +1119,17 @@ private struct EducationCatalogScreen: View {
 private struct CourseCard: View {
     let course: BusinessCourse
     var body: some View {
-        HStack(alignment: .top, spacing: VizitSpace.md) {
-            VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle, size: 64)
-            VStack(alignment: .leading, spacing: VizitSpace.xxs) {
-                Text(course.category.uppercased()).vizitOverline().foregroundStyle(VizitColor.primary)
-                Text(course.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
-                Text(course.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary).lineLimit(2)
-                Text("\(course.duration)  ·  \(course.level)  ·  \((course.modules.count + 1) / 2) modul  ·  \(course.modules.count) lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
-            }
+        VStack(alignment: .leading, spacing: VizitSpace.xs) {
+            VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle, size: 56)
+            Text(course.category.uppercased()).vizitOverline().foregroundStyle(VizitColor.primary)
+            Text(course.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary).lineLimit(2)
+            Text(course.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary).lineLimit(3)
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(VizitColor.textMuted)
+            Text("\(course.level)  ·  \(course.modules.count) lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
         }
-        .padding(VizitSpace.md).background(VizitColor.surface)
+        .padding(VizitSpace.md)
+        .frame(width: PortalMetrics.courseWidth, height: PortalMetrics.courseHeight, alignment: .topLeading)
+        .background(VizitColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
     }
