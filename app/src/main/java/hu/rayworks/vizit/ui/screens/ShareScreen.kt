@@ -56,6 +56,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
+import hu.rayworks.vizit.qr.PublicProfileUrlFactory
 import hu.rayworks.vizit.qr.QrCodeGenerator
 import hu.rayworks.vizit.qr.QrMode
 import hu.rayworks.vizit.qr.QrPayloadFactory
@@ -100,7 +101,7 @@ fun ShareScreen(
     }
     val photoContactUrl = publicProfileUrl
         ?.takeIf { profile.photoBase64.isNotBlank() }
-        ?.plus("?contact=1")
+        ?.let { PublicProfileUrlFactory.createVCardUrl(it).getOrNull() }
     val contactPayload = remember(profile, publicProfileUrl) {
         QrPayloadFactory.contact(profile, publicProfileUrl)
     }
@@ -155,7 +156,7 @@ fun ShareScreen(
                         qrMode == QrMode.PROFILE ->
                             "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
                         photoContactUrl != null ->
-                            "Beolvasás után a profilképpel együtt menthető a névjegy."
+                            "Beolvasás után közvetlenül megnyílik a profilképes névjegy mentése."
                         else ->
                             "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
                     },
