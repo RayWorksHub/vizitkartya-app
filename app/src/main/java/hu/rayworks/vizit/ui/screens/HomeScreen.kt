@@ -172,8 +172,21 @@ fun HomeScreen(
                 tone = if (nfcStatus.isReady) VizitTone.Success else VizitTone.Warning,
             )
 
-            if (syncState.status == ProfileSyncStatus.FAILED) {
-                VizitStatusPill(text = "A szinkron nem sikerült", tone = VizitTone.Error)
+            if (syncState.status == ProfileSyncStatus.RETRY_SCHEDULED ||
+                syncState.status == ProfileSyncStatus.CONFLICT
+            ) {
+                VizitStatusPill(
+                    text = if (syncState.status == ProfileSyncStatus.CONFLICT) {
+                        "A szinkron ütközött"
+                    } else {
+                        "A szinkron újrapróbálásra vár"
+                    },
+                    tone = if (syncState.status == ProfileSyncStatus.CONFLICT) {
+                        VizitTone.Error
+                    } else {
+                        VizitTone.Warning
+                    },
+                )
             }
 
             VizitGroup {

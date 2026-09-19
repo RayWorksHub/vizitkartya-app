@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * VIZIT type ramp, mirroring the VIZIT/* text styles in Figma.
+ * VIZIT type ramp, mirroring the VIZIT/… text styles in Figma.
  *
  * Sizes are in sp so Dynamic Type / font scaling keeps working; line heights are
  * in sp for the same reason. The platform default family is used deliberately —
