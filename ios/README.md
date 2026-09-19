@@ -1,4 +1,4 @@
-# VIZIT iOS DEV 0.3
+# VIZIT iOS 6.0
 
 Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az aktív VIZIT Supabase-projekthez csatlakozik, az Androidon elérhető névjegyfolyamatokat az iOS platformbiztonsági korlátai között valósítja meg.
 
@@ -43,6 +43,12 @@ A GitHub **iOS secure IPA** workflow csak akkor tölti fel a VIZIT-iOS-DEV-unsig
 Nincs continue-on-error; hibás teszt után nem készül IPA-artifact. A szimulátoros teszt nem bizonyítja a kamerát, fotóválasztást, AirDropot, OAuth rendszerböngészőt vagy a valódi iPhone-telepítést.
 
 Az artifact aláíratlan IPA. Sideloadly/AltStore a saját Apple ID-val újra tudja aláírni, vagy Macen Xcode-ból telepíthető saját Team kiválasztásával. Ez nem App Store/TestFlight kiadás.
+
+## TestFlight-kiadás
+
+A `VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED=true` repository-változó és a
+`[testflight]` kiadási commit együtt engedélyezi az aláírt App Store-archívum
+ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 6.0.0**.
 
 ## Kötelező fizikai készülékteszt
 
