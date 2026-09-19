@@ -40,6 +40,7 @@ struct HomeScreen: View {
                             QuickTile(systemImage: "pencil", title: "Szerkesztés", subtitle: "Adataim") {
                                 editing = true
                             }
+                            .accessibilityIdentifier("card.edit")
                         }
 
                         if let issue = store.storageError {
@@ -75,10 +76,18 @@ struct HomeScreen: View {
                 Text("Üdv újra,")
                     .font(VizitFont.bodySmall)
                     .foregroundStyle(VizitColor.textMuted)
-                Text(store.profile.displayName.isEmpty ? "VIZIT" : store.profile.displayName)
-                    .font(VizitFont.h2)
-                    .foregroundStyle(VizitColor.textPrimary)
-                    .lineLimit(1)
+                if store.hasProfile {
+                    Text(store.profile.displayName)
+                        .font(VizitFont.h2)
+                        .foregroundStyle(VizitColor.textPrimary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("card.name")
+                } else {
+                    Text("VIZIT")
+                        .font(VizitFont.h2)
+                        .foregroundStyle(VizitColor.textPrimary)
+                        .lineLimit(1)
+                }
             }
             Spacer()
             Button { selectedTab = .card } label: {

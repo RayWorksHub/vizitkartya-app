@@ -112,6 +112,32 @@ struct VizitDigitalCard: View {
     }
 }
 
+/// Profile photo outside the card, on a themed surface rather than the card's
+/// white-on-ink treatment. Falls back to the initials monogram.
+struct VizitAvatar: View {
+    let profile: ContactProfile
+    var size: CGFloat = 72
+
+    var body: some View {
+        ZStack {
+            Circle().fill(VizitColor.primarySubtle)
+            Circle().stroke(VizitColor.border, lineWidth: 1)
+            if let data = Data(base64Encoded: profile.photoBase64), let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .clipShape(Circle())
+            } else {
+                Text(profile.initials.isEmpty ? "V" : profile.initials)
+                    .font(.system(size: size * 0.34, weight: .semibold))
+                    .foregroundStyle(VizitColor.primary)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
 /// The official VIZIT artwork always sits on a white plate, in both themes —
 /// the logo is a fixed brand asset and must not be tinted or inverted.
 struct VizitBrandLockup: View {

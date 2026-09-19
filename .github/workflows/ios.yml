@@ -2,7 +2,7 @@ name: iOS secure IPA
 
 on:
   push:
-    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability]
+    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj]
     paths: ['ios/**', 'config/**', '.github/workflows/ios.yml']
   pull_request:
     branches: [main, develop]

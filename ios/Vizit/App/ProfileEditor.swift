@@ -2,112 +2,41 @@ import SwiftUI
 import PhotosUI
 import ImageIO
 
+/// Profile editing, restructured from one unbroken list of fields into the same
+/// six labelled groups the Android `ProfileEditScreen` uses: Profilkép,
+/// Személyes adatok, Munkahely, Elérhetőségek, Közösségi profilok, Megosztási
+/// adatok. The photo pipeline, validation, save path and every accessibility
+/// identifier are carried over unchanged.
 struct ProfileEditor: View {
-    private enum Field: Hashable {
-        case fullName, lastName, firstName, phone, email, website
-        case company, jobTitle, address, linkedIn, facebook, instagram, tiktok, youtube, publicSlug
-    }
-
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State var draft: ContactProfile
     @State private var photo: PhotosPickerItem?
     @State private var error: String?
     @State private var loadingPhoto = false
-    @FocusState private var focusedField: Field?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Profilkép") {
-                    HStack(spacing: 20) {
-                        ProfileAvatar(profile: draft)
-                        VStack(alignment: .leading, spacing: 10) {
-                            PhotosPicker(selection: $photo, matching: .images) {
-                                Label("Kép kiválasztása", systemImage: "photo")
-                            }
-                            .disabled(loadingPhoto)
-                            if !draft.photoBase64.isEmpty {
-                                Button("Kép eltávolítása", role: .destructive) {
-                                    photo = nil
-                                    draft.photoBase64 = ""
-                                }
-                            }
-                            if loadingPhoto { ProgressView("Kép feldolgozása…") }
-                        }
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.xl) {
+                        photoSection
+                        personalSection
+                        workSection
+                        contactSection
+                        socialSection
+                        sharingSection
+                        storageNote
                     }
+                    .padding(.horizontal, VizitSpace.md)
+                    .padding(.vertical, VizitSpace.lg)
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
                 }
-                Section("Név") {
-                    TextField("Megjelenített név", text: $draft.fullName)
-                        .focused($focusedField, equals: .fullName)
-                        .textContentType(.name).accessibilityIdentifier("profile.fullName")
-                    TextField("Vezetéknév", text: $draft.lastName)
-                        .focused($focusedField, equals: .lastName).textContentType(.familyName)
-                    TextField("Keresztnév", text: $draft.firstName)
-                        .focused($focusedField, equals: .firstName).textContentType(.givenName)
-                }
-                Section("Elérhetőségek") {
-                    TextField("Telefonszám", text: $draft.phone)
-                        .focused($focusedField, equals: .phone)
-                        .keyboardType(.phonePad).textContentType(.telephoneNumber)
-                        .accessibilityIdentifier("profile.phone")
-                    TextField("E-mail-cím", text: $draft.email)
-                        .focused($focusedField, equals: .email)
-                        .keyboardType(.emailAddress).textContentType(.emailAddress)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .accessibilityIdentifier("profile.email")
-                    TextField("Weboldal – https://…", text: $draft.website)
-                        .focused($focusedField, equals: .website)
-                        .keyboardType(.URL).textContentType(.URL)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                }
-                Section("Munkahely") {
-                    TextField("Cég", text: $draft.company)
-                        .focused($focusedField, equals: .company).textContentType(.organizationName)
-                    TextField("Beosztás", text: $draft.jobTitle)
-                        .focused($focusedField, equals: .jobTitle).textContentType(.jobTitle)
-                    TextField("Cím", text: $draft.address)
-                        .focused($focusedField, equals: .address).textContentType(.fullStreetAddress)
-                }
-                Section("Közösségi média") {
-                    TextField("LinkedIn – https://…", text: $draft.linkedIn)
-                        .focused($focusedField, equals: .linkedIn)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Facebook – https://…", text: $draft.facebook)
-                        .focused($focusedField, equals: .facebook)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Instagram – https://…", text: $draft.instagram)
-                        .focused($focusedField, equals: .instagram)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("TikTok – https://…", text: $draft.tiktok)
-                        .focused($focusedField, equals: .tiktok)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("YouTube – https://…", text: $draft.youtube)
-                        .focused($focusedField, equals: .youtube)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Text("A megadott profilok a VIZIT-névjeggyel együtt szinkronizálódnak és kerülnek átadásra.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Nyilvános VIZIT-profil") {
-                    Toggle("Nyilvános profil engedélyezése", isOn: $draft.isPublic)
-                    TextField("Profilazonosító – pl. kovacs-anna", text: $draft.publicSlug)
-                        .focused($focusedField, equals: .publicSlug)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    if draft.publicSlug.isEmpty {
-                        Text("Az első felhőmentés biztonságos, egyedi azonosítót készít. Ezután itt módosíthatod.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    } else {
-                        Text("A nyilvános cím megváltoztatása a korábban megosztott hivatkozásokat érvénytelenné teheti.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-                Section {
-                    Text("Először titkosított helyi fájlba mentünk, majd bejelentkezve szinkronizálunk. Mások QR-kódon, megosztott fájlon vagy az általad engedélyezett nyilvános profilon kapják meg az adatokat.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Névjegy szerkesztése").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Névjegy szerkesztése")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Mégse") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -120,7 +49,7 @@ struct ProfileEditor: View {
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Kész") { focusedField = nil }
+                    Button("Kész") { dismissKeyboard() }
                         .accessibilityIdentifier("profile.keyboardDone")
                 }
             }
@@ -151,5 +80,258 @@ struct ProfileEditor: View {
                 }
             }
         }
+    }
+
+    /// Resigns first responder globally. The fields are composite views, so a
+    /// FocusState binding on them would not reach the inner UITextField.
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+    }
+
+    // MARK: - Groups
+
+    private func group<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: VizitSpace.sm) {
+            VizitSectionHeader(title: title)
+            content()
+        }
+    }
+
+    private var photoSection: some View {
+        group("Profilkép") {
+            VizitPanel {
+                HStack(spacing: VizitSpace.md) {
+                    VizitAvatar(profile: draft, size: 72)
+                    VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                        PhotosPicker(selection: $photo, matching: .images) {
+                            Label("Kép kiválasztása", systemImage: "photo")
+                                .font(VizitFont.label)
+                                .foregroundStyle(VizitColor.primary)
+                        }
+                        .disabled(loadingPhoto)
+                        .frame(minHeight: VizitMetrics.minTouchTarget, alignment: .leading)
+
+                        if !draft.photoBase64.isEmpty {
+                            Button("Kép eltávolítása") {
+                                photo = nil
+                                draft.photoBase64 = ""
+                            }
+                            .font(VizitFont.label)
+                            .foregroundStyle(VizitColor.error)
+                            .frame(minHeight: VizitMetrics.minTouchTarget, alignment: .leading)
+                        }
+
+                        if loadingPhoto {
+                            HStack(spacing: VizitSpace.xs) {
+                                ProgressView().controlSize(.small)
+                                Text("Kép feldolgozása…")
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private var personalSection: some View {
+        group("Személyes adatok") {
+            VStack(spacing: VizitSpace.sm) {
+                VizitTextField(
+                    label: "Megjelenített név",
+                    text: $draft.fullName,
+                    placeholder: "pl. Kovács Anna",
+                    contentType: .name,
+                    autocapitalization: .words,
+                    identifier: "profile.fullName",
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "Vezetéknév",
+                    text: $draft.lastName,
+                    contentType: .familyName,
+                    autocapitalization: .words,
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "Keresztnév",
+                    text: $draft.firstName,
+                    contentType: .givenName,
+                    autocapitalization: .words,
+                    submitLabel: .next
+                )
+            }
+        }
+    }
+
+    private var workSection: some View {
+        group("Munkahely") {
+            VStack(spacing: VizitSpace.sm) {
+                VizitTextField(
+                    label: "Cég",
+                    text: $draft.company,
+                    contentType: .organizationName,
+                    autocapitalization: .words,
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "Beosztás",
+                    text: $draft.jobTitle,
+                    contentType: .jobTitle,
+                    autocapitalization: .sentences,
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "Cím",
+                    text: $draft.address,
+                    contentType: .fullStreetAddress,
+                    autocapitalization: .sentences,
+                    submitLabel: .next
+                )
+            }
+        }
+    }
+
+    private var contactSection: some View {
+        group("Elérhetőségek") {
+            VStack(spacing: VizitSpace.sm) {
+                VizitTextField(
+                    label: "Telefonszám",
+                    text: $draft.phone,
+                    placeholder: "+36 …",
+                    keyboard: .phonePad,
+                    contentType: .telephoneNumber,
+                    identifier: "profile.phone",
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "E-mail-cím",
+                    text: $draft.email,
+                    placeholder: "nev@pelda.hu",
+                    keyboard: .emailAddress,
+                    contentType: .emailAddress,
+                    autocapitalization: .never,
+                    identifier: "profile.email",
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "Weboldal",
+                    text: $draft.website,
+                    placeholder: "https://…",
+                    keyboard: .URL,
+                    contentType: .URL,
+                    autocapitalization: .never,
+                    submitLabel: .next
+                )
+            }
+        }
+    }
+
+    private var socialSection: some View {
+        group("Közösségi profilok") {
+            VStack(spacing: VizitSpace.sm) {
+                VizitTextField(
+                    label: "LinkedIn",
+                    text: $draft.linkedIn,
+                    placeholder: "https://…",
+                    keyboard: .URL,
+                    autocapitalization: .never,
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "Facebook",
+                    text: $draft.facebook,
+                    placeholder: "https://…",
+                    keyboard: .URL,
+                    autocapitalization: .never,
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "Instagram",
+                    text: $draft.instagram,
+                    placeholder: "https://…",
+                    keyboard: .URL,
+                    autocapitalization: .never,
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "TikTok",
+                    text: $draft.tiktok,
+                    placeholder: "https://…",
+                    keyboard: .URL,
+                    autocapitalization: .never,
+                    submitLabel: .next
+                )
+
+                VizitTextField(
+                    label: "YouTube",
+                    text: $draft.youtube,
+                    placeholder: "https://…",
+                    keyboard: .URL,
+                    autocapitalization: .never,
+                    submitLabel: .next
+                )
+
+                Text("A megadott profilok a VIZIT-névjeggyel együtt szinkronizálódnak és kerülnek átadásra.")
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(VizitColor.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var sharingSection: some View {
+        group("Megosztási adatok") {
+            VStack(spacing: VizitSpace.sm) {
+                VizitPanel {
+                    Toggle(isOn: $draft.isPublic) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nyilvános profil engedélyezése")
+                                .font(VizitFont.body)
+                                .foregroundStyle(VizitColor.textPrimary)
+                            Text("Bárki megnyithatja a megosztott hivatkozást.")
+                                .font(VizitFont.bodySmall)
+                                .foregroundStyle(VizitColor.textSecondary)
+                        }
+                    }
+                    .tint(VizitColor.primary)
+                }
+
+                VizitTextField(
+                    label: "Profilazonosító",
+                    text: $draft.publicSlug,
+                    placeholder: "pl. kovacs-anna",
+                    helper: draft.publicSlug.isEmpty
+                        ? "Az első felhőmentés biztonságos, egyedi azonosítót készít. Ezután itt módosíthatod."
+                        : "A nyilvános cím megváltoztatása a korábban megosztott hivatkozásokat érvénytelenné teheti.",
+                    autocapitalization: .never,
+                    submitLabel: .done
+                )
+            }
+        }
+    }
+
+    private var storageNote: some View {
+        Text("Először titkosított helyi fájlba mentünk, majd bejelentkezve szinkronizálunk. Mások QR-kódon, megosztott fájlon vagy az általad engedélyezett nyilvános profilon kapják meg az adatokat.")
+            .font(VizitFont.bodySmall)
+            .foregroundStyle(VizitColor.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, VizitSpace.xxs)
     }
 }

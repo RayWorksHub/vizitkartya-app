@@ -115,6 +115,10 @@ struct VizitTextField: View {
     var contentType: UITextContentType?
     var autocapitalization: TextInputAutocapitalization = .sentences
     var isSecure = false
+    /// Applied to the field element itself so UI tests can address it by type.
+    var identifier: String?
+    var submitLabel: SubmitLabel = .return
+    var onSubmit: (() -> Void)?
 
     @FocusState private var focused: Bool
     @State private var revealed = false
@@ -149,6 +153,9 @@ struct VizitTextField: View {
                 .autocorrectionDisabled(keyboard == .emailAddress || keyboard == .URL)
                 .focused($focused)
                 .disabled(!isEnabled)
+                .submitLabel(submitLabel)
+                .onSubmit { onSubmit?() }
+                .vizitIdentifier(identifier)
 
                 if isSecure {
                     VizitIconButton(
@@ -557,5 +564,28 @@ struct VizitSegmentedControl: View {
         .padding(VizitSpace.xxs)
         .background(VizitColor.controlTrack)
         .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+    }
+}
+
+
+// MARK: - Helpers
+
+/// Applies an accessibility identifier only when one is supplied, so a nil
+/// value leaves whatever the surrounding view hierarchy already set.
+private struct VizitOptionalIdentifier: ViewModifier {
+    let identifier: String?
+
+    func body(content: Content) -> some View {
+        if let identifier {
+            content.accessibilityIdentifier(identifier)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func vizitIdentifier(_ identifier: String?) -> some View {
+        modifier(VizitOptionalIdentifier(identifier: identifier))
     }
 }
