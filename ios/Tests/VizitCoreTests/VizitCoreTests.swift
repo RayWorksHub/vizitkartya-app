@@ -30,6 +30,8 @@ final class VizitCoreTests: XCTestCase {
     func testContactMethodRequired() {
         var p = sample(); p.phone = ""; p.email = ""
         XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .missingContact) }
+        XCTAssertEqual(ProfileError.missingPhoto.errorDescription,
+                       "A névjegy megosztásához tölts fel profilképet.")
     }
     func testEmailWithoutPhoneWorks() throws {
         var p = sample(); p.phone = ""; try p.validate()
