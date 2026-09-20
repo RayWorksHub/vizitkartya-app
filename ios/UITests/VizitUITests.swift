@@ -225,15 +225,12 @@ final class VizitUITests: XCTestCase {
         for identifier in ["card.material.ink", "card.material.paper", "card.material.brand"] {
             XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5), "Missing \(identifier)")
         }
-        for layout in [
-            (identifier: "card.layout.portrait", label: "Portré"),
-            (identifier: "card.layout.minimal", label: "Minimál"),
-            (identifier: "card.layout.classic", label: "Klasszikus"),
-        ] {
-            let button = app.buttons[layout.identifier]
-            XCTAssertTrue(button.exists, "Missing \(layout.identifier)")
-            XCTAssertEqual(button.label, layout.label)
-            XCTAssertTrue(button.isHittable, "Not hittable: \(layout.identifier)")
+        let layoutControl = app.segmentedControls["card.layout"]
+        XCTAssertTrue(layoutControl.waitForExistence(timeout: 5))
+        for label in ["Portré", "Minimál", "Klasszikus"] {
+            let button = layoutControl.buttons[label]
+            XCTAssertTrue(button.exists, "Missing layout: \(label)")
+            XCTAssertTrue(button.isHittable, "Not hittable: \(label)")
         }
 
         for material in [
@@ -248,18 +245,18 @@ final class VizitUITests: XCTestCase {
         }
 
         for layout in [
-            (identifier: "card.layout.portrait", attachment: "VIZIT-card-layout-portrait"),
-            (identifier: "card.layout.minimal", attachment: "VIZIT-card-layout-minimal"),
-            (identifier: "card.layout.classic", attachment: "VIZIT-card-layout-classic"),
+            (label: "Portré", attachment: "VIZIT-card-layout-portrait"),
+            (label: "Minimál", attachment: "VIZIT-card-layout-minimal"),
+            (label: "Klasszikus", attachment: "VIZIT-card-layout-classic"),
         ] {
-            let button = app.buttons[layout.identifier]
+            let button = layoutControl.buttons[layout.label]
             button.tap()
             assertSelected(button)
             capture(layout.attachment, in: app)
         }
 
         app.buttons["card.material.paper"].tap()
-        app.buttons["card.layout.classic"].tap()
+        layoutControl.buttons["Klasszikus"].tap()
 
         for identifier in ["card.showPhoto", "card.showQR", "card.showSocial"] {
             let toggle = app.switches[identifier]
@@ -274,8 +271,10 @@ final class VizitUITests: XCTestCase {
         app.buttons["Kész"].tap()
         reveal(appearance, in: app)
         appearance.tap()
+        let reopenedLayoutControl = app.segmentedControls["card.layout"]
+        XCTAssertTrue(reopenedLayoutControl.waitForExistence(timeout: 5))
         assertSelected(app.buttons["card.material.paper"])
-        assertSelected(app.buttons["card.layout.classic"])
+        assertSelected(reopenedLayoutControl.buttons["Klasszikus"])
     }
 
     func testReleaseAuditCoversPrimaryScreensAndPhotoQR() {

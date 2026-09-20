@@ -544,49 +544,23 @@ struct VizitSkeleton: View {
     }
 }
 
-/// Two-to-three option switch. Selection is carried by fill and weight, not
-/// colour alone, and each segment is a real accessibility element.
+/// Native two-to-three option switch. UIKit owns the hit regions and selected
+/// semantics so every visual segment is the control VoiceOver activates.
 struct VizitSegmentedControl: View {
     let options: [String]
     @Binding var selection: Int
-    var accessibilityIdentifiers: [String]? = nil
-
-    private func accessibilityIdentifier(at index: Int, fallback: String) -> String {
-        guard let accessibilityIdentifiers,
-              accessibilityIdentifiers.indices.contains(index) else { return fallback }
-        return accessibilityIdentifiers[index]
-    }
+    var accessibilityIdentifier: String? = nil
 
     var body: some View {
-        HStack(spacing: VizitSpace.xxs) {
+        Picker("Választó", selection: $selection) {
             ForEach(Array(options.enumerated()), id: \.offset) { index, title in
-                Button {
-                    selection = index
-                } label: {
-                    Text(title)
-                        .font(VizitFont.label)
-                        .foregroundStyle(selection == index ? VizitColor.textPrimary : VizitColor.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                        .background(selection == index ? VizitColor.surface : .clear)
-                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.sm + 1, style: .continuous))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                // Keep every accessibility activation point inside its own
-                // equal-width visual segment, including the trailing option.
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .accessibilityLabel(title)
-                .accessibilityIdentifier(accessibilityIdentifier(at: index, fallback: title))
-                .accessibilityValue(selection == index ? "Kiválasztva" : "Nincs kiválasztva")
-                .accessibilityAddTraits(selection == index ? .isSelected : [])
-                .accessibilityRemoveTraits(selection == index ? [] : .isSelected)
+                Text(title).tag(index)
             }
         }
-        .padding(VizitSpace.xxs)
-        .background(VizitColor.controlTrack)
-        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.large)
+        .vizitIdentifier(accessibilityIdentifier)
     }
 }
 
