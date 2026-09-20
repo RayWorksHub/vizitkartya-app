@@ -22,6 +22,8 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Nfc
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -39,12 +41,12 @@ import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.auth.AuthActionState
 import hu.rayworks.vizit.auth.AuthOperation
 import hu.rayworks.vizit.auth.AuthValidator
+import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.ThemeMode
 import hu.rayworks.vizit.ui.design.Vizit
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
+import hu.rayworks.vizit.ui.design.components.VizitLargeTitle
 import hu.rayworks.vizit.ui.design.components.VizitBanner
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
@@ -81,6 +83,9 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onDeleteAccount: (String) -> Unit,
     modifier: Modifier = Modifier,
+    cardPresentation: CardPresentation = CardPresentation(),
+    onOpenCardAppearance: () -> Unit = {},
+    onOpenDataVisibility: () -> Unit = {},
 ) {
     val colors = Vizit.colors
     val context = LocalContext.current
@@ -104,9 +109,26 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
         Spacer(Modifier.height(Vizit.space.xs))
-        VizitBrandHeader(style = VizitBrandHeaderStyle.Compact)
+        VizitLargeTitle(title = "Beállítások")
 
-        Text("Beállítások", style = Vizit.type.h1, color = colors.textPrimary)
+        // ---------- The card itself
+        VizitSectionHeader("Névjegy")
+        VizitGroup {
+            VizitRow(
+                label = "Kártya megjelenése",
+                value = cardPresentation.colorway.label,
+                icon = Icons.Outlined.Palette,
+                onClick = onOpenCardAppearance,
+            )
+            VizitDivider()
+            VizitRow(
+                label = "Adatok láthatósága",
+                supporting = "${cardPresentation.sharedFieldCount} mező látható a " +
+                    "${CardPresentation.OPTIONAL_FIELD_COUNT}-ből",
+                icon = Icons.Outlined.Visibility,
+                onClick = onOpenDataVisibility,
+            )
+        }
 
         // ---------- Appearance
         VizitSectionHeader("Megjelenés")

@@ -38,6 +38,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.BusinessCenter
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.outlined.CallEnd
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Description
@@ -83,11 +85,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.ui.design.Vizit
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
+import hu.rayworks.vizit.ui.design.components.VizitLargeTitle
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
 import hu.rayworks.vizit.ui.design.components.VizitDivider
@@ -589,18 +592,18 @@ private fun PortalHome(onBack: () -> Unit, navigate: (PortalPage) -> Unit, modif
         verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
         item {
-            VizitBrandHeader(
-                style = VizitBrandHeaderStyle.Compact,
-                onBack = onBack,
-                modifier = Modifier.padding(horizontal = Vizit.space.md),
-            )
-        }
-        item {
             Column(
                 modifier = Modifier.padding(horizontal = Vizit.space.md),
                 verticalArrangement = Arrangement.spacedBy(Vizit.space.xs),
             ) {
-                Text("Vállalkozói Portál", style = Vizit.type.h1, color = colors.textPrimary)
+                VizitLargeTitle(title = "Vállalkozói Portál") {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "Portál bezárása",
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(24.dp).clickable(onClick = onBack),
+                    )
+                }
                 Text(
                     "Tanulás, hiteles források és digitális segítség a vállalkozásod következő lépéséhez.",
                     style = Vizit.type.body,
@@ -689,12 +692,31 @@ private fun PortalFeatureCard(card: PortalCard, onClick: () -> Unit, modifier: M
     }
 }
 
+/** A portal sub-page header: the way back, the page's own title, its purpose. */
 @Composable
 private fun PortalHeader(title: String, subtitle: String, onBack: () -> Unit) {
     val colors = Vizit.colors
-    Column(verticalArrangement = Arrangement.spacedBy(Vizit.space.sm)) {
-        VizitBrandHeader(style = VizitBrandHeaderStyle.Compact, onBack = onBack)
-        Text(title, style = Vizit.type.h2, color = colors.textPrimary)
+    Column(verticalArrangement = Arrangement.spacedBy(Vizit.space.xs)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "Vissza",
+                tint = colors.textPrimary,
+                modifier = Modifier.size(24.dp).clickable(onClick = onBack),
+            )
+            Text(
+                title,
+                style = Vizit.type.h2,
+                color = colors.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+        }
         Text(subtitle, style = Vizit.type.body, color = colors.textSecondary)
     }
 }

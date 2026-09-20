@@ -55,9 +55,12 @@ import hu.rayworks.vizit.ui.design.components.VizitBanner
 import hu.rayworks.vizit.ui.design.components.VizitTone
 import hu.rayworks.vizit.ui.design.components.vizitReduceMotion
 import hu.rayworks.vizit.ui.screens.BusinessHubScreen
+import hu.rayworks.vizit.ui.screens.CardAppearanceScreen
 import hu.rayworks.vizit.ui.screens.CardScreen
+import hu.rayworks.vizit.ui.screens.DataVisibilityScreen
 import hu.rayworks.vizit.ui.screens.HomeScreen
 import hu.rayworks.vizit.ui.screens.NfcShareScreen
+import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
 
@@ -81,6 +84,9 @@ fun VizitApp(
 ) {
     var selectedSection by rememberSaveable { mutableStateOf(AppSection.HOME) }
     var showKnowledgeHub by rememberSaveable { mutableStateOf(false) }
+    var showCardAppearance by rememberSaveable { mutableStateOf(false) }
+    var showDataVisibility by rememberSaveable { mutableStateOf(false) }
+    var showScanner by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
 
     // Full-screen NFC hand-off takes over the whole app while it is running.
@@ -97,6 +103,31 @@ fun VizitApp(
 
     if (showKnowledgeHub) {
         BusinessHubScreen(onBack = { showKnowledgeHub = false })
+        return
+    }
+
+    if (showScanner) {
+        QrScanScreen(onClose = { showScanner = false })
+        return
+    }
+
+    if (showCardAppearance) {
+        CardAppearanceScreen(
+            profile = viewModel.profile,
+            presentation = viewModel.cardPresentation,
+            onPresentationChange = viewModel::updateCardPresentation,
+            onClose = { showCardAppearance = false },
+        )
+        return
+    }
+
+    if (showDataVisibility) {
+        DataVisibilityScreen(
+            profile = viewModel.profile,
+            presentation = viewModel.cardPresentation,
+            onPresentationChange = viewModel::updateCardPresentation,
+            onClose = { showDataVisibility = false },
+        )
         return
     }
 
@@ -127,23 +158,29 @@ fun VizitApp(
                 when (section) {
                     AppSection.HOME -> HomeScreen(
                         profile = viewModel.profile,
+                        presentation = viewModel.cardPresentation,
                         nfcStatus = viewModel.nfcStatus,
                         syncState = viewModel.profileSyncState,
                         onStartNfcShare = viewModel::startNfcShare,
                         onOpenCard = { selectedSection = AppSection.CARD },
                         onOpenShare = { selectedSection = AppSection.SHARE },
                         onOpenKnowledgeHub = { showKnowledgeHub = true },
+                        onOpenScanner = { showScanner = true },
                         onShareAsText = viewModel::shareAsText,
                     )
 
                     AppSection.CARD -> CardScreen(
                         profile = viewModel.profile,
+                        presentation = viewModel.cardPresentation,
                         onSave = viewModel::saveProfile,
                         onShare = { selectedSection = AppSection.SHARE },
+                        onOpenCardAppearance = { showCardAppearance = true },
+                        onOpenDataVisibility = { showDataVisibility = true },
                     )
 
                     AppSection.SHARE -> ShareScreen(
                         profile = viewModel.profile,
+                        presentation = viewModel.cardPresentation,
                         synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
                             !viewModel.profileSyncState.pendingChanges,
                         nfcStatus = viewModel.nfcStatus,
@@ -152,6 +189,9 @@ fun VizitApp(
 
                     AppSection.SETTINGS -> SettingsScreen(
                         nfcStatus = viewModel.nfcStatus,
+                        cardPresentation = viewModel.cardPresentation,
+                        onOpenCardAppearance = { showCardAppearance = true },
+                        onOpenDataVisibility = { showDataVisibility = true },
                         syncState = viewModel.profileSyncState,
                         automaticSyncEnabled = viewModel.automaticSyncEnabled,
                         themeMode = viewModel.themeMode,

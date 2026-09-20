@@ -243,3 +243,86 @@ fun VizitUserBadge(
         }
     }
 }
+
+/**
+ * The screen's own title, rendered the way the platform renders one: large,
+ * left-aligned, with an optional action or identity chip on the trailing edge.
+ *
+ * Primary screens carry the brand here instead of a separate header block, so
+ * the brand costs nothing but the title line the screen already needed.
+ */
+@Composable
+fun VizitLargeTitle(
+    title: String,
+    modifier: Modifier = Modifier,
+    letterSpacing: Double = 0.0,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+    ) {
+        Text(
+            text = title,
+            style = Vizit.type.display.copy(letterSpacing = letterSpacing.sp),
+            color = Vizit.colors.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).semantics { heading() },
+        )
+        trailing?.invoke()
+    }
+}
+
+/**
+ * The signed-in person as a tappable chip beside the title. It replaces the
+ * full greeting row on the home screen: same destination, a fraction of the
+ * height.
+ */
+@Composable
+fun VizitIdentityChip(
+    initials: String,
+    photoBase64: String,
+    displayName: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = Vizit.colors
+    val photo = rememberProfilePhoto(photoBase64)
+    val label = if (displayName.isBlank()) {
+        "Névjegy beállítása"
+    } else {
+        "Megnyitás: $displayName névjegye"
+    }
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .background(colors.primarySubtle, CircleShape)
+                .border(1.dp, colors.border, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (photo != null) {
+                Image(
+                    bitmap = photo,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(34.dp).clip(CircleShape),
+                )
+            } else {
+                Text(
+                    text = initials.ifBlank { "V" },
+                    style = Vizit.type.caption,
+                    color = colors.primary,
+                )
+            }
+        }
+    }
+}

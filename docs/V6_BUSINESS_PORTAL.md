@@ -1,4 +1,4 @@
-# VIZIT 7.1.0 — Vállalkozói Portál és saját domain
+# VIZIT 7.3.0 — Vállalkozói Portál és saját domain
 
 ## Elkészült funkciók
 
@@ -43,5 +43,5 @@ használja az alkalmazás témájától függetlenül, mert minden elem a videó
 
 ## Verzió
 
-- Android: `7.1.0` (`7010000`)
-- iOS: `7.1.0`
+- Android: `7.3.0` (`7030000`)
+- iOS: `7.3.0`

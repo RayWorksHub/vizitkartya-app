@@ -4,11 +4,18 @@ import AVFoundation
 struct QRScanner: UIViewControllerRepresentable {
     let onResult: (String) -> Void
     let onError: (String) -> Void
+    /// Driven by the overlay's torch button; the controller owns the hardware.
+    var torchOn = false
+    /// Reported back once the camera is configured, so the overlay only offers
+    /// a torch button on a device that actually has one.
+    var onTorchAvailability: ((Bool) -> Void)?
 
     func makeUIViewController(context: Context) -> ScannerController {
-        ScannerController(onResult: onResult, onError: onError)
+        ScannerController(onResult: onResult, onError: onError, onTorchAvailability: onTorchAvailability)
     }
-    func updateUIViewController(_ controller: ScannerController, context: Context) {}
+    func updateUIViewController(_ controller: ScannerController, context: Context) {
+        controller.setTorch(torchOn)
+    }
     static func dismantleUIViewController(_ controller: ScannerController, coordinator: ()) { controller.stop() }
 }
 
@@ -17,15 +24,21 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
     private let sessionQueue = DispatchQueue(label: "hu.rayworks.vizit.ios.camera")
     private let onResult: (String) -> Void
     private let onError: (String) -> Void
+    private let onTorchAvailability: ((Bool) -> Void)?
     private var preview: AVCaptureVideoPreviewLayer?
+    private var camera: AVCaptureDevice?
     private var finished = false
     private var visible = false
     // Accessed exclusively on sessionQueue.
     private var stopped = false
+    private var torchRequested = false
 
-    init(onResult: @escaping (String) -> Void, onError: @escaping (String) -> Void) {
+    init(onResult: @escaping (String) -> Void,
+         onError: @escaping (String) -> Void,
+         onTorchAvailability: ((Bool) -> Void)? = nil) {
         self.onResult = onResult
         self.onError = onError
+        self.onTorchAvailability = onTorchAvailability
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(onResult:onError:)") }
@@ -37,22 +50,6 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
         layer.videoGravity = .resizeAspectFill
         view.layer.addSublayer(layer)
         preview = layer
-        let hint = UILabel()
-        hint.text = "Irányítsd a kamerát a QR-kódra."
-        hint.textColor = .white
-        hint.backgroundColor = UIColor.black.withAlphaComponent(0.65)
-        hint.font = .preferredFont(forTextStyle: .headline)
-        hint.adjustsFontForContentSizeCategory = true
-        hint.numberOfLines = 0
-        hint.textAlignment = .center
-        hint.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(hint)
-        NSLayoutConstraint.activate([
-            hint.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            hint.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            hint.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -32),
-            hint.heightAnchor.constraint(greaterThanOrEqualToConstant: 60)
-        ])
         NotificationCenter.default.addObserver(self, selector: #selector(sessionInterrupted),
             name: .AVCaptureSessionWasInterrupted, object: session)
         NotificationCenter.default.addObserver(self, selector: #selector(sessionInterrupted),
@@ -109,6 +106,9 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
                 return
             }
             self.session.addInput(input)
+            self.camera = camera
+            let hasTorch = camera.hasTorch && camera.isTorchAvailable
+            DispatchQueue.main.async { self.onTorchAvailability?(hasTorch) }
             let output = AVCaptureMetadataOutput()
             guard self.session.canAddOutput(output) else {
                 self.session.commitConfiguration()
@@ -125,13 +125,34 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
             output.metadataObjectTypes = [.qr]
             self.session.commitConfiguration()
             self.session.startRunning()
+            self.applyTorch()
         }
+    }
+
+    func setTorch(_ on: Bool) {
+        sessionQueue.async { [weak self] in
+            guard let self, self.torchRequested != on else { return }
+            self.torchRequested = on
+            self.applyTorch()
+        }
+    }
+
+    /// The torch is a camera-device setting, so it has to be locked, changed
+    /// and unlocked off the main thread like any other capture configuration.
+    private func applyTorch() {
+        guard let camera, camera.hasTorch, camera.isTorchAvailable else { return }
+        let wanted = torchRequested && !stopped
+        guard camera.torchMode != (wanted ? .on : .off) else { return }
+        guard (try? camera.lockForConfiguration()) != nil else { return }
+        camera.torchMode = wanted ? .on : .off
+        camera.unlockForConfiguration()
     }
 
     func stop() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.stopped = true
+            self.applyTorch()
             if self.session.isRunning { self.session.stopRunning() }
         }
     }

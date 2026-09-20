@@ -7,6 +7,7 @@ import hu.rayworks.vizit.data.local.RoomProfileStore
 import hu.rayworks.vizit.data.local.VizitDatabase
 import hu.rayworks.vizit.data.remote.SupabaseProfileRemoteDataSource
 import hu.rayworks.vizit.data.remote.SupabaseProvider
+import hu.rayworks.vizit.data.card.CardPresentationStore
 import hu.rayworks.vizit.data.settings.AppSettingsStore
 import hu.rayworks.vizit.data.sync.ProfileSyncEngine
 import hu.rayworks.vizit.data.sync.WorkManagerProfileSyncScheduler
@@ -25,6 +26,7 @@ class VizitApplication : Application() {
 
 class VizitAppContainer(application: Application) {
     val settingsStore = AppSettingsStore(application)
+    val cardPresentationStore = CardPresentationStore(application)
     private val database = VizitDatabase.get(application)
     private val localStore = RoomProfileStore(database.profileDao())
     private val syncScheduler = WorkManagerProfileSyncScheduler(application)

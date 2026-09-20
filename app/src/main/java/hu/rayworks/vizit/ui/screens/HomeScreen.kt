@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -39,23 +40,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
+import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.Vizit
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
-import hu.rayworks.vizit.ui.design.components.VizitUserBadge
+import hu.rayworks.vizit.ui.design.components.VizitIdentityChip
+import hu.rayworks.vizit.ui.design.components.VizitLargeTitle
 import hu.rayworks.vizit.ui.design.components.VizitButton
-import hu.rayworks.vizit.ui.design.components.VizitDigitalCard
 import hu.rayworks.vizit.ui.design.components.VizitIconChip
 import hu.rayworks.vizit.ui.design.components.VizitRow
 import hu.rayworks.vizit.ui.design.components.VizitStatusPill
 import hu.rayworks.vizit.ui.design.components.VizitTone
 import hu.rayworks.vizit.ui.design.components.VizitGroup
-import hu.rayworks.vizit.ui.util.rememberProfilePhoto
 import kotlinx.coroutines.launch
 
 /**
@@ -74,12 +74,13 @@ fun HomeScreen(
     onOpenKnowledgeHub: () -> Unit,
     onShareAsText: (Context) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenScanner: () -> Unit = {},
+    presentation: CardPresentation = CardPresentation(),
 ) {
     val colors = Vizit.colors
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val photo = rememberProfilePhoto(profile.photoBase64)
 
     Box(modifier = modifier.fillMaxSize().background(colors.canvas)) {
         Column(
@@ -92,25 +93,17 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.height(Vizit.space.xs))
 
-            VizitBrandHeader(style = VizitBrandHeaderStyle.Full)
-
-            VizitUserBadge(
-                displayName = profile.resolvedDisplayName,
-                initials = profile.initials,
-                photoBase64 = profile.photoBase64,
-                onClick = onOpenCard,
-            )
+            VizitLargeTitle(title = "VIZIT", letterSpacing = 4.0) {
+                VizitIdentityChip(
+                    initials = profile.initials,
+                    photoBase64 = profile.photoBase64,
+                    displayName = profile.resolvedDisplayName,
+                    onClick = onOpenCard,
+                )
+            }
 
             Box(modifier = Modifier.clickable(role = Role.Button, onClick = onOpenCard)) {
-                VizitDigitalCard(
-                    fullName = profile.resolvedDisplayName,
-                    initials = profile.initials,
-                    jobTitle = profile.jobTitle,
-                    company = profile.company,
-                    phone = profile.phone,
-                    email = profile.email,
-                    photo = photo,
-                )
+                ProfileCard(profile = profile, presentation = presentation)
             }
 
             VizitButton(
@@ -141,6 +134,13 @@ fun HomeScreen(
                     subtitle = "Mutatás",
                     modifier = Modifier.weight(1f),
                     onClick = onOpenShare,
+                )
+                QuickTile(
+                    icon = Icons.Outlined.QrCodeScanner,
+                    title = "Beolvasás",
+                    subtitle = "Új kapcsolat",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenScanner,
                 )
                 QuickTile(
                     icon = Icons.Outlined.ContentCopy,
@@ -217,12 +217,24 @@ private fun QuickTile(
             background = if (enabled) colors.primarySubtle else colors.controlDisabled,
         )
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            // Four tiles share one row on a phone, so a long label shrinks
+            // rather than wrapping the tile out of alignment with its siblings.
             Text(
                 text = title,
                 style = Vizit.type.label,
                 color = if (enabled) colors.textPrimary else colors.textDisabled,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
-            Text(text = subtitle, style = Vizit.type.caption, color = colors.textMuted)
+            Text(
+                text = subtitle,
+                style = Vizit.type.caption,
+                color = colors.textMuted,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
