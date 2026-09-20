@@ -1,4 +1,4 @@
-# VIZIT iOS 6.1
+# VIZIT iOS 8.0
 
 Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az aktív VIZIT Supabase-projekthez csatlakozik, az Androidon elérhető névjegyfolyamatokat az iOS platformbiztonsági korlátai között valósítja meg.
 
@@ -9,7 +9,7 @@ Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az a
 - A Supabase-munkamenet kSecAttrAccessibleWhenUnlockedThisDeviceOnly kulcstár-elemként tárolódik.
 - Felhasználónként elkülönített, atomi és teljes fájlvédelemmel mentett helyi profil; a könyvtár ki van zárva az eszközmentésből.
 - Helyi-first profilmentés és optimista konkurenciavezérlés az adatbázis updated_at értékével. Ütközéskor a helyi példány nem íródik felül.
-- Nyilvános profil engedélyezése, Kontakt QR, HTTPS-profil QR, képes .vcf-megosztás és manuálisan jóváhagyott Kontaktokba mentés.
+- Nyilvános profil engedélyezése, fényképes kontakt QR, fényképes HTTPS-profil QR, képes .vcf-megosztás és manuálisan jóváhagyott Kontaktokba mentés.
 - Kamerás QR-beolvasás; HTTPS-link csak felhasználói megerősítés után nyílik meg.
 - Szerveroldali fióktörlés JWT-ellenőrzéssel, avatar-takarítással és az Auth-felhasználóhoz kapcsolt sorok kaszkádos törlésével.
 
@@ -48,7 +48,12 @@ Az artifact aláíratlan IPA. Sideloadly/AltStore a saját Apple ID-val újra tu
 
 A `VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED=true` repository-változó és a
 `[testflight]` kiadási commit együtt engedélyezi az aláírt App Store-archívum
-ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 7.3.0**.
+ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 8.0.0**.
+
+A 8.0-s iOS-kiadásban nincs kép nélküli névjegyátadás: a közvetlen QR
+optimalizált JPEG profilképet tartalmaz, a Profil QR pedig csak szinkronizált
+fényképes profilhoz érhető el. Ha ez nem garantálható, az app nem készít
+félrevezető QR-kódot.
 
 ## Kötelező fizikai készülékteszt
 
@@ -58,7 +63,7 @@ Kiadásra jelölés előtt valódi iPhone-on külön ellenőrizendő:
 - e-mailes regisztráció/megerősítés/belépés;
 - Google OAuth és jelszó-visszaállítás;
 - offline mentés, újracsatlakozás és két eszköz közti szinkronütközés;
-- kameraengedély, Kontakt QR visszaolvasás, Kontaktokba mentés;
+- kameraengedély, fényképes kontakt QR visszaolvasás, Kontaktokba mentés;
 - fotóválasztás, .vcf és AirDrop;
 - nyilvános profil megnyitása;
 - csak erre létrehozott tesztfiókkal a végleges fióktörlés.
