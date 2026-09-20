@@ -55,6 +55,22 @@ class LegacyProfileCodecTest {
         assertNull(QrPayloadFactory.profileUrl(p.copy(isPublic=false),true))
         assertEquals("https://e-nevjegy.vercel.app/p/teszt-elek",QrPayloadFactory.profileUrl(p,true))
     }
+    @Test fun `first save creates a readable identifier without user input`() {
+        val payload = ProfileSyncPayload(displayName = "Csukárdi Rajmund")
+        val values = LegacyProfileCodec.write(payload, null, row().ownerId)
+        assertEquals("\"csukardi-rajmund\"", values["slug"].toString())
+    }
+    @Test fun `QR uses only a verified custom domain`() {
+        val profile = ContactProfile(
+            fullName = "Teszt Elek", phone = "123", publicSlug = "teszt-elek", isPublic = true,
+            customDomain = "nevjegy.example.hu",
+        )
+        assertEquals("https://e-nevjegy.vercel.app/p/teszt-elek", QrPayloadFactory.profileUrl(profile, true))
+        assertEquals(
+            "https://nevjegy.example.hu",
+            QrPayloadFactory.profileUrl(profile.copy(customDomainVerified = true), true),
+        )
+    }
     @Test fun `oversized offline QR fails instead of losing fields`() {
         val p=ContactProfile(fullName="Teszt Elek",phone="123",address="Budapest ".repeat(400))
         assertTrue(QrPayloadFactory.contact(p,null).isFailure)

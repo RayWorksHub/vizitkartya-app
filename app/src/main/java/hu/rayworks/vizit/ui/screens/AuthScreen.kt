@@ -5,31 +5,30 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.MarkEmailRead
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,24 +37,41 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.auth.AuthActionState
 import hu.rayworks.vizit.auth.AuthOperation
 import hu.rayworks.vizit.auth.AuthScreenMode
 import hu.rayworks.vizit.auth.AuthViewModel
-import hu.rayworks.vizit.ui.components.VizitBrandLockup
+import hu.rayworks.vizit.ui.design.Vizit
+import hu.rayworks.vizit.ui.design.components.VizitBanner
+import hu.rayworks.vizit.ui.design.components.VizitBrandLockup
+import hu.rayworks.vizit.ui.design.components.VizitButton
+import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
+import hu.rayworks.vizit.ui.design.components.VizitPasswordField
+import hu.rayworks.vizit.ui.design.components.VizitTextField
+import hu.rayworks.vizit.ui.design.components.VizitTone
 
+/**
+ * One auth surface for every mode (login, register, forgot, reset, legal gate).
+ * The brand lockup anchors the top, the form sits on the canvas without a card
+ * around it, and exactly one primary action is offered at a time.
+ */
 @Composable
 fun AuthScreen(
     viewModel: AuthViewModel,
     forceNewPassword: Boolean = false,
     forceLegalAcceptance: Boolean = false,
 ) {
+    val colors = Vizit.colors
     val context = LocalContext.current
     var mode by rememberSaveable(forceNewPassword, forceLegalAcceptance) {
         mutableStateOf(
@@ -87,67 +103,82 @@ fun AuthScreen(
         }
     }
 
+    fun clearError() {
+        if (action is AuthActionState.Error) viewModel.clearActionState()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(colors.canvas)
             .verticalScroll(rememberScrollState())
-            .padding(28.dp),
-        verticalArrangement = Arrangement.Center,
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
+            .padding(horizontal = Vizit.space.xl),
+        verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
+        Spacer(Modifier.height(Vizit.space.xxl))
         VizitBrandLockup(modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(18.dp))
-        Text(mode.title(), style = MaterialTheme.typography.headlineMedium)
-        mode.description()?.let { description ->
-            Text(
-                text = description,
-                modifier = Modifier.padding(top = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
+        Column(verticalArrangement = Arrangement.spacedBy(Vizit.space.xs)) {
+            Text(mode.title(), style = Vizit.type.h1, color = colors.textPrimary)
+            mode.description()?.let {
+                Text(it, style = Vizit.type.body, color = colors.textSecondary)
+            }
         }
-        Spacer(Modifier.height(24.dp))
+
+        Spacer(Modifier.height(Vizit.space.xxs))
+
+        if (mode == AuthScreenMode.EMAIL_VERIFICATION_SENT || mode == AuthScreenMode.PASSWORD_RESET_SENT) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.primarySubtle, RoundedCornerShape(Vizit.radius.lg))
+                    .padding(Vizit.space.lg),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+            ) {
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.Outlined.MarkEmailRead,
+                    contentDescription = null,
+                    tint = colors.primary,
+                    modifier = Modifier.size(36.dp),
+                )
+                Text(
+                    text = if (email.isNotBlank()) email else "Ellenőrizd a postafiókodat.",
+                    style = Vizit.type.bodyStrong,
+                    color = colors.textPrimary,
+                )
+            }
+        }
 
         if (mode == AuthScreenMode.REGISTER) {
-            OutlinedTextField(
+            VizitTextField(
                 value = name,
-                onValueChange = {
-                    name = it
-                    if (action is AuthActionState.Error) viewModel.clearActionState()
-                },
-                label = { Text("Név") },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                singleLine = true,
+                onValueChange = { name = it; clearError() },
+                label = "Név",
+                placeholder = "Teljes neved",
                 enabled = !loading,
-                modifier = Modifier.fillMaxWidth(),
+                imeAction = ImeAction.Next,
             )
-            Spacer(Modifier.height(12.dp))
         }
 
         if (mode.requiresEmail()) {
-            OutlinedTextField(
+            VizitTextField(
                 value = email,
-                onValueChange = {
-                    email = it
-                    if (action is AuthActionState.Error) viewModel.clearActionState()
-                },
-                label = { Text("E-mail-cím") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = if (mode == AuthScreenMode.FORGOT_PASSWORD) ImeAction.Done else ImeAction.Next,
-                ),
-                singleLine = true,
+                onValueChange = { email = it; clearError() },
+                label = "E-mail-cím",
+                placeholder = "nev@pelda.hu",
                 enabled = !loading,
-                modifier = Modifier.fillMaxWidth(),
+                keyboardType = KeyboardType.Email,
+                imeAction = if (mode == AuthScreenMode.FORGOT_PASSWORD) ImeAction.Done else ImeAction.Next,
             )
-            Spacer(Modifier.height(12.dp))
         }
 
         if (mode.requiresPassword()) {
-            PasswordField(
+            VizitPasswordField(
                 value = password,
-                onValueChange = {
-                    password = it
-                    if (action is AuthActionState.Error) viewModel.clearActionState()
-                },
+                onValueChange = { password = it; clearError() },
                 label = if (mode == AuthScreenMode.NEW_PASSWORD) "Új jelszó" else "Jelszó",
                 enabled = !loading,
                 imeAction = if (mode.requiresConfirmation()) ImeAction.Next else ImeAction.Done,
@@ -155,13 +186,9 @@ fun AuthScreen(
         }
 
         if (mode.requiresConfirmation()) {
-            Spacer(Modifier.height(12.dp))
-            PasswordField(
+            VizitPasswordField(
                 value = confirmation,
-                onValueChange = {
-                    confirmation = it
-                    if (action is AuthActionState.Error) viewModel.clearActionState()
-                },
+                onValueChange = { confirmation = it; clearError() },
                 label = "Jelszó újra",
                 enabled = !loading,
                 imeAction = ImeAction.Done,
@@ -171,10 +198,7 @@ fun AuthScreen(
         if (mode == AuthScreenMode.REGISTER || mode == AuthScreenMode.LEGAL_ACCEPTANCE) {
             LegalAcceptanceSection(
                 checked = legalAccepted,
-                onCheckedChange = {
-                    legalAccepted = it
-                    viewModel.clearActionState()
-                },
+                onCheckedChange = { legalAccepted = it; viewModel.clearActionState() },
                 documentsReady = viewModel.legalDocumentsReady,
                 privacyPolicyUrl = viewModel.privacyPolicyUrl,
                 termsUrl = viewModel.termsUrl,
@@ -186,8 +210,8 @@ fun AuthScreen(
         }
 
         if (mode.hasPrimaryAction()) {
-            Spacer(Modifier.height(20.dp))
-            Button(
+            VizitButton(
+                text = mode.primaryActionLabel(),
                 onClick = {
                     viewModel.clearActionState()
                     when (mode) {
@@ -202,39 +226,36 @@ fun AuthScreen(
                     }
                 },
                 enabled = !loading &&
-                    (mode != AuthScreenMode.REGISTER && mode != AuthScreenMode.LEGAL_ACCEPTANCE ||
-                        viewModel.legalDocumentsReady),
+                    (
+                        (mode != AuthScreenMode.REGISTER && mode != AuthScreenMode.LEGAL_ACCEPTANCE) ||
+                            viewModel.legalDocumentsReady
+                        ),
+                loading = loading,
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Text(mode.primaryActionLabel())
-                }
-            }
+            )
         }
 
-        AuthStatus(action)
+        when (action) {
+            is AuthActionState.Error -> VizitBanner(text = action.message, tone = VizitTone.Error)
+            is AuthActionState.Success -> VizitBanner(text = action.message, tone = VizitTone.Success)
+            else -> Unit
+        }
 
         if (mode == AuthScreenMode.LOGIN && viewModel.googleSignInEnabled) {
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(
+            AuthDividerLabel()
+            VizitButton(
+                text = "Folytatás Google-fiókkal",
                 onClick = {
                     context.findActivity()?.let(viewModel::signInWithGoogle)
                         ?: viewModel.reportUiError("A Google-belépés ezen a képernyőn nem indítható el.")
                 },
+                style = VizitButtonStyle.Secondary,
                 enabled = !loading,
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Folytatás Google-fiókkal")
-            }
+            )
         }
 
         if (!forceNewPassword && !forceLegalAcceptance) {
-            Spacer(Modifier.height(10.dp))
             AuthNavigation(
                 mode = mode,
                 canUseDebugLocalProfile = viewModel.canUseDebugLocalProfile,
@@ -247,39 +268,22 @@ fun AuthScreen(
                 onUseDebugLocalProfile = viewModel::useDebugLocalProfile,
             )
         }
+
+        Spacer(Modifier.height(Vizit.space.xxl))
     }
 }
 
 @Composable
-private fun PasswordField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    enabled: Boolean,
-    imeAction: ImeAction,
-) {
-    var visible by rememberSaveable { mutableStateOf(false) }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Password,
-            imeAction = imeAction,
-        ),
-        trailingIcon = {
-            IconButton(onClick = { visible = !visible }, enabled = enabled) {
-                Icon(
-                    imageVector = if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                    contentDescription = if (visible) "Jelszó elrejtése" else "Jelszó megjelenítése",
-                )
-            }
-        },
-        singleLine = true,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth(),
-    )
+private fun AuthDividerLabel() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Vizit.space.xxs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+    ) {
+        Box(modifier = Modifier.weight(1f).height(1.dp).background(Vizit.colors.divider))
+        Text("vagy", style = Vizit.type.caption, color = Vizit.colors.textMuted)
+        Box(modifier = Modifier.weight(1f).height(1.dp).background(Vizit.colors.divider))
+    }
 }
 
 @Composable
@@ -292,61 +296,83 @@ private fun LegalAcceptanceSection(
     enabled: Boolean,
     onOpenFailed: () -> Unit,
 ) {
+    val colors = Vizit.colors
     val context = LocalContext.current
-    Spacer(Modifier.height(12.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled && documentsReady,
-        )
-        Text(
-            text = "Elolvastam és elfogadom az adatkezelési tájékoztatót és az ÁSZF-et.",
-            modifier = Modifier.weight(1f),
-        )
-    }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        TextButton(
-            onClick = { if (!context.openWebUrl(privacyPolicyUrl)) onOpenFailed() },
-            enabled = enabled && documentsReady,
+    val interactive = enabled && documentsReady
+
+    Column(verticalArrangement = Arrangement.spacedBy(Vizit.space.xs)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = interactive, role = Role.Checkbox) { onCheckedChange(!checked) }
+                .semantics {
+                    toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
+                    contentDescription =
+                        "Elolvastam és elfogadom az adatkezelési tájékoztatót és az ÁSZF-et."
+                }
+                .padding(vertical = Vizit.space.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
         ) {
-            Text("Adatkezelési tájékoztató")
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .background(
+                        if (checked) colors.primary else Color.Transparent,
+                        RoundedCornerShape(Vizit.radius.xs),
+                    )
+                    .border(
+                        if (checked) 0.dp else 1.5.dp,
+                        if (interactive) colors.borderStrong else colors.border,
+                        RoundedCornerShape(Vizit.radius.xs),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (checked) {
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = colors.textOnBrand,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+            Text(
+                text = "Elolvastam és elfogadom az adatkezelési tájékoztatót és az ÁSZF-et.",
+                style = Vizit.type.bodySmall,
+                color = if (interactive) colors.textPrimary else colors.textDisabled,
+                modifier = Modifier.weight(1f),
+            )
         }
-        TextButton(
-            onClick = { if (!context.openWebUrl(termsUrl)) onOpenFailed() },
-            enabled = enabled && documentsReady,
-        ) {
-            Text("Általános Szerződési Feltételek")
+
+        Row(horizontalArrangement = Arrangement.spacedBy(Vizit.space.md)) {
+            LegalLink("Adatkezelés", interactive) {
+                if (!context.openWebUrl(privacyPolicyUrl)) onOpenFailed()
+            }
+            LegalLink("ÁSZF", interactive) {
+                if (!context.openWebUrl(termsUrl)) onOpenFailed()
+            }
         }
-    }
-    if (!documentsReady) {
-        Text(
-            text = "A folytatás a végleges jogi dokumentumok beállításáig nem aktiválható.",
-            color = MaterialTheme.colorScheme.error,
-        )
+
+        if (!documentsReady) {
+            VizitBanner(
+                text = "A folytatás a végleges jogi dokumentumok beállításáig nem aktiválható.",
+                tone = VizitTone.Warning,
+            )
+        }
     }
 }
 
 @Composable
-private fun AuthStatus(action: AuthActionState) {
-    when (action) {
-        is AuthActionState.Error -> Text(
-            text = action.message,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 14.dp),
-        )
-
-        is AuthActionState.Success -> Text(
-            text = action.message,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 14.dp),
-        )
-
-        else -> Unit
-    }
+private fun LegalLink(text: String, enabled: Boolean, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = Vizit.type.label,
+        color = if (enabled) Vizit.colors.primary else Vizit.colors.textDisabled,
+        modifier = Modifier
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(vertical = Vizit.space.xs),
+    )
 }
 
 @Composable
@@ -356,30 +382,44 @@ private fun AuthNavigation(
     onModeChange: (AuthScreenMode) -> Unit,
     onUseDebugLocalProfile: () -> Unit,
 ) {
-    when (mode) {
-        AuthScreenMode.LOGIN -> {
-            TextButton(onClick = { onModeChange(AuthScreenMode.FORGOT_PASSWORD) }) {
-                Text("Elfelejtett jelszó")
-            }
-            TextButton(onClick = { onModeChange(AuthScreenMode.REGISTER) }) {
-                Text("Nincs még fiókod? Regisztráció")
-            }
-            if (canUseDebugLocalProfile) {
-                TextButton(onClick = onUseDebugLocalProfile) {
-                    Text("DEV: helyi tesztprofil")
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Vizit.space.xxs),
+    ) {
+        when (mode) {
+            AuthScreenMode.LOGIN -> {
+                VizitButton(
+                    text = "Elfelejtett jelszó",
+                    onClick = { onModeChange(AuthScreenMode.FORGOT_PASSWORD) },
+                    style = VizitButtonStyle.Tertiary,
+                )
+                VizitButton(
+                    text = "Nincs még fiókod? Regisztráció",
+                    onClick = { onModeChange(AuthScreenMode.REGISTER) },
+                    style = VizitButtonStyle.Tertiary,
+                )
+                if (canUseDebugLocalProfile) {
+                    VizitButton(
+                        text = "Belépés helyi próbaprofillal",
+                        onClick = onUseDebugLocalProfile,
+                        style = VizitButtonStyle.Tertiary,
+                    )
                 }
             }
-        }
 
-        AuthScreenMode.EMAIL_VERIFICATION_SENT,
-        AuthScreenMode.PASSWORD_RESET_SENT,
-        AuthScreenMode.REGISTER,
-        AuthScreenMode.FORGOT_PASSWORD -> TextButton(onClick = { onModeChange(AuthScreenMode.LOGIN) }) {
-            Text("Vissza a bejelentkezéshez")
-        }
+            AuthScreenMode.EMAIL_VERIFICATION_SENT,
+            AuthScreenMode.PASSWORD_RESET_SENT,
+            AuthScreenMode.REGISTER,
+            AuthScreenMode.FORGOT_PASSWORD -> VizitButton(
+                text = "Vissza a bejelentkezéshez",
+                onClick = { onModeChange(AuthScreenMode.LOGIN) },
+                style = VizitButtonStyle.Tertiary,
+            )
 
-        AuthScreenMode.NEW_PASSWORD,
-        AuthScreenMode.LEGAL_ACCEPTANCE -> Unit
+            AuthScreenMode.NEW_PASSWORD,
+            AuthScreenMode.LEGAL_ACCEPTANCE -> Unit
+        }
     }
 }
 
@@ -394,11 +434,13 @@ private fun AuthScreenMode.title(): String = when (this) {
 }
 
 private fun AuthScreenMode.description(): String? = when (this) {
+    AuthScreenMode.LOGIN -> "Lépj be, és add át a névjegyed egyetlen érintéssel."
+    AuthScreenMode.REGISTER -> "Pár adat, és kész is a digitális névjegyed."
     AuthScreenMode.EMAIL_VERIFICATION_SENT ->
         "Megerősítő e-mailt küldtünk. Ellenőrizd a postafiókodat, majd nyisd meg a levélben kapott linket."
 
     AuthScreenMode.PASSWORD_RESET_SENT ->
-        "A helyreállító linkkel biztonságosan beállíthatod az új jelszavadat."
+        "A helyreállító linkkel beállíthatod az új jelszavadat."
 
     AuthScreenMode.NEW_PASSWORD -> "Adj meg egy új, legalább 8 karakteres jelszót."
     AuthScreenMode.LEGAL_ACCEPTANCE ->
@@ -448,7 +490,5 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 
 private fun Context.openWebUrl(url: String): Boolean {
     if (url.isBlank()) return false
-    return runCatching {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    }.isSuccess
+    return runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isSuccess
 }

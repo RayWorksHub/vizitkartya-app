@@ -7,6 +7,7 @@ import hu.rayworks.vizit.data.local.ProfileContactEntity
 import hu.rayworks.vizit.data.local.ProfileEntity
 import hu.rayworks.vizit.data.local.ProfileFieldSettingsEntity
 import hu.rayworks.vizit.data.local.ProfileLinkEntity
+import hu.rayworks.vizit.qr.PublicProfileUrlFactory
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
@@ -146,6 +147,10 @@ object ProfileSnapshotMapper {
                 contactImagePath = previous?.profile?.contactImagePath,
                 logoPath = previous?.profile?.logoPath,
                 publicSlug = canonical.publicSlug.ifBlank { null },
+                customDomain = canonical.customDomain.ifBlank { null },
+                customDomainVerified = previous?.profile?.let {
+                    it.customDomain == canonical.customDomain.ifBlank { null } && it.customDomainVerified
+                } ?: false,
                 isPublic = canonical.isPublic,
                 updatedAtEpochMs = updatedAtEpochMs,
                 pendingSync = pendingSync,
@@ -184,6 +189,8 @@ object ProfileSnapshotMapper {
             contactImagePath = payload.contactImagePath,
             logoPath = payload.logoPath,
             publicSlug = payload.publicSlug,
+            customDomain = payload.customDomain,
+            customDomainVerified = payload.customDomainVerified,
             isPublic = payload.isPublic,
             updatedAtEpochMs = updatedAtEpochMs,
             pendingSync = false,
@@ -248,6 +255,8 @@ object ProfileSnapshotMapper {
         contactImagePath = snapshot.profile.contactImagePath,
         logoPath = snapshot.profile.logoPath,
         publicSlug = snapshot.profile.publicSlug,
+        customDomain = snapshot.profile.customDomain,
+        customDomainVerified = snapshot.profile.customDomainVerified,
         isPublic = snapshot.profile.isPublic,
         fieldOrder = snapshot.fieldSettings?.fieldOrderJson
             ?.let { runCatching { ProfilePayloadCodec.decodeFieldOrder(it) }.getOrNull() }
@@ -313,6 +322,8 @@ object ProfileSnapshotMapper {
             youtube = youtube,
             photoBase64 = snapshot.profile.localContactPhotoBase64,
             publicSlug = snapshot.profile.publicSlug.orEmpty(),
+            customDomain = snapshot.profile.customDomain.orEmpty(),
+            customDomainVerified = snapshot.profile.customDomainVerified,
             isPublic = snapshot.profile.isPublic,
         )
     }
@@ -333,6 +344,8 @@ object ProfileSnapshotMapper {
         tiktok = tiktok.trim(),
         youtube = youtube.trim(),
         publicSlug = publicSlug.trim(),
+        customDomain = customDomain.trim().takeIf(String::isNotBlank)
+            ?.let(PublicProfileUrlFactory::normalizeCustomDomain).orEmpty(),
     )
 
     private fun ContactProfile.managedLinks(): List<ManagedLink> = listOf(

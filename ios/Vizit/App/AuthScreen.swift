@@ -6,6 +6,12 @@ private enum AuthMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Authentication entry point, rebuilt on the VIZIT 2026 design system.
+///
+/// The old screen was a dark hero gradient with two blurred glow circles and a
+/// translucent card — the exact "generic AI SaaS" look the brief rules out. It
+/// now follows the product default (light, with a real dark theme) and leads
+/// with the brand lockup and the digital card promise instead of decoration.
 struct AuthScreen: View {
     @EnvironmentObject private var store: AppStore
     @State private var mode: AuthMode = .login
@@ -16,56 +22,54 @@ struct AuthScreen: View {
     @State private var legalAccepted = false
     @State private var forgotPassword = false
     @State private var passwordResetSent = false
-    @State private var showPassword = false
-    @State private var showConfirmation = false
+
+    private func select(_ next: AuthMode) {
+        guard next != mode else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            mode = next
+            password = ""
+            confirmation = ""
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Brand.heroGradient.ignoresSafeArea()
-                Circle()
-                    .fill(Brand.cyan.opacity(0.16))
-                    .frame(width: 330, height: 330)
-                    .blur(radius: 40)
-                    .offset(x: 185, y: -360)
-                Circle()
-                    .fill(Brand.blue.opacity(0.22))
-                    .frame(width: 280, height: 280)
-                    .blur(radius: 48)
-                    .offset(x: -190, y: 390)
-
+            VizitScreen {
                 ScrollView {
-                    VStack(spacing: 22) {
-                        VizitBrandLockup(height: 106)
-                            .padding(.top, 10)
+                    VStack(spacing: VizitSpace.lg) {
+                        VizitBrandLockup(maxHeight: 96)
+                            .padding(.top, VizitSpace.xs)
 
-                        VStack(spacing: 8) {
-                            Text(mode == .login ? "Üdv újra!" : "Csatlakozz a VIZIT-hez")
-                                .font(.system(size: 31, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .multilineTextAlignment(.center)
-                            Text(mode == .login
-                                 ? "A digitális névjegyed mindig veled van."
-                                 : "Hozd létre a fiókod, majd állítsd össze a névjegyed.")
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.72))
-                                .multilineTextAlignment(.center)
+                        heading
+
+                        modeSelector
+
+                        if let address = verificationAddress {
+                            VizitBanner(
+                                text: "Megerősítő linket küldtünk ide: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót.",
+                                tone: .info
+                            )
                         }
 
-                        authCard
+                        fields
 
-                        Label("Titkosított munkamenet az iPhone-kulcstárban",
-                              systemImage: "lock.shield.fill")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.66))
-                            .multilineTextAlignment(.center)
-                        Text(buildVersionLabel)
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.46))
-                            .accessibilityIdentifier("auth.version")
-                            .padding(.bottom, 24)
+                        if mode == .register { legalSection }
+
+                        VizitButton(
+                            title: mode == .login ? "Belépés" : "Fiók létrehozása",
+                            systemImage: mode == .login ? "arrow.right" : "person.badge.plus",
+                            isLoading: store.busy,
+                            isEnabled: !store.busy,
+                            action: submit
+                        )
+                        .accessibilityIdentifier("auth.submit")
+
+                        if mode == .login { loginExtras }
+
+                        footer
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, VizitSpace.lg)
+                    .padding(.bottom, VizitSpace.xl)
                     .frame(maxWidth: 540)
                     .frame(maxWidth: .infinity)
                 }
@@ -74,261 +78,161 @@ struct AuthScreen: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $forgotPassword) { passwordResetSheet }
         }
-        .preferredColorScheme(.dark)
     }
 
-    private var authCard: some View {
-        VStack(spacing: 18) {
-            modeSelector
-
-            if let address = verificationAddress {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "envelope.badge.shield.half.filled")
-                        .font(.title3)
-                        .foregroundStyle(Brand.cyan)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Ellenőrizd az e-mailjeidet")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
-                        Text("Ha ez új cím, megerősítő linket küldtünk ide: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(14)
-                .background(Brand.cyan.opacity(0.10))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Brand.cyan.opacity(0.3), lineWidth: 1)
-                }
-            }
-
-            VStack(spacing: 14) {
-                if mode == .register {
-                    authField(title: "Név", icon: "person.fill") {
-                        TextField("Teljes név", text: $name,
-                                  prompt: Text("Teljes név").foregroundColor(.white.opacity(0.42)))
-                            .textContentType(.name)
-                            .submitLabel(.next)
-                            .accessibilityIdentifier("auth.name")
-                    }
-                }
-
-                authField(title: "E-mail-cím", icon: "envelope.fill") {
-                    TextField("E-mail-cím", text: $email,
-                              prompt: Text("nev@pelda.hu").foregroundColor(.white.opacity(0.42)))
-                        .textContentType(.username)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.next)
-                        .accessibilityIdentifier("auth.email")
-                }
-
-                passwordField(
-                    title: "Jelszó",
-                    text: $password,
-                    revealed: $showPassword,
-                    contentType: mode == .login ? .password : .newPassword,
-                    submitLabel: mode == .login ? .go : .next,
-                    identifier: "auth.password"
-                )
-
-                if mode == .register {
-                    passwordField(
-                        title: "Jelszó újra",
-                        text: $confirmation,
-                        revealed: $showConfirmation,
-                        contentType: .newPassword,
-                        submitLabel: .go,
-                        identifier: "auth.confirmation"
-                    )
-                    Text("Legalább 8 karakter, kis- és nagybetű, valamint szám szükséges.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.58))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-
-            if mode == .register { legalSection }
-
-            Button(action: submit) {
-                VizitPrimaryButtonLabel(
-                    title: mode == .login ? "Belépés" : "Fiók létrehozása",
-                    systemImage: mode == .login ? "arrow.right" : "person.badge.plus",
-                    busy: store.busy
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(store.busy)
-            .opacity(store.busy ? 0.72 : 1)
-            .accessibilityIdentifier("auth.submit")
-
-            if mode == .login {
-                if store.configuration?.googleSignInEnabled == true {
-                    Button {
-                        Task { await store.googleLogin() }
-                    } label: {
-                        Label("Folytatás Google-fiókkal", systemImage: "g.circle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(store.busy)
-                }
-
-                Button("Elfelejtettem a jelszavam") {
-                    passwordResetSent = false
-                    forgotPassword = true
-                }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Brand.cyanLight)
-                    .disabled(store.busy)
-                    .accessibilityIdentifier("auth.forgotPassword")
-            }
+    private var heading: some View {
+        VStack(spacing: VizitSpace.xs) {
+            Text(mode == .login ? "Üdv újra!" : "Csatlakozz a VIZIT-hez")
+                .font(VizitFont.h1)
+                .foregroundStyle(VizitColor.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(mode == .login
+                 ? "A digitális névjegyed mindig veled van."
+                 : "Hozd létre a fiókod, majd állítsd össze a névjegyed.")
+                .font(VizitFont.body)
+                .foregroundStyle(VizitColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(20)
-        .background(Color(red: 4 / 255, green: 19 / 255, blue: 49 / 255).opacity(0.92))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(0.24), radius: 28, y: 16)
     }
 
+    /// Kept as two plain buttons carrying the mode names, because the UI tests
+    /// address them by label ("Regisztráció") rather than by identifier.
     private var modeSelector: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: VizitSpace.xxs) {
             ForEach(AuthMode.allCases) { item in
                 Button {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        mode = item
-                        password = ""
-                        confirmation = ""
-                    }
+                    select(item)
                 } label: {
                     Text(item.rawValue)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(mode == item ? Color.white : Color.white.opacity(0.58))
+                        .font(VizitFont.label)
+                        .foregroundStyle(mode == item ? VizitColor.textPrimary : VizitColor.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(mode == item ? Brand.blue : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .frame(height: VizitMetrics.minTouchTarget - 4)
+                        .background(mode == item ? VizitColor.surface : .clear)
+                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.sm + 1, style: .continuous))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(mode == item ? [.isButton, .isSelected] : .isButton)
             }
         }
-        .padding(4)
-        .background(Color.white.opacity(0.07))
-        .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
+        .padding(VizitSpace.xxs)
+        .background(VizitColor.controlTrack)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
     }
 
-    private func authField<Content: View>(
-        title: String,
-        icon: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.76))
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundStyle(Brand.cyanLight)
-                    .frame(width: 20)
-                content()
-                    .foregroundStyle(.white)
-                    .tint(Brand.cyan)
+    private var fields: some View {
+        VStack(spacing: VizitSpace.sm) {
+            if mode == .register {
+                VizitTextField(
+                    label: "Név",
+                    text: $name,
+                    placeholder: "Teljes név",
+                    contentType: .name,
+                    autocapitalization: .words,
+                    identifier: "auth.name",
+                    submitLabel: .next
+                )
             }
-            .padding(.horizontal, 15)
-            .frame(minHeight: 54)
-            .background(Color.white.opacity(0.075))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
-            }
-        }
-    }
 
-    private func passwordField(
-        title: String,
-        text: Binding<String>,
-        revealed: Binding<Bool>,
-        contentType: UITextContentType,
-        submitLabel: SubmitLabel,
-        identifier: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.76))
-            HStack(spacing: 12) {
-                Image(systemName: "lock.fill")
-                    .foregroundStyle(Brand.cyanLight)
-                    .frame(width: 20)
-                Group {
-                    if revealed.wrappedValue {
-                        TextField(title, text: text,
-                                  prompt: Text("••••••••").foregroundColor(.white.opacity(0.42)))
-                            .accessibilityIdentifier(identifier)
-                    } else {
-                        SecureField(title, text: text,
-                                    prompt: Text("••••••••").foregroundColor(.white.opacity(0.42)))
-                            .accessibilityIdentifier(identifier)
-                    }
-                }
-                .textContentType(contentType)
-                .submitLabel(submitLabel)
-                .foregroundStyle(.white)
-                .tint(Brand.cyan)
-                Button { revealed.wrappedValue.toggle() } label: {
-                    Image(systemName: revealed.wrappedValue ? "eye.slash.fill" : "eye.fill")
-                        .foregroundStyle(.white.opacity(0.58))
-                        .frame(width: 30, height: 38)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(revealed.wrappedValue ? "Jelszó elrejtése" : "Jelszó megjelenítése")
-            }
-            .padding(.horizontal, 15)
-            .frame(minHeight: 54)
-            .background(Color.white.opacity(0.075))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+            VizitTextField(
+                label: "E-mail-cím",
+                text: $email,
+                placeholder: "nev@pelda.hu",
+                keyboard: .emailAddress,
+                contentType: .username,
+                autocapitalization: .never,
+                identifier: "auth.email",
+                submitLabel: .next
+            )
+
+            VizitTextField(
+                label: "Jelszó",
+                text: $password,
+                placeholder: "••••••••",
+                contentType: mode == .login ? .password : .newPassword,
+                autocapitalization: .never,
+                isSecure: true,
+                identifier: "auth.password",
+                submitLabel: mode == .login ? .go : .next,
+                onSubmit: { if mode == .login { submit() } }
+            )
+
+            if mode == .register {
+                VizitTextField(
+                    label: "Jelszó újra",
+                    text: $confirmation,
+                    placeholder: "••••••••",
+                    helper: "Legalább 8 karakter, kis- és nagybetű, valamint szám szükséges.",
+                    contentType: .newPassword,
+                    autocapitalization: .never,
+                    isSecure: true,
+                    identifier: "auth.confirmation",
+                    submitLabel: .go,
+                    onSubmit: submit
+                )
             }
         }
     }
 
     private var legalSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: VizitSpace.sm) {
             Toggle(isOn: $legalAccepted) {
                 Text("Elfogadom az adatkezelési tájékoztatót és az ÁSZF-et.")
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.82))
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(VizitColor.textSecondary)
             }
-            .tint(Brand.cyan)
+            .tint(VizitColor.primary)
 
             if let config = store.configuration {
-                HStack(spacing: 20) {
+                HStack(spacing: VizitSpace.lg) {
                     Link("Adatkezelés", destination: config.privacyPolicyURL)
                     Link("ÁSZF", destination: config.termsURL)
                 }
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Brand.cyanLight)
+                .font(VizitFont.label)
+                .foregroundStyle(VizitColor.primary)
             }
         }
+        .padding(VizitSpace.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(VizitColor.sunken)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+    }
+
+    private var loginExtras: some View {
+        VStack(spacing: VizitSpace.sm) {
+            if store.configuration?.googleSignInEnabled == true {
+                VizitButton(
+                    title: "Folytatás Google-fiókkal",
+                    systemImage: "g.circle.fill",
+                    kind: .secondary,
+                    isEnabled: !store.busy
+                ) {
+                    Task { await store.googleLogin() }
+                }
+            }
+
+            Button("Elfelejtettem a jelszavam") {
+                passwordResetSent = false
+                forgotPassword = true
+            }
+            .font(VizitFont.label)
+            .foregroundStyle(VizitColor.primary)
+            .frame(minHeight: VizitMetrics.minTouchTarget)
+            .disabled(store.busy)
+            .accessibilityIdentifier("auth.forgotPassword")
+        }
+    }
+
+    private var footer: some View {
+        VStack(spacing: VizitSpace.xs) {
+            Text(buildVersionLabel)
+                .font(VizitFont.caption.monospacedDigit())
+                .foregroundStyle(VizitColor.textMuted)
+                .accessibilityIdentifier("auth.version")
+        }
+        .padding(.top, VizitSpace.xs)
     }
 
     private var verificationAddress: String? {
@@ -339,7 +243,7 @@ struct AuthScreen: View {
     private var buildVersionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-        return "DEV \(version) (\(build))"
+        return "VIZIT \(version) (\(build))"
     }
 
     private func submit() {
@@ -355,64 +259,71 @@ struct AuthScreen: View {
 
     private var passwordResetSheet: some View {
         NavigationStack {
-            ZStack {
-                Brand.canvas.ignoresSafeArea()
-                VStack(spacing: 20) {
-                    Image(systemName: "key.horizontal.fill")
-                        .font(.system(size: 42, weight: .semibold))
-                        .foregroundStyle(Brand.cyan)
-                        .frame(width: 82, height: 82)
-                        .background(Brand.blue.opacity(0.18))
-                        .clipShape(Circle())
-                    Text("Új jelszó kérése")
-                        .font(.title2.bold())
-                    Text("Add meg az e-mail-címed, és elküldjük a biztonságos jelszó-visszaállító hivatkozást.")
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    if passwordResetSent {
-                        VStack(spacing: 10) {
-                            Label("A kérés sikeresen elment", systemImage: "checkmark.circle.fill")
-                                .font(.headline)
-                                .foregroundStyle(.green)
-                            Text("Ha a címhez tartozik fiók, hamarosan megérkezik a levél. Mindig csak a legutóbb kért hivatkozást nyisd meg.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+            VizitScreen {
+                ScrollView {
+                    VStack(spacing: VizitSpace.lg) {
+                        VizitIconChip(
+                            systemImage: "key.horizontal",
+                            tint: VizitColor.primary,
+                            background: VizitColor.primarySubtle,
+                            size: 64
+                        )
+                        .padding(.top, VizitSpace.xs)
+
+                        VStack(spacing: VizitSpace.xs) {
+                            Text("Új jelszó kérése")
+                                .font(VizitFont.h2)
+                                .foregroundStyle(VizitColor.textPrimary)
+                            Text("Add meg az e-mail-címed, és elküldjük a jelszó-visszaállító hivatkozást.")
+                                .font(VizitFont.body)
+                                .foregroundStyle(VizitColor.textSecondary)
                                 .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .accessibilityIdentifier("auth.reset.sent")
-                        Button("Kész") { forgotPassword = false }
-                            .buttonStyle(.borderedProminent)
-                            .accessibilityIdentifier("auth.reset.done")
-                    } else {
-                        TextField("E-mail-cím", text: $email)
-                            .textContentType(.emailAddress)
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .submitLabel(.send)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(minHeight: 52)
-                            .accessibilityIdentifier("auth.reset.email")
-                        Button {
-                            Task {
-                                if await store.requestPasswordReset(email: email) {
-                                    passwordResetSent = true
-                                }
+
+                        if passwordResetSent {
+                            VStack(spacing: VizitSpace.sm) {
+                                VizitStatusPill(text: "A kérés sikeresen elment", tone: .success)
+                                Text("Ha a címhez tartozik fiók, hamarosan megérkezik a levél. Mindig csak a legutóbb kért hivatkozást nyisd meg.")
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                        } label: {
-                            VizitPrimaryButtonLabel(title: "E-mail küldése",
-                                                    systemImage: "paperplane.fill",
-                                                    busy: store.busy)
+                            .accessibilityIdentifier("auth.reset.sent")
+
+                            VizitButton(title: "Kész", kind: .secondary) {
+                                forgotPassword = false
+                            }
+                            .accessibilityIdentifier("auth.reset.done")
+                        } else {
+                            VizitTextField(
+                                label: "E-mail-cím",
+                                text: $email,
+                                placeholder: "nev@pelda.hu",
+                                keyboard: .emailAddress,
+                                contentType: .emailAddress,
+                                autocapitalization: .never,
+                                identifier: "auth.reset.email",
+                                submitLabel: .send,
+                                onSubmit: requestReset
+                            )
+
+                            VizitButton(
+                                title: "E-mail küldése",
+                                systemImage: "paperplane",
+                                isLoading: store.busy,
+                                isEnabled: !store.busy,
+                                action: requestReset
+                            )
+                            .accessibilityIdentifier("auth.reset.submit")
                         }
-                        .buttonStyle(.plain)
-                        .disabled(store.busy)
-                        .opacity(store.busy ? 0.72 : 1)
-                        .accessibilityIdentifier("auth.reset.submit")
                     }
-                    Spacer()
+                    .padding(VizitSpace.lg)
+                    .frame(maxWidth: 520)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(24)
-                .frame(maxWidth: 520)
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Jelszó-visszaállítás")
             .navigationBarTitleDisplayMode(.inline)
@@ -423,8 +334,18 @@ struct AuthScreen: View {
             }
         }
     }
+
+    private func requestReset() {
+        Task {
+            if await store.requestPasswordReset(email: email) {
+                passwordResetSent = true
+            }
+        }
+    }
 }
 
+/// Recovery-link destination: the user arrived from the e-mail and must set a
+/// new password before the session continues.
 struct PasswordChangeScreen: View {
     @EnvironmentObject private var store: AppStore
     @State private var password = ""
@@ -432,44 +353,70 @@ struct PasswordChangeScreen: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                VizitScreenBackground()
+            VizitScreen {
                 ScrollView {
-                    VStack(spacing: 20) {
-                        Image(systemName: "lock.rotation")
-                            .font(.system(size: 48, weight: .semibold))
-                            .foregroundStyle(Brand.blue)
-                        Text("Állíts be új jelszót")
-                            .font(.title.bold())
-                        Text("A jelszó legalább 8 karakterből, kis- és nagybetűből, valamint számból álljon.")
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                        VizitCard {
-                            VStack(spacing: 16) {
-                                SecureField("Új jelszó", text: $password)
-                                    .textContentType(.newPassword)
-                                    .textFieldStyle(.roundedBorder)
-                                SecureField("Új jelszó újra", text: $confirmation)
-                                    .textContentType(.newPassword)
-                                    .textFieldStyle(.roundedBorder)
-                            }
+                    VStack(spacing: VizitSpace.lg) {
+                        VizitIconChip(
+                            systemImage: "lock.rotation",
+                            tint: VizitColor.primary,
+                            background: VizitColor.primarySubtle,
+                            size: 64
+                        )
+                        .padding(.top, VizitSpace.md)
+
+                        VStack(spacing: VizitSpace.xs) {
+                            Text("Állíts be új jelszót")
+                                .font(VizitFont.h2)
+                                .foregroundStyle(VizitColor.textPrimary)
+                            Text("A jelszó legalább 8 karakterből, kis- és nagybetűből, valamint számból álljon.")
+                                .font(VizitFont.body)
+                                .foregroundStyle(VizitColor.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Button {
-                            Task { await store.changePassword(password, confirmation: confirmation) }
-                        } label: {
-                            VizitPrimaryButtonLabel(title: "Jelszó módosítása", systemImage: "checkmark.shield.fill",
-                                                    busy: store.busy)
+
+                        VStack(spacing: VizitSpace.sm) {
+                            VizitTextField(
+                                label: "Új jelszó",
+                                text: $password,
+                                placeholder: "••••••••",
+                                contentType: .newPassword,
+                                autocapitalization: .never,
+                                isSecure: true,
+                                submitLabel: .next
+                            )
+                            VizitTextField(
+                                label: "Új jelszó újra",
+                                text: $confirmation,
+                                placeholder: "••••••••",
+                                contentType: .newPassword,
+                                autocapitalization: .never,
+                                isSecure: true,
+                                submitLabel: .go,
+                                onSubmit: change
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .disabled(store.busy)
+
+                        VizitButton(
+                            title: "Jelszó módosítása",
+                            systemImage: "checkmark.shield",
+                            isLoading: store.busy,
+                            isEnabled: !store.busy,
+                            action: change
+                        )
                     }
-                    .padding(24)
+                    .padding(VizitSpace.lg)
                     .frame(maxWidth: 540)
                     .frame(maxWidth: .infinity)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Jelszó-visszaállítás")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private func change() {
+        Task { await store.changePassword(password, confirmation: confirmation) }
     }
 }

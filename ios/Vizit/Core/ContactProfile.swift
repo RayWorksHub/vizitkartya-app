@@ -2,7 +2,7 @@ import Foundation
 
 /// The editable contact fields mirror the currently supported Android profile
 /// fields and the live Supabase profile schema.
-public struct ContactProfile: Codable, Equatable, Sendable {
+public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public var fullName = ""
     public var firstName = ""
     public var lastName = ""
@@ -21,6 +21,8 @@ public struct ContactProfile: Codable, Equatable, Sendable {
     public var photoSyncInitialized = false
     public var publicSlug = ""
     public var isPublic = false
+    public var customDomain = ""
+    public var customDomainVerified = false
 
     public init() {}
 
@@ -28,6 +30,7 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         case fullName, firstName, lastName, jobTitle, company, phone, email
         case website, address, linkedIn, facebook, instagram, tiktok, youtube
         case photoBase64, photoSyncInitialized, publicSlug, isPublic
+        case customDomain, customDomainVerified
     }
 
     /// Explicit decoding keeps profiles created by the earlier local-only iOS
@@ -52,6 +55,8 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         photoSyncInitialized = try values.decodeIfPresent(Bool.self, forKey: .photoSyncInitialized) ?? false
         publicSlug = try values.decodeIfPresent(String.self, forKey: .publicSlug) ?? ""
         isPublic = try values.decodeIfPresent(Bool.self, forKey: .isPublic) ?? false
+        customDomain = try values.decodeIfPresent(String.self, forKey: .customDomain) ?? ""
+        customDomainVerified = try values.decodeIfPresent(Bool.self, forKey: .customDomainVerified) ?? false
     }
 
     public var displayName: String {
@@ -72,11 +77,12 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         let paths: [WritableKeyPath<ContactProfile, String>] = [
             \.fullName, \.firstName, \.lastName, \.jobTitle, \.company,
             \.phone, \.email, \.website, \.address, \.linkedIn, \.facebook,
-            \.instagram, \.tiktok, \.youtube, \.publicSlug
+            \.instagram, \.tiktok, \.youtube, \.publicSlug, \.customDomain
         ]
         for path in paths {
             value[keyPath: path] = value[keyPath: path].trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        value.customDomain = CustomProfileDomain.normalize(value.customDomain)
         return value
     }
 
@@ -113,6 +119,9 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         }
         if !p.publicSlug.isEmpty && !PublicProfileLink.isValidSlug(p.publicSlug) {
             throw ProfileError.invalidSlug
+        }
+        if !p.customDomain.isEmpty && !CustomProfileDomain.isValid(p.customDomain) {
+            throw ProfileError.invalidDomain
         }
     }
 }
@@ -169,7 +178,7 @@ public extension ContactProfile {
 
 public enum ProfileError: Error, LocalizedError, Equatable {
     case missingName, missingContact, invalidEmail, invalidPhone, invalidURL
-    case invalidField, invalidPhoto, invalidSlug, oversizedQR, unsupportedFile, damagedFile
+    case invalidField, invalidPhoto, invalidSlug, invalidDomain, oversizedQR, unsupportedFile, damagedFile
 
     public var errorDescription: String? {
         switch self {
@@ -181,6 +190,7 @@ public enum ProfileError: Error, LocalizedError, Equatable {
         case .invalidField: return "Egy mező túl hosszú, sortörést vagy vezérlőkaraktert tartalmaz."
         case .invalidPhoto: return "A profilkép nem olvasható vagy túl nagy. Válassz új képet."
         case .invalidSlug: return "A nyilvános profilazonosító 3–50 kisbetűből, számból és kötőjelből állhat."
+        case .invalidDomain: return "Az egyedi domain csak egy teljes domainnév lehet, például nevjegy.cegem.hu."
         case .oversizedQR: return "Túl sok adat a jól olvasható QR-kódhoz. Rövidítsd a mezőket, vagy használd a névjegyküldést."
         case .unsupportedFile: return "Ezt a mentést újabb alkalmazásverzió készítette. Az adatokat nem írtuk felül."
         case .damagedFile: return "A helyi névjegy nem olvasható. Az eredeti mentést megőriztük; a Beállításokban törölheted."
@@ -200,19 +210,58 @@ public enum PublicProfileLink {
               isValidSlug(slug) else { return nil }
         return baseURL.appendingPathComponent(slug, isDirectory: false)
     }
+
+    public static func preferred(baseURL: URL, slug: String, customDomain: String,
+                                 customDomainVerified: Bool) -> URL? {
+        if customDomainVerified, let custom = CustomProfileDomain.url(customDomain) { return custom }
+        return make(baseURL: baseURL, slug: slug)
+    }
+}
+
+public enum CustomProfileDomain {
+    public static func normalize(_ value: String) -> String {
+        var result = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if result.hasPrefix("https://") { result.removeFirst("https://".count) }
+        while result.hasSuffix("/") || result.hasSuffix(".") { result.removeLast() }
+        return result
+    }
+
+    public static func isValid(_ value: String) -> Bool {
+        let host = normalize(value)
+        guard (4...253).contains(host.count),
+              host.range(
+                of: #"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"#,
+                options: .regularExpression
+              ) != nil,
+              let parts = URLComponents(string: "https://\(host)"),
+              parts.host == host, parts.user == nil, parts.password == nil,
+              parts.path.isEmpty, parts.query == nil, parts.fragment == nil else { return false }
+        return true
+    }
+
+    public static func url(_ value: String) -> URL? {
+        let host = normalize(value)
+        guard isValid(host) else { return nil }
+        return URL(string: "https://\(host)")
+    }
 }
 
 public enum ProfileSlug {
     /// Ordered candidates for first profile creation. The first value preserves
     /// the requested public URL. Later values are stable per account and stay
     /// inside the 50-character public-slug contract.
-    public static func creationCandidates(requested: String, ownerID: UUID) -> [String] {
+    public static func creationCandidates(requested: String, displayName: String = "", ownerID: UUID) -> [String] {
         let ownerToken = ownerID.uuidString.lowercased().replacingOccurrences(of: "-", with: "")
         let requested = requested.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let primary = requested.isEmpty ? "vizit-\(ownerToken.prefix(12))" : requested
-        let readableFallback = requested.isEmpty
-            ? "vizit-\(ownerToken)"
-            : "\(requested.prefix(40))-\(ownerToken.prefix(8))"
+        let folded = displayName.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+            .replacingOccurrences(of: #"[^a-z0-9]+"#, with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let readable = String(folded.prefix(50)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let generated = PublicProfileLink.isValidSlug(readable) ? readable : "vizit-\(ownerToken.prefix(12))"
+        let primary = requested.isEmpty ? generated : requested
+        let fallbackPrefix = String(primary.prefix(40)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let readableFallback = "\(fallbackPrefix)-\(ownerToken.prefix(8))"
         let ownerFallback = "vizit-\(ownerToken)"
 
         var seen = Set<String>()
@@ -264,17 +313,6 @@ public enum ProfilePhoto {
         return url
     }
 }
-
-public enum ContactQRLink {
-    public static func make(publicURL: URL) -> URL? {
-        guard SafeLink.https(publicURL.absoluteString) != nil else { return nil }
-        var parts = URLComponents(url: publicURL, resolvingAgainstBaseURL: false)
-        parts?.queryItems = [URLQueryItem(name: "contact", value: "1")]
-        parts?.fragment = nil
-        return parts?.url
-    }
-}
-
 
 public enum ProfileRevisionPolicy {
     public static func mayUpload(localID: UUID?, localRevision: String?, localFingerprint: String?,

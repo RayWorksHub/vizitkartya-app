@@ -21,6 +21,8 @@ data class ContactProfile(
     val photoBase64: String = "",
     val publicSlug: String = "",
     val isPublic: Boolean = false,
+    val customDomain: String = "",
+    val customDomainVerified: Boolean = false,
 ) {
     val resolvedDisplayName: String
         get() = fullName.trim().ifBlank {
@@ -53,11 +55,11 @@ object ContactProfileValidator {
         profile.socialAndWebsiteUrls().any { !isValidHttpsUrl(it) } ->
             "A webes és közösségi hivatkozások teljes, https:// kezdetű címek legyenek."
 
-        profile.isPublic && profile.publicSlug.isBlank() ->
-            "A publikus profilhoz adj meg egy profilazonosítót."
-
         profile.publicSlug.isNotBlank() && !PublicProfileUrlFactory.isValidSlug(profile.publicSlug) ->
             "A profilazonosító 3–50 kisbetűből, számból vagy kötőjelből állhat."
+
+        profile.customDomain.isNotBlank() && !PublicProfileUrlFactory.isValidCustomDomain(profile.customDomain) ->
+            "Az egyedi domain csak egy teljes domainnév lehet, például nevjegy.cegem.hu."
 
         else -> null
     }

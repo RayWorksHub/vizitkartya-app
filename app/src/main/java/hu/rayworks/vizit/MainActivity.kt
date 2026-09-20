@@ -11,7 +11,7 @@ import hu.rayworks.vizit.auth.AuthCallbackParser
 import hu.rayworks.vizit.auth.AuthViewModel
 import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.ui.VizitRoot
-import hu.rayworks.vizit.ui.theme.VizitTheme
+import hu.rayworks.vizit.ui.design.VizitTheme
 import io.github.jan.supabase.auth.handleDeeplinks
 
 class MainActivity : ComponentActivity() {
@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleAuthIntent(intent)
         setContent {
-            VizitTheme {
+            VizitTheme(themeMode = viewModel.themeMode) {
                 VizitRoot(vizitViewModel = viewModel, authViewModel = authViewModel)
             }
         }

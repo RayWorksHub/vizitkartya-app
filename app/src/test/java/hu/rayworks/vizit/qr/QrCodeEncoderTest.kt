@@ -31,6 +31,22 @@ class QrCodeEncoderTest {
         assertTrue((0 until qr.size).all { y -> qr.pixels[y * qr.size + qr.size - 1] == WHITE })
     }
 
+    @Test
+    fun `medium correction survives the centered logo plate`() {
+        val content = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Teszt Elek\r\nTEL:+36201234567\r\nEND:VCARD\r\n"
+        val original = QrCodeEncoder.encode(content, size = 512)
+        val pixels = original.pixels.copyOf()
+        val plateSize = (original.size * 0.14f).toInt()
+        val start = (original.size - plateSize) / 2
+        for (y in start until start + plateSize) {
+            for (x in start until start + plateSize) {
+                pixels[y * original.size + x] = WHITE
+            }
+        }
+
+        assertEquals(content, decode(RenderedQrCode(original.size, pixels)))
+    }
+
     private fun decode(qr: RenderedQrCode): String {
         val source = RGBLuminanceSource(qr.size, qr.size, qr.pixels)
         return MultiFormatReader()

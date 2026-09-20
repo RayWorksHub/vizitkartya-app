@@ -95,6 +95,27 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertFalse(CloudError.server(status: 409, code: "PGRST116").isUniqueConstraintViolation)
         XCTAssertFalse(CloudError.server(status: 500, code: "23505").isUniqueConstraintViolation)
     }
+
+    func testRESTURLBuilderPercentEncodesTimestampOffsetPlus() throws {
+        let timestamp = "eq.2026-09-18T17:12:04.733081+00:00"
+        let url = try XCTUnwrap(RESTURLBuilder.make(
+            baseURL: URL(string: "https://example.supabase.co")!,
+            path: ["rest", "v1", "profiles"],
+            query: [URLQueryItem(name: "updated_at", value: timestamp)]
+        ))
+        XCTAssertTrue(url.absoluteString.contains("%2B00"))
+        XCTAssertFalse(url.absoluteString.contains("+00"))
+        XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "updated_at" })?.value, timestamp)
+    }
+
+    func testServerErrorIncludesSafeDiagnosticCode() {
+        XCTAssertEqual(
+            CloudError.server(status: 400, code: "22007").errorDescription,
+            "A VIZIT kiszolgáló elutasította a kérést (HTTP 400, kód: 22007)."
+        )
+    }
+
     func testPendingPhotoSurvivesJournalReloadBeforeProfileFileWrite() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
