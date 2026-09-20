@@ -150,4 +150,54 @@ final class NativeIntegrationTests: XCTestCase {
         first.facebook = "https://facebook.com/teszt"
         XCTAssertNotEqual(first.fingerprint, originalFingerprint)
     }
+
+    func testHiddenFieldsNeverReachTheSharedVCard() throws {
+        var p = profile()
+        p.website = "https://pelda.hu"
+        p.address = "Budapest, Fő utca 1."
+        p.linkedIn = "https://linkedin.com/in/teszt"
+
+        var presentation = CardPresentation()
+        presentation.sharesEmail = false
+        presentation.sharesAddress = false
+        presentation.sharesSocial = false
+
+        let shared = p.visible(through: presentation)
+        XCTAssertEqual(shared.email, "")
+        XCTAssertEqual(shared.address, "")
+        XCTAssertEqual(shared.linkedIn, "")
+        // Everything left switched on survives untouched.
+        XCTAssertEqual(shared.phone, p.phone)
+        XCTAssertEqual(shared.company, p.company)
+        XCTAssertEqual(shared.website, p.website)
+
+        let payload = try VCard.encode(shared)
+        XCTAssertFalse(payload.contains("test@example.com"))
+        XCTAssertFalse(payload.contains("linkedin.com"))
+        XCTAssertFalse(payload.contains("ADR;"))
+        XCTAssertTrue(payload.contains("+36201234567"))
+    }
+
+    func testPresentationDefaultsShareEverythingAndSurviveARoundTrip() throws {
+        let fresh = CardPresentation()
+        XCTAssertEqual(fresh.sharedFieldCount, CardPresentation.optionalFieldCount)
+        XCTAssertEqual(profile().visible(through: fresh), profile())
+
+        var changed = CardPresentation()
+        changed.colorway = .amethyst
+        changed.layout = .landscape
+        changed.showsQR = true
+        changed.sharesPhone = false
+        let decoded = try JSONDecoder().decode(
+            CardPresentation.self,
+            from: try JSONEncoder().encode(changed)
+        )
+        XCTAssertEqual(decoded, changed)
+        XCTAssertEqual(decoded.sharedFieldCount, CardPresentation.optionalFieldCount - 1)
+
+        // A preference file written before these keys existed must not start
+        // hiding data the owner is sharing today.
+        let legacy = try JSONDecoder().decode(CardPresentation.self, from: Data("{}".utf8))
+        XCTAssertEqual(legacy, CardPresentation())
+    }
 }

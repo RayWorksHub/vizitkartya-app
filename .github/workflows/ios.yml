@@ -163,7 +163,7 @@ jobs:
           failed = result.get('failedTests')
           passed = result.get('passedTests')
           skipped = result.get('skippedTests', 0)
-          expected = 18
+          expected = 20
           if failed != 0 or passed != expected or skipped != 0:
               raise SystemExit(f'Invalid test summary: passed={passed}, failed={failed}, skipped={skipped}')
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')

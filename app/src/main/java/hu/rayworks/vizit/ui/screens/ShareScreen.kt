@@ -58,6 +58,8 @@ import androidx.compose.ui.window.DialogProperties
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.R
 import hu.rayworks.vizit.data.ContactProfile
+import hu.rayworks.vizit.data.card.CardPresentation
+import hu.rayworks.vizit.data.card.visibleThrough
 import hu.rayworks.vizit.qr.QrCodeGenerator
 import hu.rayworks.vizit.qr.QrMode
 import hu.rayworks.vizit.qr.QrPayloadFactory
@@ -88,6 +90,7 @@ fun ShareScreen(
     nfcStatus: NfcStatus,
     onStartNfcShare: () -> String?,
     modifier: Modifier = Modifier,
+    presentation: CardPresentation = CardPresentation(),
 ) {
     val colors = Vizit.colors
     val context = LocalContext.current
@@ -99,15 +102,19 @@ fun ShareScreen(
     var qrMode by rememberSaveable { mutableStateOf(QrMode.CONTACT) }
     var fullScreen by rememberSaveable { mutableStateOf(false) }
 
-    val publicProfileUrl = remember(profile, synchronized) {
-        QrPayloadFactory.profileUrl(profile, synchronized)
+    // What actually leaves the device: the stored profile minus whatever the
+    // owner switched off in Adatláthatóság.
+    val shared = remember(profile, presentation) { profile.visibleThrough(presentation) }
+
+    val publicProfileUrl = remember(shared, synchronized) {
+        QrPayloadFactory.profileUrl(shared, synchronized)
     }
-    val contactPayload = remember(profile, publicProfileUrl) {
-        QrPayloadFactory.contact(profile, publicProfileUrl)
+    val contactPayload = remember(shared, publicProfileUrl) {
+        QrPayloadFactory.contact(shared, publicProfileUrl)
     }
-    val photoContactPayload = remember(profile, publicProfileUrl) {
-        profile.photoBase64.takeIf(String::isNotBlank)
-            ?.let { QrPayloadFactory.photoContact(profile, publicProfileUrl).getOrNull() }
+    val photoContactPayload = remember(shared, publicProfileUrl) {
+        shared.photoBase64.takeIf(String::isNotBlank)
+            ?.let { QrPayloadFactory.photoContact(shared, publicProfileUrl).getOrNull() }
     }
     val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, photoContactPayload) {
         when (qrMode) {
@@ -137,8 +144,6 @@ fun ShareScreen(
         ) {
             Spacer(Modifier.height(Vizit.space.xs))
             VizitLargeTitle(title = "Megosztás")
-
-            Text("Megosztás", style = Vizit.type.h1, color = colors.textPrimary)
             Text(
                 text = "Érintsd össze a telefonokat, vagy mutasd a QR-kódot. A fogadó félnek nem kell VIZIT.",
                 style = Vizit.type.body,
@@ -240,8 +245,21 @@ fun ShareScreen(
                                     "vagy maradj a Kontakt módnál — abból semmilyen adat nem marad ki, csak a kép."
                             }
                         QrMode.CONTACT ->
-                            contactPayload.exceptionOrNull()?.message
-                                ?: "Előbb töltsd ki a névjegyed alapadatait."
+                            // Naming the real cause: an empty code because every
+                            // reachable field is switched off looks identical to
+                            // an empty code because the profile is empty.
+                            if (profile.phone.isNotBlank() || profile.email.isNotBlank()) {
+                                if (shared.phone.isBlank() && shared.email.isBlank()) {
+                                    "Az Adatláthatóságban a telefonszám és az e-mail-cím is ki van " +
+                                        "kapcsolva, így nem marad mit a kódba tenni."
+                                } else {
+                                    contactPayload.exceptionOrNull()?.message
+                                        ?: "Előbb töltsd ki a névjegyed alapadatait."
+                                }
+                            } else {
+                                contactPayload.exceptionOrNull()?.message
+                                    ?: "Előbb töltsd ki a névjegyed alapadatait."
+                            }
                     },
                     actionLabel = if (qrMode == QrMode.CONTACT) null else "Vissza a Kontakt QR-hoz",
                     onAction = if (qrMode == QrMode.CONTACT) null else ({ qrMode = QrMode.CONTACT }),

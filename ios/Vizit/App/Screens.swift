@@ -1,5 +1,6 @@
 import SwiftUI
 import Contacts
+import PhotosUI
 import CoreImage.CIFilterBuiltins
 import WebKit
 
@@ -10,6 +11,7 @@ import WebKit
 /// One primary action, three shortcuts, then status.
 struct HomeScreen: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var selectedTab: RootTab
     @State private var editing = false
     @State private var showScanner = false
@@ -26,7 +28,8 @@ struct HomeScreen: View {
 
                         VizitDigitalCard(
                             profile: store.profile,
-                            nameIdentifier: store.hasProfile ? "card.name" : nil
+                            nameIdentifier: store.hasProfile ? "card.name" : nil,
+                            presentation: presentation.value
                         )
                             .onTapGesture { selectedTab = .card }
 
@@ -126,8 +129,11 @@ private struct QuickTile: View {
 /// with it. Editing happens in a sheet so this stays a clean preview.
 struct CardScreen: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var selectedTab: RootTab
     @State private var editing = false
+    @State private var customizing = false
+    @State private var adjustingVisibility = false
 
     private var hasDetails: Bool {
         ![store.profile.phone, store.profile.email, store.profile.website, store.profile.address]
@@ -147,7 +153,24 @@ struct CardScreen: View {
                                 .disabled(store.storageError != nil)
                         }
 
-                        VizitDigitalCard(profile: store.profile)
+                        VizitDigitalCard(profile: store.profile, presentation: presentation.value)
+
+                        VizitSectionHeader(title: "A kártyád")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Kártya megjelenése",
+                                systemImage: "paintpalette",
+                                value: presentation.value.colorway.label,
+                                supporting: "Színvilág, elrendezés és megjelenő elemek"
+                            ) { customizing = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Adatok láthatósága",
+                                systemImage: "eye",
+                                value: "\(presentation.value.sharedFieldCount)/\(CardPresentation.optionalFieldCount)",
+                                supporting: "Mezőnként eldöntöd, mi kerül át megosztáskor"
+                            ) { adjustingVisibility = true }
+                        }
 
                         VizitButton(
                             title: store.hasProfile ? "Névjegy szerkesztése" : "Névjegy létrehozása",
@@ -213,6 +236,16 @@ struct CardScreen: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
+            .sheet(isPresented: $customizing) {
+                CardAppearanceScreen(store: presentation, profile: store.profile)
+            }
+            .sheet(isPresented: $adjustingVisibility) {
+                DataVisibilityScreen(
+                    store: presentation,
+                    profile: store.profile,
+                    isPublicProfile: store.profile.isPublic
+                )
+            }
         }
     }
 
@@ -241,6 +274,7 @@ struct CardScreen: View {
 /// because a tinted or low-contrast code is a code that does not scan.
 struct ShareScreen: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
     @State private var shareFile: ShareFile?
     @State private var temporaryURL: URL?
     @State private var showContact = false
@@ -259,6 +293,10 @@ struct ShareScreen: View {
 
     private var mode: QRMode { QRMode(rawValue: modeIndex) ?? .contact }
     private var usePublicProfile: Bool { mode == .profile }
+
+    /// What actually leaves the device: the stored profile minus whatever the
+    /// owner switched off in Adatláthatóság.
+    private var sharedProfile: ContactProfile { store.profile.visible(through: presentation.value) }
 
     var body: some View {
         NavigationStack {
@@ -311,14 +349,14 @@ struct ShareScreen: View {
                 }
             }
             .navigationBarHidden(true)
-            .task(id: store.profile) {
-                embeddedPhotoQRPayload = PhotoContactQR.payload(store.profile)
+            .task(id: sharedProfile) {
+                embeddedPhotoQRPayload = PhotoContactQR.payload(sharedProfile)
             }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
             .sheet(isPresented: $showContact) {
-                ContactEditor(contact: ContactBridge.contact(store.profile)) { _ in showContact = false }
+                ContactEditor(contact: ContactBridge.contact(sharedProfile)) { _ in showContact = false }
             }
             .fullScreenCover(isPresented: $showFullScreenQR) {
                 FullScreenQRView(image: currentQRImage, title: store.profile.displayName) {
@@ -414,6 +452,12 @@ struct ShareScreen: View {
         case .photo:
             return "A névjegyed adatai már kitöltik a QR kapacitását. Válassz kisebb profilképet, vagy maradj a Kontakt módnál — abból semmilyen adat nem marad ki, csak a kép."
         case .contact:
+            // Naming the real cause: an empty code because every reachable field
+            // is switched off looks identical to one because the profile is empty.
+            if (!store.profile.phone.isEmpty || !store.profile.email.isEmpty),
+               sharedProfile.phone.isEmpty, sharedProfile.email.isEmpty {
+                return "Az Adatláthatóságban a telefonszám és az e-mail-cím is ki van kapcsolva, így nem marad mit a kódba tenni."
+            }
             return "Előbb töltsd ki a névjegyed alapadatait: a névre és egy elérhetőségre mindenképp szükség van."
         }
     }
@@ -427,7 +471,7 @@ struct ShareScreen: View {
         switch mode {
         case .profile: return publicURL?.absoluteString
         case .photo: return embeddedPhotoQRPayload
-        case .contact: return try? VCard.qrPayload(store.profile)
+        case .contact: return try? VCard.qrPayload(sharedProfile)
         }
     }
 
@@ -444,7 +488,7 @@ struct ShareScreen: View {
 
     private func shareVCard() {
         do {
-            let file = try ContactBridge.shareFile(store.profile)
+            let file = try ContactBridge.shareFile(sharedProfile)
             temporaryURL = file.url
             shareFile = file
         } catch {
@@ -606,6 +650,9 @@ struct ScanFlow: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var scanning = false
+    @State private var torchOn = false
+    @State private var torchAvailable = false
+    @State private var pickedCode: PhotosPickerItem?
     @State private var pendingText: String?
     @State private var incoming: IncomingContact?
     @State private var link: URL?
@@ -674,20 +721,7 @@ struct ScanFlow: View {
                     Button("Kész") { dismiss() }
                 }
             }
-            .fullScreenCover(isPresented: $scanning, onDismiss: processScan) {
-                NavigationStack {
-                    QRScanner(onResult: { text in pendingText = text; scanning = false },
-                              onError: { text in message = text; scanning = false })
-                        .ignoresSafeArea(edges: .bottom)
-                        .navigationTitle("Névjegy beolvasása")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Bezárás") { scanning = false }
-                            }
-                        }
-                }
-            }
+            .fullScreenCover(isPresented: $scanning, onDismiss: processScan) { viewfinder }
             .sheet(item: $incoming) { item in
                 ContactEditor(contact: item.contact) { saved in
                     incoming = nil
@@ -712,6 +746,70 @@ struct ScanFlow: View {
                     Button("Rendszerbeállítások") { openURL(url); message = nil }
                 }
             } message: { Text(message ?? "") }
+        }
+    }
+
+    private var viewfinder: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                QRScanner(
+                    onResult: { text in pendingText = text; scanning = false },
+                    onError: { text in message = text; scanning = false },
+                    torchOn: torchOn,
+                    onTorchAvailability: { torchAvailable = $0 }
+                )
+                .ignoresSafeArea()
+
+                ScannerOverlay {
+                    PhotosPicker(selection: $pickedCode, matching: .images, photoLibrary: .shared()) {
+                        HStack(spacing: VizitSpace.xs) {
+                            Image(systemName: "photo").font(.system(size: 15, weight: .semibold))
+                            Text("Kód kiválasztása a képtárból").font(VizitFont.label)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, VizitSpace.md)
+                        .frame(minHeight: VizitMetrics.minTouchTarget)
+                        .background(Color.white.opacity(0.14))
+                        .clipShape(Capsule())
+                        .overlay { Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1) }
+                    }
+                }
+            }
+            .navigationTitle("Beolvasás")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Bezárás") { torchOn = false; scanning = false }
+                }
+                if torchAvailable {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(torchOn ? "Vaku ki" : "Vaku") { torchOn.toggle() }
+                            .accessibilityLabel(torchOn ? "Vaku kikapcsolása" : "Vaku bekapcsolása")
+                    }
+                }
+            }
+            .onChange(of: pickedCode) { _ in decodePickedCode() }
+        }
+    }
+
+    /// A picked still is decoded in the background, then handed to the same
+    /// path a live scan takes — so one set of safety checks covers both.
+    private func decodePickedCode() {
+        guard let item = pickedCode else { return }
+        pickedCode = nil
+        Task { @MainActor in
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let value = QRImageDecoder.decode(data) else {
+                message = "Ezen a képen nem találtunk egyetlen egyértelmű QR-kódot sem."
+                return
+            }
+            pendingText = value
+            torchOn = false
+            scanning = false
         }
     }
 
@@ -1678,7 +1776,10 @@ private struct PortalScroll<Content: View>: View {
 /// own outlined group at the very bottom.
 struct SettingsScreen: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var themeMode: ThemeMode
+    @State private var customizing = false
+    @State private var adjustingVisibility = false
     @State private var confirmReset = false
     @State private var error: String?
     @State private var confirmLogout = false
@@ -1702,6 +1803,21 @@ struct SettingsScreen: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
                         VizitLargeTitle("Beállítások")
+
+                        VizitSectionHeader(title: "Névjegy")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Kártya megjelenése",
+                                systemImage: "paintpalette",
+                                value: presentation.value.colorway.label
+                            ) { customizing = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Adatok láthatósága",
+                                systemImage: "eye",
+                                supporting: "\(presentation.value.sharedFieldCount) mező látható a \(CardPresentation.optionalFieldCount)-ből"
+                            ) { adjustingVisibility = true }
+                        }
 
                         VizitSectionHeader(title: "Megjelenés")
                         VizitGroup {

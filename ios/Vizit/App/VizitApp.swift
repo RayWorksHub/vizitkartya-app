@@ -4,10 +4,14 @@ import Supabase
 @main
 struct VizitApp: App {
     @StateObject private var store = AppStore()
+    @StateObject private var presentation = CardPresentationStore()
 
     var body: some Scene {
         WindowGroup {
-            AppGate().environmentObject(store).tint(VizitColor.primary)
+            AppGate()
+                .environmentObject(store)
+                .environmentObject(presentation)
+                .tint(VizitColor.primary)
                 .onOpenURL { url in Task { await store.handleCallback(url) } }
         }
     }

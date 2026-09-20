@@ -14,6 +14,8 @@ import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.ContactProfileValidator
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.nfc.HcePayloadStore
+import hu.rayworks.vizit.data.card.CardPresentation
+import hu.rayworks.vizit.data.card.visibleThrough
 import hu.rayworks.vizit.nfc.NfcPayloadFactory
 import hu.rayworks.vizit.nfc.NfcShareEvent
 import hu.rayworks.vizit.nfc.NfcShareEvents
@@ -28,6 +30,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private val container = (application as VizitApplication).container
     private val repository = container.profileRepository
     private val settingsStore = container.settingsStore
+    private val cardPresentationStore = container.cardPresentationStore
     private val hcePayloadStore = HcePayloadStore()
     private var profileObservationJob: Job? = null
     private var nfcTimeoutJob: Job? = null
@@ -46,6 +49,10 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
 
     /** User-selected appearance. Light is the product default. */
     var themeMode by mutableStateOf(ThemeMode.LIGHT)
+        private set
+
+    /** Card styling and per-field visibility, both local to this device. */
+    var cardPresentation by mutableStateOf(CardPresentation())
         private set
 
     var hasOfflineProfileSession by mutableStateOf(false)
@@ -69,6 +76,9 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
                 automaticSyncEnabled = settings.automaticSyncEnabled
                 themeMode = ThemeMode.fromStorage(settings.appearance)
             }
+        }
+        viewModelScope.launch {
+            cardPresentationStore.presentation.collect { cardPresentation = it }
         }
         viewModelScope.launch {
             NfcShareEvents.events.collect { event ->
@@ -146,6 +156,17 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.retrySync(userId) }
     }
 
+    /** The profile as a recipient sees it, with hidden fields already stripped. */
+    val sharedProfile: ContactProfile
+        get() = profile.visibleThrough(cardPresentation)
+
+    fun updateCardPresentation(value: CardPresentation) {
+        // Optimistic: the switch has to move under the finger, the DataStore
+        // write follows and the collector confirms it.
+        cardPresentation = value
+        viewModelScope.launch { cardPresentationStore.save(value) }
+    }
+
     fun updateThemeMode(mode: ThemeMode) {
         themeMode = mode
         viewModelScope.launch { settingsStore.setAppearance(mode.storageValue) }
@@ -165,6 +186,12 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         val validationError = ContactProfileValidator.validate(profile)
         if (validationError != null) return validationError
 
+        // Hiding every reachable field would hand over a card nobody can act on.
+        if (sharedProfile.phone.isBlank() && sharedProfile.email.isBlank()) {
+            return "Az Adatláthatóságban a telefonszám és az e-mail-cím is ki van kapcsolva, " +
+                "így nem marad mit átadni. Kapcsold vissza valamelyiket."
+        }
+
         refreshNfcStatus()
         if (!nfcStatus.isAvailable) return "Ez a telefon nem rendelkezik NFC-vel."
         if (!nfcStatus.hasHostCardEmulation) return "A telefon nem támogatja az NFC-kártyaemulációt."
@@ -182,7 +209,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
             }
 
         val prepared = runCatching {
-            NfcPayloadFactory.create(profile.copy(photoBase64 = ""), fallbackUrl)
+            NfcPayloadFactory.create(sharedProfile.copy(photoBase64 = ""), fallbackUrl)
         }
             .getOrElse { return "A névjegy NFC-adatcsomagja túl nagy. Rövidíts néhány mezőt, majd próbáld újra." }
 
@@ -228,6 +255,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun shareAsText(context: Context) {
+        val profile = sharedProfile
         val contactText = buildString {
             appendLine(profile.resolvedDisplayName)
             if (profile.jobTitle.isNotBlank()) appendLine(profile.jobTitle)

@@ -20,7 +20,9 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Mail
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,17 +33,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import hu.rayworks.vizit.data.ContactProfile
+import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.ui.design.Vizit
 import hu.rayworks.vizit.ui.design.components.VizitLargeTitle
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
-import hu.rayworks.vizit.ui.design.components.VizitDigitalCard
 import hu.rayworks.vizit.ui.design.components.VizitDivider
 import hu.rayworks.vizit.ui.design.components.VizitEmptyState
 import hu.rayworks.vizit.ui.design.components.VizitGroup
 import hu.rayworks.vizit.ui.design.components.VizitRow
 import hu.rayworks.vizit.ui.design.components.VizitSectionHeader
-import hu.rayworks.vizit.ui.util.rememberProfilePhoto
 
 /**
  * The card tab: the card itself, what is on it, and the two things you can do
@@ -53,9 +54,11 @@ fun CardScreen(
     onSave: suspend (ContactProfile) -> String?,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
+    presentation: CardPresentation = CardPresentation(),
+    onOpenCardAppearance: () -> Unit = {},
+    onOpenDataVisibility: () -> Unit = {},
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
-    val photo = rememberProfilePhoto(profile.photoBase64)
 
     if (editing) {
         ProfileEditScreen(
@@ -82,17 +85,26 @@ fun CardScreen(
         Spacer(Modifier.height(Vizit.space.xs))
         VizitLargeTitle(title = "Névjegyem")
 
-        Text("Névjegyem", style = Vizit.type.h1, color = Vizit.colors.textPrimary)
+        ProfileCard(profile = profile, presentation = presentation)
 
-        VizitDigitalCard(
-            fullName = profile.resolvedDisplayName,
-            initials = profile.initials,
-            jobTitle = profile.jobTitle,
-            company = profile.company,
-            phone = profile.phone,
-            email = profile.email,
-            photo = photo,
-        )
+        VizitSectionHeader("A kártyád")
+        VizitGroup {
+            VizitRow(
+                label = "Kártya megjelenése",
+                value = presentation.colorway.label,
+                supporting = "Színvilág, elrendezés és megjelenő elemek",
+                icon = Icons.Outlined.Palette,
+                onClick = onOpenCardAppearance,
+            )
+            VizitDivider()
+            VizitRow(
+                label = "Adatok láthatósága",
+                value = "${presentation.sharedFieldCount}/${CardPresentation.OPTIONAL_FIELD_COUNT}",
+                supporting = "Mezőnként eldöntöd, mi kerül át megosztáskor",
+                icon = Icons.Outlined.Visibility,
+                onClick = onOpenDataVisibility,
+            )
+        }
 
         VizitButton(
             text = "Névjegy szerkesztése",

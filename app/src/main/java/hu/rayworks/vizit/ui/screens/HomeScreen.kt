@@ -42,19 +42,18 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
+import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.Vizit
 import hu.rayworks.vizit.ui.design.components.VizitIdentityChip
 import hu.rayworks.vizit.ui.design.components.VizitLargeTitle
 import hu.rayworks.vizit.ui.design.components.VizitButton
-import hu.rayworks.vizit.ui.design.components.VizitDigitalCard
 import hu.rayworks.vizit.ui.design.components.VizitIconChip
 import hu.rayworks.vizit.ui.design.components.VizitRow
 import hu.rayworks.vizit.ui.design.components.VizitStatusPill
 import hu.rayworks.vizit.ui.design.components.VizitTone
 import hu.rayworks.vizit.ui.design.components.VizitGroup
-import hu.rayworks.vizit.ui.util.rememberProfilePhoto
 import kotlinx.coroutines.launch
 
 /**
@@ -73,12 +72,12 @@ fun HomeScreen(
     onOpenKnowledgeHub: () -> Unit,
     onShareAsText: (Context) -> Unit,
     modifier: Modifier = Modifier,
+    presentation: CardPresentation = CardPresentation(),
 ) {
     val colors = Vizit.colors
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val photo = rememberProfilePhoto(profile.photoBase64)
 
     Box(modifier = modifier.fillMaxSize().background(colors.canvas)) {
         Column(
@@ -101,15 +100,7 @@ fun HomeScreen(
             }
 
             Box(modifier = Modifier.clickable(role = Role.Button, onClick = onOpenCard)) {
-                VizitDigitalCard(
-                    fullName = profile.resolvedDisplayName,
-                    initials = profile.initials,
-                    jobTitle = profile.jobTitle,
-                    company = profile.company,
-                    phone = profile.phone,
-                    email = profile.email,
-                    photo = photo,
-                )
+                ProfileCard(profile = profile, presentation = presentation)
             }
 
             VizitButton(
