@@ -178,7 +178,7 @@ public extension ContactProfile {
 
 public enum ProfileError: Error, LocalizedError, Equatable {
     case missingName, missingContact, invalidEmail, invalidPhone, invalidURL
-    case invalidField, invalidPhoto, invalidSlug, invalidDomain, oversizedQR, unsupportedFile, damagedFile
+    case invalidField, missingPhoto, invalidPhoto, invalidSlug, invalidDomain, oversizedQR, unsupportedFile, damagedFile
 
     public var errorDescription: String? {
         switch self {
@@ -188,6 +188,7 @@ public enum ProfileError: Error, LocalizedError, Equatable {
         case .invalidPhone: return "Ellenőrizd a telefonszámot; számokat, szóközt és + ( ) - . / jeleket használhatsz."
         case .invalidURL: return "A hivatkozások teljes, https:// kezdetű webcímek legyenek."
         case .invalidField: return "Egy mező túl hosszú, sortörést vagy vezérlőkaraktert tartalmaz."
+        case .missingPhoto: return "A névjegy megosztásához tölts fel profilképet."
         case .invalidPhoto: return "A profilkép nem olvasható vagy túl nagy. Válassz új képet."
         case .invalidSlug: return "A nyilvános profilazonosító 3–50 kisbetűből, számból és kötőjelből állhat."
         case .invalidDomain: return "Az egyedi domain csak egy teljes domainnév lehet, például nevjegy.cegem.hu."
