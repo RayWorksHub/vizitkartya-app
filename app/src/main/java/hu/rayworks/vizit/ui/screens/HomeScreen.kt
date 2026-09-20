@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
@@ -72,6 +74,7 @@ fun HomeScreen(
     onOpenKnowledgeHub: () -> Unit,
     onShareAsText: (Context) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenScanner: () -> Unit = {},
     presentation: CardPresentation = CardPresentation(),
 ) {
     val colors = Vizit.colors
@@ -131,6 +134,13 @@ fun HomeScreen(
                     subtitle = "Mutatás",
                     modifier = Modifier.weight(1f),
                     onClick = onOpenShare,
+                )
+                QuickTile(
+                    icon = Icons.Outlined.QrCodeScanner,
+                    title = "Beolvasás",
+                    subtitle = "Új kapcsolat",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenScanner,
                 )
                 QuickTile(
                     icon = Icons.Outlined.ContentCopy,
@@ -207,12 +217,24 @@ private fun QuickTile(
             background = if (enabled) colors.primarySubtle else colors.controlDisabled,
         )
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            // Four tiles share one row on a phone, so a long label shrinks
+            // rather than wrapping the tile out of alignment with its siblings.
             Text(
                 text = title,
                 style = Vizit.type.label,
                 color = if (enabled) colors.textPrimary else colors.textDisabled,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
-            Text(text = subtitle, style = Vizit.type.caption, color = colors.textMuted)
+            Text(
+                text = subtitle,
+                style = Vizit.type.caption,
+                color = colors.textMuted,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

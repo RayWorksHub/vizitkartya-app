@@ -60,6 +60,7 @@ import hu.rayworks.vizit.ui.screens.CardScreen
 import hu.rayworks.vizit.ui.screens.DataVisibilityScreen
 import hu.rayworks.vizit.ui.screens.HomeScreen
 import hu.rayworks.vizit.ui.screens.NfcShareScreen
+import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
 
@@ -85,6 +86,7 @@ fun VizitApp(
     var showKnowledgeHub by rememberSaveable { mutableStateOf(false) }
     var showCardAppearance by rememberSaveable { mutableStateOf(false) }
     var showDataVisibility by rememberSaveable { mutableStateOf(false) }
+    var showScanner by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
 
     // Full-screen NFC hand-off takes over the whole app while it is running.
@@ -101,6 +103,11 @@ fun VizitApp(
 
     if (showKnowledgeHub) {
         BusinessHubScreen(onBack = { showKnowledgeHub = false })
+        return
+    }
+
+    if (showScanner) {
+        QrScanScreen(onClose = { showScanner = false })
         return
     }
 
@@ -158,6 +165,7 @@ fun VizitApp(
                         onOpenCard = { selectedSection = AppSection.CARD },
                         onOpenShare = { selectedSection = AppSection.SHARE },
                         onOpenKnowledgeHub = { showKnowledgeHub = true },
+                        onOpenScanner = { showScanner = true },
                         onShareAsText = viewModel::shareAsText,
                     )
 
