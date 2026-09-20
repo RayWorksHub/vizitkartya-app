@@ -238,12 +238,13 @@ jobs:
           set -euo pipefail
           result="$RUNNER_TEMP/VIZIT-iPhone.xcresult"
           attachments="$RUNNER_TEMP/VIZIT-iPhone-attachments"
+          attachment_manifest="$RUNNER_TEMP/VIZIT-attachment-export.log"
           test -d "$result"
           mkdir -p "$attachments"
-          xcrun xcresulttool export attachments --path "$result" --output-path "$attachments"
+          xcrun xcresulttool export attachments --path "$result" --output-path "$attachments" 2>&1 | tee "$attachment_manifest"
           node scripts/verify-ios-release.mjs evidence \
             --summary "$RUNNER_TEMP/VIZIT-test-summary.json" \
-            --xcresult-json "$RUNNER_TEMP/VIZIT-xcresult.json" \
+            --attachment-manifest "$attachment_manifest" \
             --attachments "$attachments"
           python3 - "$attachments" "$RUNNER_TEMP" <<'PY'
           from pathlib import Path

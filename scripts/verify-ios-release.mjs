@@ -120,7 +120,7 @@ function validateSource() {
   for (const forbidden of ['VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED', "contains(github.event.head_commit.message, '[testflight]')"]) {
     if (workflow.includes(forbidden)) fail(`unsafe legacy release trigger remains in ios.yml: ${forbidden}`)
   }
-  for (const required of ['environment: testflight-production', 'release_commit', 'physical_device_commit', 'design_review_commit']) {
+  for (const required of ['environment: testflight-production', 'release_commit', 'physical_device_commit', 'design_review_commit', '--attachment-manifest']) {
     if (!workflow.includes(required)) fail(`ios.yml is missing release control: ${required}`)
   }
 
@@ -137,7 +137,7 @@ function argument(name) {
 
 function validateEvidence(source) {
   const summaryPath = existingFile(argument('--summary'), '--summary')
-  const resultJSONPath = existingFile(argument('--xcresult-json'), '--xcresult-json')
+  const attachmentManifestPath = existingFile(argument('--attachment-manifest'), '--attachment-manifest')
   const attachmentsDirectory = resolve(argument('--attachments'))
   if (!existsSync(attachmentsDirectory) || !statSync(attachmentsDirectory).isDirectory()) {
     fail(`attachments directory is missing: ${attachmentsDirectory}`)
@@ -151,11 +151,17 @@ function validateEvidence(source) {
     fail(`invalid Xcode result: expected ${source.expectedXcodeTests} passed; got ${passed} passed, ${failed} failed, ${skipped} skipped`)
   }
 
-  const resultText = readFileSync(resultJSONPath, 'utf8')
+  // Xcode 16's legacy xcresult JSON no longer includes attachment names even
+  // though `xcresulttool export attachments` exports them successfully. The
+  // export command's own manifest is the authoritative name-to-file mapping.
+  const attachmentManifest = readFileSync(attachmentManifestPath, 'utf8')
   const missingNames = source.manifest.uiEvidence
     .map((item) => item.attachment)
-    .filter((name) => !resultText.includes(name))
-  if (missingNames.length) fail(`xcresult is missing named evidence: ${missingNames.join(', ')}`)
+    .filter((name) => {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return !new RegExp(`suggested name:\\s*"${escaped}(?:_\\d+_[^"]+)?\\.png"`).test(attachmentManifest)
+    })
+  if (missingNames.length) fail(`attachment export is missing named evidence: ${missingNames.join(', ')}`)
 
   const pngs = readdirSync(attachmentsDirectory, { recursive: true })
     .filter((path) => path.toLowerCase().endsWith('.png'))
