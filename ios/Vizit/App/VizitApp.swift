@@ -1,5 +1,6 @@
 import SwiftUI
 import Supabase
+import UIKit
 
 @main
 struct VizitApp: App {
@@ -67,12 +68,14 @@ final class AppStore: ObservableObject {
 
     init() {
         #if DEBUG
-        uiTesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+        let launchArguments = ProcessInfo.processInfo.arguments
+        uiTesting = launchArguments.contains("--ui-testing")
         #else
         uiTesting = false
         #endif
         if uiTesting {
-            if ProcessInfo.processInfo.arguments.contains("--ui-testing-verification") {
+            #if DEBUG
+            if launchArguments.contains("--ui-testing-verification") {
                 authStatus = .verificationSent("teszt@vizit.hu")
                 syncStatus = .localOnly
                 return
@@ -82,17 +85,25 @@ final class AppStore: ObservableObject {
                 let storage = ProfileFileStore(directory: directory)
                 fileStore = storage
                 syncStore = ProfileSyncStore(directory: directory)
-                if ProcessInfo.processInfo.arguments.contains("--reset-test-profile") {
+                if launchArguments.contains("--reset-test-profile") {
                     try storage.reset()
                     try? syncStore?.reset()
                 }
-                profile = try storage.load()
+                if launchArguments.contains("--ui-testing-release-profile") {
+                    profile = Self.releaseAuditProfile(arguments: launchArguments)
+                    configuration = try? AppConfiguration.load()
+                    userEmail = "csukardi.rajmund@gmail.com"
+                    syncStatus = .synced
+                } else {
+                    profile = try storage.load()
+                    syncStatus = .localOnly
+                }
                 authStatus = .authenticated
-                syncStatus = .localOnly
             } catch {
                 storageError = error.localizedDescription
                 authStatus = .authenticated
             }
+            #endif
             return
         }
 
@@ -109,6 +120,53 @@ final class AppStore: ObservableObject {
     var hasProfile: Bool { !profile.displayName.isEmpty }
     var accountEmail: String { userEmail }
     var isOnline: Bool { authStatus == .authenticated }
+
+    #if DEBUG
+    /// A complete, deterministic profile used only by UI release-audit tests.
+    /// It never enters a signed build and never touches Supabase.
+    private static func releaseAuditProfile(arguments: [String]) -> ContactProfile {
+        var value = ContactProfile()
+        value.fullName = "Csukárdi Rajmund"
+        value.firstName = "Rajmund"
+        value.lastName = "Csukárdi"
+        value.jobTitle = "CEO"
+        value.company = "RayWorks | Solutions Kft."
+        value.phone = "+36 70 298 0003"
+        value.email = "csukardi.rajmund@gmail.com"
+        value.website = "https://rayworks.hu"
+        value.address = "Budapest"
+        value.linkedIn = "https://linkedin.com/in/csukardi-rajmund"
+        value.facebook = "https://facebook.com/csukardi.rajmund"
+        value.instagram = "https://instagram.com/csukardi.rajmund"
+        value.tiktok = "https://tiktok.com/@csukardi.rajmund"
+        value.youtube = "https://youtube.com/@rayworks"
+        value.photoSyncInitialized = true
+        value.publicSlug = "csukardi-rajmund"
+        value.isPublic = true
+        value.customDomain = arguments.contains("--ui-testing-domain-invalid")
+            ? "https://nevjegy.cegem.hu/profil"
+            : "nevjegy.cegem.hu"
+        value.customDomainVerified = arguments.contains("--ui-testing-domain-verified")
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96), format: format).image { context in
+            UIColor(red: 0.07, green: 0.22, blue: 0.43, alpha: 1).setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 96, height: 96))
+            let initials = "CR" as NSString
+            initials.draw(
+                at: CGPoint(x: 20, y: 31),
+                withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 28, weight: .bold),
+                    .foregroundColor: UIColor.white,
+                ]
+            )
+        }
+        value.photoBase64 = image.jpegData(compressionQuality: 0.72)?.base64EncodedString() ?? ""
+        return value
+    }
+    #endif
 
     func showSignIn() {
         message = nil

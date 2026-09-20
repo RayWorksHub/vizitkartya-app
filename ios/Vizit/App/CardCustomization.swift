@@ -53,6 +53,7 @@ struct CardAppearanceScreen: View {
                         VizitGroup {
                             toggleRow(
                                 "Profilkép",
+                                identifier: "card.showPhoto",
                                 supporting: profile.photoBase64.isEmpty
                                     ? "Még nincs feltöltött profilképed."
                                     : nil,
@@ -61,12 +62,14 @@ struct CardAppearanceScreen: View {
                             VizitDivider()
                             toggleRow(
                                 "QR-kód a kártyán",
+                                identifier: "card.showQR",
                                 supporting: "A kártya sarkába kerül, így egy fotóról is beolvasható.",
                                 isOn: $store.value.showsQR
                             )
                             VizitDivider()
                             toggleRow(
                                 "Közösségi profilok",
+                                identifier: "card.showSocial",
                                 supporting: store.value.sharesSocial
                                     ? nil
                                     : "Az Adatláthatóságban most ki van kapcsolva.",
@@ -141,6 +144,7 @@ struct CardAppearanceScreen: View {
 
     private func toggleRow(
         _ label: String,
+        identifier: String,
         supporting: String? = nil,
         isOn: Binding<Bool>,
         isEnabled: Bool = true
@@ -149,6 +153,7 @@ struct CardAppearanceScreen: View {
             Toggle("", isOn: isOn)
                 .labelsHidden()
                 .disabled(!isEnabled)
+                .accessibilityIdentifier(identifier)
         }
     }
 }

@@ -1,0 +1,79 @@
+name: TestFlight build status
+
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: App version shown in TestFlight, for example 8.1.0
+        required: true
+        type: string
+      build_number:
+        description: Exact TestFlight build number, for example 86
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight-status-${{ inputs.marketing_version }}-${{ inputs.build_number }}
+  cancel-in-progress: true
+
+jobs:
+  read-build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APPLE_BUNDLE_ID: hu.rayworks.vizit.ios.dev
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate requested build and API credentials
+        env:
+          MARKETING_VERSION: ${{ inputs.marketing_version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          [[ "$MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid marketing version'; exit 1; }
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid build number'; exit 1; }
+          test -n "$APP_STORE_CONNECT_API_KEY_ID"
+          test -n "$APP_STORE_CONNECT_API_ISSUER_ID"
+          test -n "$APP_STORE_CONNECT_API_KEY_BASE64"
+          python3 -m py_compile scripts/app-store-connect-build-status.py
+
+      - name: Install temporary App Store Connect key
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/AuthKey_$APP_STORE_CONNECT_API_KEY_ID.p8"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "$key"
+          chmod 600 "$key"
+          echo "VIZIT_ASC_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      - name: Read exact TestFlight build
+        env:
+          MARKETING_VERSION: ${{ inputs.marketing_version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          python3 scripts/app-store-connect-build-status.py \
+            --bundle-id "$APPLE_BUNDLE_ID" \
+            --marketing-version "$MARKETING_VERSION" \
+            --build-number "$BUILD_NUMBER" \
+            --output "$RUNNER_TEMP/VIZIT-App-Store-Connect-build.json"
+
+      - name: Upload read-only status evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: VIZIT-TestFlight-${{ inputs.marketing_version }}-${{ inputs.build_number }}-status
+          retention-days: 30
+          if-no-files-found: error
+          path: ${{ runner.temp }}/VIZIT-App-Store-Connect-build.json
+
+      - name: Remove temporary API key
+        if: always()
+        run: rm -f "${VIZIT_ASC_KEY_PATH:-$RUNNER_TEMP/nonexistent}"

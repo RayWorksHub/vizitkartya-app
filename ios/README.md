@@ -38,12 +38,14 @@ A Supabase Swift SDK pontosan a 2.55.2 verzióra van rögzítve. Az OAuth és he
 
 A GitHub **iOS secure IPA** workflow csak akkor tölti fel a VIZIT-iOS-DEV-unsigned-IPA artifactot, ha minden előfeltétel sikeres:
 
-1. a szükséges konfiguráció és az élő Supabase Auth-policy ellenőrzése;
-2. a hordozható Swift unit tesztek;
-3. az iPhone-szimulátoros natív integrációs és UI-tesztek;
-4. az iPad-indítási smoke teszt;
-5. a fizikai iOS célra készülő Release build;
-6. az ARM64/Mach-O platform, plist, privacy manifest, IPA ZIP és SHA-256 ellenőrzése.
+1. a rögzített Figma-források hashének és a teljes UI-bizonyítékjegyzéknek az ellenőrzése;
+2. a szükséges konfiguráció, a Supabase-forrás és az élő Auth-policy ellenőrzése;
+3. a hordozható Swift unit tesztek;
+4. a rögzített iPhone-modellen futó natív integrációs és UI-tesztek, kihagyás nélkül;
+5. minden névvel ellátott képernyőkép megléte az eredeti xcresultban, beleértve a három kártyaanyagot és a három elrendezést;
+6. az iPad-indítási smoke teszt;
+7. a fizikai iOS célra készülő Release build;
+8. az ARM64/Mach-O platform, plist, privacy manifest, IPA ZIP és SHA-256 ellenőrzése.
 
 Nincs continue-on-error; hibás teszt után nem készül IPA-artifact. A szimulátoros teszt nem bizonyítja a kamerát, fotóválasztást, AirDropot, OAuth rendszerböngészőt vagy a valódi iPhone-telepítést.
 
@@ -51,9 +53,22 @@ Az artifact aláíratlan IPA. Sideloadly/AltStore a saját Apple ID-val újra tu
 
 ## TestFlight-kiadás
 
-A `VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED=true` repository-változó és a
-`[testflight]` kiadási commit együtt engedélyezi az aláírt App Store-archívum
-ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 8.1.0**.
+A commitüzenet és a korlátlan ideig érvényes repository-változó többé nem tud
+TestFlight-feltöltést indítani. Feltöltés kizárólag az **iOS secure IPA** kézi
+indításával, `upload_testflight` művelettel történhet. A forrás-, fizikai
+készülékes és vizuális jóváhagyásnak ugyanarra a teljes commit SHA-ra kell
+mutatnia; ezen felül a `testflight-production` GitHub Environment jóváhagyása és
+az `UPLOAD VIZIT TO TESTFLIGHT` megerősítés is kötelező.
+
+A release-only futás teljes, ideiglenes felhasználókat létrehozó és törlő DEV
+Supabase E2E-t is futtat. Ehhez a `VIZIT_DEV_SUPABASE_SERVICE_ROLE_KEY` secret
+szükséges; ez a kulcs nem kerül az alkalmazásba vagy az artifactokba.
+
+A feltöltés után a workflow az App Store Connect API-ból visszaolvassa ugyanazt
+a verziót és buildszámot, és csak `VALID` feldolgozási állapotnál sikeres. A
+feltöltött buildhez nem rendel automatikusan tesztelőcsoportot. Meglévő build
+állapota a read-only **TestFlight build status** workflow-val kérdezhető le.
+A jelenlegi kiadás: **VIZIT 8.1.0**.
 
 A 8.1-es iOS-kiadásban nincs kép nélküli névjegyátadás: az egyetlen elsődleges
 QR optimalizált JPEG profilképet tartalmaz. A nyilvános profil nem második QR,
@@ -74,3 +89,6 @@ Kiadásra jelölés előtt valódi iPhone-on külön ellenőrizendő:
 - csak erre létrehozott tesztfiókkal a végleges fióktörlés.
 
 Sikert csak a ténylegesen lefutott, bizonyítékkal rendelkező ellenőrzés után szabad rögzíteni.
+
+A teljes kiadási kapu, a Figma-hivatkozások és a pontos kézi eljárás:
+[`Release/README.md`](Release/README.md).

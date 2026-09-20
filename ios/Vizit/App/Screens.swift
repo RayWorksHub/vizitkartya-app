@@ -43,9 +43,11 @@ struct HomeScreen: View {
                             QuickTile(systemImage: "qrcode", title: "QR-kód", subtitle: "Mutatás") {
                                 selectedTab = .share
                             }
+                            .accessibilityIdentifier("home.showQR")
                             QuickTile(systemImage: "qrcode.viewfinder", title: "Beolvasás", subtitle: "Új kapcsolat") {
                                 showScanner = true
                             }
+                            .accessibilityIdentifier("home.scan")
                             QuickTile(systemImage: "pencil", title: "Szerkesztés", subtitle: "Adataim") {
                                 editing = true
                             }
@@ -172,6 +174,7 @@ struct CardScreen: View {
                                 value: "\(presentation.value.sharedFieldCount)/\(CardPresentation.optionalFieldCount)",
                                 supporting: "Mezőnként eldöntöd, mi kerül át megosztáskor"
                             ) { adjustingVisibility = true }
+                            .accessibilityIdentifier("card.visibility")
                         }
 
                         VizitButton(
@@ -430,6 +433,7 @@ struct ShareScreen: View {
                 VizitButton(title: "Teljes képernyő", systemImage: "arrow.up.left.and.arrow.down.right", kind: .secondary) {
                     showFullScreenQR = true
                 }
+                .accessibilityIdentifier("share.fullscreen")
                 VizitButton(title: "Névjegyfájl", systemImage: "square.and.arrow.up", kind: .secondary) {
                     shareVCard()
                 }

@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "releaseContract": "VIZIT iOS 8.1",
+  "figmaFileKey": "PWzvA7sVoYIBqgfw6MCpRf",
+  "referenceSnapshot": "tervek-figma export pinned on 2026-09-20",
+  "simulators": {
+    "iphonePreferredNames": ["iPhone 16 Pro", "iPhone 17 Pro"],
+    "iphoneScreenshotPixels": [1206, 2622],
+    "ipadPreferredNames": ["iPad Pro 11-inch (M4)", "iPad Pro 11-inch (M5)"]
+  },
+  "boards": [
+    {
+      "id": "12-ios-authentication",
+      "path": "ios/Release/Figma/12-iOS-Authentication.png",
+      "sha256": "140a3a2b5b4a030a7e69d06269546546465f67b2c73e4fecc6f06f0318b332ef"
+    },
+    {
+      "id": "13-ios-main-app",
+      "path": "ios/Release/Figma/13-iOS-Main-App.png",
+      "sha256": "84558bbdd1d15c3db50ee0d71e94abe366a081dec5e39f41bc435b884a4df561"
+    },
+    {
+      "id": "14-ios-profile-customization",
+      "path": "ios/Release/Figma/14-iOS-Profile-Customization.png",
+      "sha256": "7e9388ed6a5034421f76199269315d7e174868fead87b2c5ff20872fb9578390"
+    },
+    {
+      "id": "15-ios-sharing",
+      "path": "ios/Release/Figma/15-iOS-Sharing.png",
+      "sha256": "b7a80c07f102daabed6683338f4b82e8c7570cc7e3938feb7d01aa5aa9559478"
+    },
+    {
+      "id": "16-ios-settings",
+      "path": "ios/Release/Figma/16-iOS-Settings.png",
+      "sha256": "da724156b1997df32d533124a5173a3892aa4a55b554fbc8b389a1d1f95ea688"
+    },
+    {
+      "id": "17-ios-business-portal",
+      "path": "ios/Release/Figma/17-iOS-Vallalkozoi-Portal.png",
+      "sha256": "8ada73365b3d852055218c8dc780c05ac9da12a270fe0cd630c9ac827c445694"
+    },
+    {
+      "id": "18-ios-qr-modes",
+      "path": "ios/Release/Figma/18-QR-modok-es-logos-QR.png",
+      "sha256": "ddb66986267d562d2bdcdc472b3bea1b4cecd8095e00dfae320bee3b3cefb632"
+    },
+    {
+      "id": "19-ios-custom-domain",
+      "path": "ios/Release/Figma/19-Sajat-domain.png",
+      "sha256": "5302a7d767fb92a369c929be141cef53d39b5457abee1a1c0732f60d64dcd3eb"
+    }
+  ],
+  "uiEvidence": [
+    {
+      "id": "auth-login",
+      "boardIds": ["12-ios-authentication"],
+      "testMethod": "testConfiguredAppShowsAuthentication",
+      "attachment": "VIZIT-auth-login"
+    },
+    {
+      "id": "auth-registration",
+      "boardIds": ["12-ios-authentication"],
+      "testMethod": "testRegistrationFlowShowsRequiredFieldsAndLegalConsent",
+      "attachment": "VIZIT-auth-registration"
+    },
+    {
+      "id": "auth-password-recovery",
+      "boardIds": ["12-ios-authentication"],
+      "testMethod": "testPasswordRecoveryIsVisibleAndKeepsTheCurrentBuildIdentifiable",
+      "attachment": "VIZIT-auth-password-recovery"
+    },
+    {
+      "id": "auth-email-verification",
+      "boardIds": ["12-ios-authentication"],
+      "testMethod": "testRegistrationConfirmationHasADedicatedDestination",
+      "attachment": "VIZIT-email-verification"
+    },
+    {
+      "id": "home-complete-profile",
+      "boardIds": ["13-ios-main-app"],
+      "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
+      "attachment": "VIZIT-home-complete-profile"
+    },
+    {
+      "id": "card-complete-profile",
+      "boardIds": ["13-ios-main-app"],
+      "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
+      "attachment": "VIZIT-card-complete-profile"
+    },
+    {
+      "id": "share-photo-contact-qr",
+      "boardIds": ["13-ios-main-app", "15-ios-sharing", "18-ios-qr-modes"],
+      "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
+      "attachment": "VIZIT-share-photo-contact-qr"
+    },
+    {
+      "id": "share-fullscreen-qr",
+      "boardIds": ["16-ios-settings", "18-ios-qr-modes"],
+      "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
+      "attachment": "VIZIT-share-fullscreen-qr"
+    },
+    {
+      "id": "settings-complete-profile",
+      "boardIds": ["13-ios-main-app", "16-ios-settings"],
+      "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
+      "attachment": "VIZIT-settings-complete-profile"
+    },
+    {
+      "id": "profile-editor",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testReleaseAuditCoversProfileEditorAndVisibility",
+      "attachment": "VIZIT-profile-editor"
+    },
+    {
+      "id": "card-material-ink",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts",
+      "attachment": "VIZIT-card-material-ink"
+    },
+    {
+      "id": "card-material-paper",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts",
+      "attachment": "VIZIT-card-material-paper"
+    },
+    {
+      "id": "card-material-brand",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts",
+      "attachment": "VIZIT-card-material-brand"
+    },
+    {
+      "id": "card-layout-portrait",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts",
+      "attachment": "VIZIT-card-layout-portrait"
+    },
+    {
+      "id": "card-layout-minimal",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts",
+      "attachment": "VIZIT-card-layout-minimal"
+    },
+    {
+      "id": "card-layout-classic",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts",
+      "attachment": "VIZIT-card-layout-classic"
+    },
+    {
+      "id": "data-visibility",
+      "boardIds": ["14-ios-profile-customization"],
+      "testMethod": "testReleaseAuditCoversProfileEditorAndVisibility",
+      "attachment": "VIZIT-data-visibility"
+    },
+    {
+      "id": "share-photo-required",
+      "boardIds": ["15-ios-sharing", "18-ios-qr-modes"],
+      "testMethod": "testCreatePersistAndRequirePhotoBeforeSharing",
+      "attachment": "VIZIT-photo-required"
+    },
+    {
+      "id": "scanner-entry",
+      "boardIds": ["15-ios-sharing"],
+      "testMethod": "testReleaseAuditCoversScannerEntry",
+      "attachment": "VIZIT-scanner-entry"
+    },
+    {
+      "id": "business-portal",
+      "boardIds": ["17-ios-business-portal"],
+      "testMethod": "testBusinessPortalExposesAllFourFunctionalAreas",
+      "attachment": "VIZIT-business-portal"
+    },
+    {
+      "id": "domain-pending",
+      "boardIds": ["19-ios-custom-domain"],
+      "testMethod": "testReleaseAuditCoversAllCustomDomainStates",
+      "attachment": "VIZIT-domain-pending"
+    },
+    {
+      "id": "domain-verified",
+      "boardIds": ["19-ios-custom-domain"],
+      "testMethod": "testReleaseAuditCoversAllCustomDomainStates",
+      "attachment": "VIZIT-domain-verified"
+    },
+    {
+      "id": "domain-invalid",
+      "boardIds": ["19-ios-custom-domain"],
+      "testMethod": "testReleaseAuditCoversAllCustomDomainStates",
+      "attachment": "VIZIT-domain-invalid"
+    }
+  ],
+  "approvedPlatformConstraints": [
+    {
+      "id": "ios-no-nfc-card-emulation",
+      "figmaBoards": ["13-ios-main-app", "16-ios-settings"],
+      "reason": "iOS does not expose Android-HCE-style arbitrary NFC card emulation. The app must state this and offer QR, AirDrop, vCard and HTTPS sharing instead.",
+      "source": "ios/README.md"
+    },
+    {
+      "id": "photo-contact-qr-release-contract",
+      "figmaBoards": ["18-ios-qr-modes"],
+      "reason": "The current 8.1 release contract supersedes the older three-mode board: the primary QR is an offline-importable photo vCard and must fail closed when a photo cannot be included.",
+      "source": "ios/README.md"
+    }
+  ],
+  "physicalDeviceChecks": [
+    "install-and-first-launch",
+    "email-registration-confirmation-login",
+    "password-recovery-system-browser",
+    "offline-save-reconnect-conflict",
+    "camera-permission-and-photo-qr-scan",
+    "contacts-save",
+    "photo-picker-vcard-airdrop",
+    "public-profile-link",
+    "test-account-permanent-deletion"
+  ]
+}

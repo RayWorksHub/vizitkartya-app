@@ -374,6 +374,7 @@ struct ProfileEditor: View {
                         error: domainValidationError,
                         keyboard: .URL,
                         autocapitalization: .never,
+                        identifier: "profile.customDomain",
                         submitLabel: .done
                     )
 
