@@ -143,4 +143,38 @@ final class VizitUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
+
+    func testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts() {
+        let app = launchClean()
+        app.tabBars.buttons["Névjegy"].tap()
+
+        let appearance = app.buttons["card.appearance"]
+        reveal(appearance, in: app)
+        appearance.tap()
+
+        for identifier in ["card.material.ink", "card.material.paper", "card.material.brand"] {
+            XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5), "Missing \(identifier)")
+        }
+        for layout in ["Portré", "Minimál", "Klasszikus"] {
+            XCTAssertTrue(app.buttons[layout].exists, "Missing \(layout)")
+        }
+
+        let paper = app.buttons["card.material.paper"]
+        paper.tap()
+        XCTAssertTrue(paper.isSelected)
+        let classic = app.buttons["Klasszikus"]
+        classic.tap()
+        XCTAssertTrue(classic.isSelected)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "VIZIT-card-materials-and-layouts"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        app.buttons["Kész"].tap()
+        reveal(appearance, in: app)
+        appearance.tap()
+        XCTAssertTrue(app.buttons["card.material.paper"].isSelected)
+        XCTAssertTrue(app.buttons["Klasszikus"].isSelected)
+    }
 }

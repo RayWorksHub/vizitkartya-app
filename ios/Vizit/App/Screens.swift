@@ -54,7 +54,7 @@ struct HomeScreen: View {
 
                         if let issue = store.storageError {
                             VizitBanner(text: issue, tone: .error)
-                        } else {
+                        } else if ![SyncStatus.synced, .localOnly].contains(store.syncStatus) {
                             VizitStatusPill(text: store.syncStatus.label, tone: store.syncStatus.tone)
                         }
 
@@ -62,7 +62,7 @@ struct HomeScreen: View {
                             VizitRow(
                                 label: "Vállalkozói Portál",
                                 systemImage: "book.closed",
-                                supporting: "VOSZ, edukáció, digitális segítség és eszköztár"
+                                supporting: "Edukáció, források és digitális segítség"
                             ) { showKnowledgeHub = true }
                             .accessibilityIdentifier("home.businessPortal")
                         }
@@ -162,8 +162,9 @@ struct CardScreen: View {
                                 label: "Kártya megjelenése",
                                 systemImage: "paintpalette",
                                 value: presentation.value.colorway.label,
-                                supporting: "Színvilág, elrendezés és megjelenő elemek"
+                                supporting: "Anyag, elrendezés és megjelenő elemek"
                             ) { customizing = true }
+                            .accessibilityIdentifier("card.appearance")
                             VizitDivider()
                             VizitRow(
                                 label: "Adatok láthatósága",

@@ -22,6 +22,17 @@ struct VizitDigitalCard: View {
     }
 
     private var accent: Color { Color(uiColor: UIColor(hex: presentation.colorway.accent)) }
+    private var primaryText: Color { presentation.colorway.isLight ? VizitColor.ink : .white }
+    private var secondaryText: Color {
+        presentation.colorway.isLight ? VizitColor.textSecondary : .white.opacity(0.72)
+    }
+
+    private var cardAspectRatio: CGFloat {
+        switch presentation.layout {
+        case .portrait: return 343.0 / 365.0
+        case .minimal, .classic: return 343.0 / 216.0
+        }
+    }
 
     private var socialLabels: [String] {
         guard presentation.showsSocial else { return [] }
@@ -66,11 +77,22 @@ struct VizitDigitalCard: View {
                 .frame(width: 4)
                 .frame(maxHeight: .infinity)
 
+            if presentation.colorway == .brand {
+                Circle()
+                    .fill(Color.white.opacity(0.07))
+                    .frame(width: 210, height: 210)
+                    .offset(x: 225, y: -105)
+                    .accessibilityHidden(true)
+            }
+
             Group {
-                if presentation.layout == .portrait {
+                switch presentation.layout {
+                case .portrait:
                     portraitContent
-                } else {
-                    landscapeContent
+                case .minimal:
+                    minimalContent
+                case .classic:
+                    classicContent
                 }
             }
             .padding(.leading, 24)
@@ -78,39 +100,77 @@ struct VizitDigitalCard: View {
             .padding(.top, 22)
             .padding(.bottom, 20)
         }
-        .aspectRatio(presentation.layout == .portrait ? 343.0 / 216.0 : 343.0 / 180.0, contentMode: .fit)
+        .aspectRatio(cardAspectRatio, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
+        .overlay {
+            if presentation.colorway.isLight {
+                RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous)
+                    .stroke(VizitColor.border, lineWidth: 1)
+            }
+        }
         .vizitShadow(VizitElevation.card)
     }
 
-    /// Identity on top, reachable details at the bottom: the layout the card
-    /// has always used, now one of two the owner can pick.
+    /// Portrait is the signature VIZIT composition from the approved screens:
+    /// centered identity, calm divider, then the shared contact details.
     private var portraitContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
-                if presentation.showsPhoto { avatar }
+            ZStack {
+                if presentation.showsPhoto { avatar(size: 82) }
+                if presentation.showsQR {
+                    HStack {
+                        Spacer(minLength: 0)
+                        cardQR
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: VizitSpace.md)
+            portraitIdentity
+            Spacer(minLength: VizitSpace.md)
+
+            Rectangle()
+                .fill(primaryText.opacity(0.16))
+                .frame(height: 1)
+                .padding(.horizontal, VizitSpace.md)
+
+            Spacer(minLength: VizitSpace.md)
+            portraitDetails
+            Spacer(minLength: VizitSpace.md)
+
+            HStack {
+                Spacer(minLength: 0)
+                Text("VIZIT").vizitOverline().foregroundStyle(accent)
+            }
+        }
+    }
+
+    /// Reduced card face for a calm, contemporary hand-off.
+    private var minimalContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                if presentation.showsPhoto { avatar() }
                 identity
                 Spacer(minLength: 0)
                 if presentation.showsQR { cardQR }
             }
-
             Spacer(minLength: VizitSpace.md)
-
             HStack(alignment: .bottom) {
-                details
+                compactDetails
                 Spacer(minLength: VizitSpace.sm)
                 Text("VIZIT").vizitOverline().foregroundStyle(accent)
             }
         }
     }
 
-    /// Identity on the leading edge, details beside it: reads like a printed
-    /// card held landscape, and keeps the QR square in the corner.
-    private var landscapeContent: some View {
+    /// Printed-card composition: identity on the leading side and contact
+    /// details in a distinct trailing column.
+    private var classicContent: some View {
         HStack(alignment: .top, spacing: VizitSpace.md) {
             VStack(alignment: .leading, spacing: VizitSpace.sm) {
                 HStack(spacing: 12) {
-                    if presentation.showsPhoto { avatar }
+                    if presentation.showsPhoto { avatar() }
                     identity
                 }
                 Spacer(minLength: 0)
@@ -129,17 +189,42 @@ struct VizitDigitalCard: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(visible.displayName.isEmpty ? "Állítsd össze a névjegyed" : visible.displayName)
                 .font(VizitFont.h3)
-                .foregroundStyle(.white)
+                .foregroundStyle(primaryText)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .vizitIdentifier(nameIdentifier)
             if !subtitle.isEmpty {
                 Text(subtitle)
                     .font(VizitFont.bodySmall)
-                    .foregroundStyle(.white.opacity(0.68))
+                    .foregroundStyle(secondaryText)
                     .lineLimit(1)
             }
         }
+    }
+
+    private var portraitIdentity: some View {
+        VStack(spacing: 5) {
+            Text(visible.displayName.isEmpty ? "Állítsd össze a névjegyed" : visible.displayName)
+                .font(VizitFont.h3)
+                .foregroundStyle(primaryText)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .vizitIdentifier(nameIdentifier)
+            if !visible.jobTitle.isEmpty {
+                Text(visible.jobTitle)
+                    .font(VizitFont.caption)
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+            }
+            if !visible.company.isEmpty {
+                Text(visible.company)
+                    .font(VizitFont.caption)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var details: some View {
@@ -147,22 +232,88 @@ struct VizitDigitalCard: View {
             if !visible.phone.isEmpty {
                 Text(visible.phone)
                     .font(VizitFont.bodySmall)
-                    .foregroundStyle(.white.opacity(0.82))
+                    .foregroundStyle(primaryText.opacity(0.84))
             }
             if !visible.email.isEmpty {
                 Text(visible.email)
                     .font(VizitFont.bodySmall)
-                    .foregroundStyle(.white.opacity(0.82))
+                    .foregroundStyle(primaryText.opacity(0.84))
                     .lineLimit(1)
                     .truncationMode(.middle)
+            }
+            if !visible.website.isEmpty {
+                Text(visible.website)
+                    .font(VizitFont.caption)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(1)
+            }
+            if !visible.address.isEmpty {
+                Text(visible.address)
+                    .font(VizitFont.caption)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(1)
             }
             if !socialLabels.isEmpty {
                 Text(socialLabels.joined(separator: " · "))
                     .font(VizitFont.caption)
-                    .foregroundStyle(.white.opacity(0.62))
+                    .foregroundStyle(secondaryText)
                     .lineLimit(1)
             }
         }
+    }
+
+    private var compactDetails: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !visible.phone.isEmpty {
+                Text(visible.phone)
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(primaryText.opacity(0.84))
+            }
+            if !visible.email.isEmpty {
+                Text(visible.email)
+                    .font(VizitFont.caption)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+    }
+
+    private var portraitDetails: some View {
+        VStack(spacing: 5) {
+            if !visible.phone.isEmpty {
+                Text(visible.phone)
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(primaryText.opacity(0.84))
+            }
+            if !visible.email.isEmpty {
+                Text(visible.email)
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(primaryText.opacity(0.84))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            if !visible.website.isEmpty {
+                Text(visible.website)
+                    .font(VizitFont.caption)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(1)
+            }
+            if !visible.address.isEmpty {
+                Text(visible.address)
+                    .font(VizitFont.caption)
+                    .foregroundStyle(secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            if !socialLabels.isEmpty {
+                Text(socialLabels.joined(separator: " · "))
+                    .font(VizitFont.caption)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// A miniature of the contact QR, drawn only when the payload is valid —
@@ -181,10 +332,10 @@ struct VizitDigitalCard: View {
         }
     }
 
-    private var avatar: some View {
+    private func avatar(size: CGFloat = 56) -> some View {
         ZStack {
-            Circle().fill(Color.white.opacity(0.12))
-            Circle().stroke(Color.white.opacity(0.22), lineWidth: 1)
+            Circle().fill(primaryText.opacity(presentation.colorway.isLight ? 0.06 : 0.12))
+            Circle().stroke(primaryText.opacity(presentation.colorway.isLight ? 0.18 : 0.22), lineWidth: 1)
             if let data = Data(base64Encoded: visible.photoBase64), let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
@@ -193,10 +344,10 @@ struct VizitDigitalCard: View {
             } else {
                 Text(visible.initials.isEmpty ? "V" : visible.initials)
                     .font(VizitFont.title)
-                    .foregroundStyle(.white.opacity(0.92))
+                    .foregroundStyle(primaryText.opacity(0.92))
             }
         }
-        .frame(width: 56, height: 56)
+        .frame(width: size, height: size)
     }
 }
 

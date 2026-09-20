@@ -208,8 +208,8 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(profile().visible(through: fresh), profile())
 
         var changed = CardPresentation()
-        changed.colorway = .amethyst
-        changed.layout = .landscape
+        changed.colorway = .paper
+        changed.layout = .classic
         changed.showsQR = true
         changed.sharesPhone = false
         let decoded = try JSONDecoder().decode(

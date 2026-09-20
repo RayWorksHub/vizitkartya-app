@@ -34,8 +34,14 @@ public struct CardPresentation: Codable, Equatable, Sendable {
     /// written by an older build never silently hides data the owner shares today.
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        colorway = CardColorway(rawValue: try values.decodeIfPresent(String.self, forKey: .colorway) ?? "") ?? .ink
-        layout = CardLayout(rawValue: try values.decodeIfPresent(String.self, forKey: .layout) ?? "") ?? .portrait
+        let storedColorway = try values.decodeIfPresent(String.self, forKey: .colorway) ?? ""
+        colorway = CardColorway(rawValue: storedColorway) ?? .ink
+        let storedLayout = try values.decodeIfPresent(String.self, forKey: .layout) ?? ""
+        // The previous two-way control called its horizontal option
+        // `landscape`. Preserve that choice as the new classic composition.
+        layout = storedLayout == "landscape"
+            ? .classic
+            : (CardLayout(rawValue: storedLayout) ?? .portrait)
         showsPhoto = try values.decodeIfPresent(Bool.self, forKey: .showsPhoto) ?? true
         showsQR = try values.decodeIfPresent(Bool.self, forKey: .showsQR) ?? false
         showsSocial = try values.decodeIfPresent(Bool.self, forKey: .showsSocial) ?? false
@@ -72,29 +78,23 @@ public struct CardPresentation: Codable, Equatable, Sendable {
 }
 
 public enum CardColorway: String, CaseIterable, Codable, Sendable {
-    case ink, brand, emerald, amethyst, copper, graphite
+    case ink, paper, brand
 
     public var label: String {
         switch self {
         case .ink: return "Tinta"
+        case .paper: return "Papír"
         case .brand: return "Márkakék"
-        case .emerald: return "Smaragd"
-        case .amethyst: return "Ametiszt"
-        case .copper: return "Réz"
-        case .graphite: return "Grafit"
         }
     }
 
-    /// Top-leading → bottom-trailing gradient stops, dark enough in every
-    /// variant that white type stays above the 4.5:1 contrast floor.
+    /// Top-leading → bottom-trailing material gradient stops. Text colour is
+    /// selected independently so the paper material keeps accessible contrast.
     public var gradient: (start: UInt32, mid: UInt32, end: UInt32) {
         switch self {
         case .ink: return (0x0C2C63, 0x071F4C, 0x05163A)
+        case .paper: return (0xFFFFFF, 0xF8FAFC, 0xEEF2F7)
         case .brand: return (0x1668F0, 0x0B5CE8, 0x0742A8)
-        case .emerald: return (0x0E6B4A, 0x0A5138, 0x063526)
-        case .amethyst: return (0x5B2E9E, 0x452278, 0x2C1550)
-        case .copper: return (0x9A4A18, 0x7A3A12, 0x50250B)
-        case .graphite: return (0x2B3240, 0x1D222D, 0x12161E)
         }
     }
 
@@ -102,19 +102,24 @@ public enum CardColorway: String, CaseIterable, Codable, Sendable {
     public var accent: UInt32 {
         switch self {
         case .ink: return 0x0FBEE6
+        case .paper: return 0x0B5CE8
         case .brand: return 0x7FD9FF
-        case .emerald: return 0x4FE0A8
-        case .amethyst: return 0xC9A6FF
-        case .copper: return 0xFFBE7A
-        case .graphite: return 0x8FD8F0
         }
     }
+
+    public var isLight: Bool { self == .paper }
 }
 
 public enum CardLayout: String, CaseIterable, Codable, Sendable {
-    case portrait, landscape
+    case portrait, minimal, classic
 
-    public var label: String { self == .portrait ? "Álló" : "Fekvő" }
+    public var label: String {
+        switch self {
+        case .portrait: return "Portré"
+        case .minimal: return "Minimál"
+        case .classic: return "Klasszikus"
+        }
+    }
 }
 
 public extension ContactProfile {
@@ -148,6 +153,11 @@ public final class CardPresentationStore: ObservableObject {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // Keep UI-test launches independent while preserving real users'
+        // presentation choices across every normal update and restart.
+        if ProcessInfo.processInfo.arguments.contains("--reset-test-profile") {
+            defaults.removeObject(forKey: Self.key)
+        }
         if let data = defaults.data(forKey: Self.key),
            let decoded = try? JSONDecoder().decode(CardPresentation.self, from: data) {
             value = decoded

@@ -348,12 +348,42 @@ final class AppStore: ObservableObject {
         syncStatus = .syncing
         do {
             var metadata = try metadataStore.load()
+            let restoresLegacyDraft = ProfileBootstrapPolicy.shouldRestoreRemote(
+                pendingUpload: metadata.pendingUpload,
+                local: localProfile
+            )
             let remoteBundle = try await cloud.fetchProfile(ownerID: id, preserving: localProfile,
-                                                           loadPhoto: !metadata.pendingUpload)
+                loadPhoto: ProfileBootstrapPolicy.shouldDownloadPhoto(
+                    pendingUpload: metadata.pendingUpload,
+                    local: localProfile
+                )
+            )
             guard userID == id else { return }
             guard profileRevision == revision else {
                 syncAgain = true
                 syncStatus = .pending
+                return
+            }
+
+            // Builds before cloud-first bootstrap could mark an empty local
+            // placeholder as pending. Uploading it would attempt to replace a
+            // valid cloud profile with an invalid blank record and leave the
+            // app permanently in the failed state. Recover the authoritative
+            // remote profile before any write is attempted.
+            if restoresLegacyDraft, let (remote, pulled) = remoteBundle {
+                try pulled.validate()
+                try storage.save(pulled)
+                profile = pulled
+                profileRevision &+= 1
+                metadata.profileID = remote.id
+                metadata.remoteUpdatedAt = remote.updatedAt
+                metadata.remoteFingerprint = remote.fingerprint
+                metadata.pendingUpload = false
+                metadata.pendingProfile = nil
+                metadata.conflict = false
+                try metadataStore.save(metadata)
+                syncStatus = .synced
+                resetSyncRetry()
                 return
             }
 

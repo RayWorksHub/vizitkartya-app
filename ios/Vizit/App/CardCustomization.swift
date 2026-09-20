@@ -12,8 +12,11 @@ struct CardAppearanceScreen: View {
 
     private var layoutIndex: Binding<Int> {
         Binding(
-            get: { store.value.layout == .portrait ? 0 : 1 },
-            set: { store.value.layout = $0 == 0 ? .portrait : .landscape }
+            get: { CardLayout.allCases.firstIndex(of: store.value.layout) ?? 0 },
+            set: {
+                guard CardLayout.allCases.indices.contains($0) else { return }
+                store.value.layout = CardLayout.allCases[$0]
+            }
         )
     }
 
@@ -22,23 +25,29 @@ struct CardAppearanceScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.lg) {
-                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                            VizitDigitalCard(profile: profile, presentation: store.value)
-                            Text("Élő előnézet — pontosan ezt látja, akivel megosztod.")
-                                .font(VizitFont.caption)
-                                .foregroundStyle(VizitColor.textMuted)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                        }
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.value)
+                        Text("Az adataid minden változatban ugyanazok maradnak — itt csak a kártya anyagát, elrendezését és látható elemeit állítod.")
+                            .font(VizitFont.body)
+                            .foregroundStyle(VizitColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                        VizitSectionHeader(title: "Színvilág")
-                        colorways
+                        VizitSectionHeader(title: "Anyag")
+                        materials
 
                         VizitSectionHeader(title: "Elrendezés")
                         VizitSegmentedControl(
                             options: CardLayout.allCases.map(\.label),
                             selection: layoutIndex
                         )
+
+                        VizitSectionHeader(title: "Élő előnézet")
+                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                            VizitDigitalCard(profile: profile, presentation: store.value)
+                            Text("Pontosan ezt látja, akivel megosztod.")
+                                .font(VizitFont.caption)
+                                .foregroundStyle(VizitColor.textMuted)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.value)
 
                         VizitSectionHeader(title: "Megjelenő elemek")
                         VizitGroup {
@@ -87,46 +96,46 @@ struct CardAppearanceScreen: View {
         }
     }
 
-    private var colorways: some View {
-        VizitPanel {
-            HStack(spacing: VizitSpace.sm) {
-                ForEach(CardColorway.allCases, id: \.self) { colorway in
-                    Button {
-                        store.value.colorway = colorway
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(uiColor: UIColor(hex: colorway.gradient.start)),
-                                            Color(uiColor: UIColor(hex: colorway.gradient.end))
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 38, height: 38)
-                            if store.value.colorway == colorway {
-                                Circle()
-                                    .stroke(VizitColor.primary, lineWidth: 2.5)
-                                    .frame(width: 46, height: 46)
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(Color(uiColor: UIColor(hex: colorway.accent)))
-                            }
-                        }
-                        .frame(width: VizitMetrics.minTouchTarget, height: VizitMetrics.minTouchTarget)
-                        .contentShape(Circle())
+    private var materials: some View {
+        HStack(spacing: VizitSpace.sm) {
+            ForEach(CardColorway.allCases, id: \.self) { colorway in
+                Button {
+                    store.value.colorway = colorway
+                } label: {
+                    VStack(spacing: VizitSpace.xs) {
+                        MaterialPreview(colorway: colorway)
+                        Text(colorway.label)
+                            .font(VizitFont.caption)
+                            .foregroundStyle(VizitColor.textPrimary)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(colorway.label)
-                    .accessibilityAddTraits(
-                        store.value.colorway == colorway ? [.isButton, .isSelected] : .isButton
-                    )
+                    .padding(VizitSpace.xs)
+                    .frame(maxWidth: .infinity)
+                    .background(VizitColor.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous)
+                            .stroke(
+                                store.value.colorway == colorway ? VizitColor.primary : VizitColor.border,
+                                lineWidth: store.value.colorway == colorway ? 2 : 1
+                            )
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if store.value.colorway == colorway {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(VizitColor.primary)
+                                .background(Color(.systemBackground), in: Circle())
+                                .padding(6)
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(colorway.label)
+                .accessibilityIdentifier("card.material.\(colorway.rawValue)")
+                .accessibilityAddTraits(
+                    store.value.colorway == colorway ? [.isButton, .isSelected] : .isButton
+                )
             }
-            .frame(maxWidth: .infinity)
         }
     }
 
@@ -141,6 +150,51 @@ struct CardAppearanceScreen: View {
                 .labelsHidden()
                 .disabled(!isEnabled)
         }
+    }
+}
+
+private struct MaterialPreview: View {
+    let colorway: CardColorway
+
+    private var foreground: Color {
+        colorway.isLight ? VizitColor.ink : .white
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            LinearGradient(
+                colors: [
+                    Color(uiColor: UIColor(hex: colorway.gradient.start)),
+                    Color(uiColor: UIColor(hex: colorway.gradient.end))
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Rectangle()
+                .fill(Color(uiColor: UIColor(hex: colorway.accent)))
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 5) {
+                Circle()
+                    .fill(foreground.opacity(0.18))
+                    .frame(width: 22, height: 22)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(foreground.opacity(0.92))
+                    .frame(width: 42, height: 5)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(foreground.opacity(0.48))
+                    .frame(width: 30, height: 3)
+            }
+            .padding(10)
+        }
+        .aspectRatio(1.36, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.sm, style: .continuous))
+        .overlay {
+            if colorway.isLight {
+                RoundedRectangle(cornerRadius: VizitRadius.sm, style: .continuous)
+                    .stroke(VizitColor.border, lineWidth: 1)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

@@ -179,6 +179,16 @@ public enum SocialPlatform: String, CaseIterable, Sendable {
 }
 
 public extension ContactProfile {
+    /// An early signed build could persist a completely empty profile as a
+    /// pending upload before the first cloud download. Such a draft can never
+    /// pass the server's required-name/contact constraints. When a valid remote
+    /// profile already exists, restoring that profile is the only
+    /// data-preserving recovery.
+    var isUnusableLegacyDraft: Bool {
+        let value = normalized
+        return value.displayName.isEmpty && value.phone.isEmpty && value.email.isEmpty
+    }
+
     /// A profile saved by an older local-only build has no public slug. Once
     /// the account already owns a cloud profile, an empty slug must inherit
     /// that stable server identity instead of being sent back as an invalid
@@ -213,6 +223,19 @@ public extension ContactProfile {
 
     var socialProfiles: [(platform: SocialPlatform, url: String)] {
         SocialPlatform.allCases.map { ($0, socialURL(for: $0)) }
+    }
+}
+
+/// Keeps the one-time recovery for early signed builds explicit and testable.
+/// A normal pending edit must never pull over the user's local changes, while
+/// the impossible empty placeholder must never be uploaded over real cloud data.
+public enum ProfileBootstrapPolicy {
+    public static func shouldRestoreRemote(pendingUpload: Bool, local: ContactProfile) -> Bool {
+        pendingUpload && local.isUnusableLegacyDraft
+    }
+
+    public static func shouldDownloadPhoto(pendingUpload: Bool, local: ContactProfile) -> Bool {
+        !pendingUpload || shouldRestoreRemote(pendingUpload: pendingUpload, local: local)
     }
 }
 

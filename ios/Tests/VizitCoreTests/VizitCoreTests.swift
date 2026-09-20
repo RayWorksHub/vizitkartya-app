@@ -211,6 +211,33 @@ final class VizitCoreTests: XCTestCase {
         )
     }
 
+    func testEmptyLegacyDraftIsRecoveredInsteadOfUploaded() {
+        var empty = ContactProfile()
+        empty.isPublic = true
+        empty.customDomain = "nevjegy.example.test"
+        XCTAssertTrue(empty.isUnusableLegacyDraft)
+        XCTAssertTrue(ProfileBootstrapPolicy.shouldRestoreRemote(pendingUpload: true, local: empty))
+        XCTAssertTrue(ProfileBootstrapPolicy.shouldDownloadPhoto(pendingUpload: true, local: empty))
+
+        var valid = sample()
+        valid.fullName = ""
+        valid.firstName = "Elek"
+        valid.lastName = "Teszt"
+        XCTAssertFalse(valid.isUnusableLegacyDraft)
+        XCTAssertFalse(ProfileBootstrapPolicy.shouldRestoreRemote(pendingUpload: true, local: valid))
+        XCTAssertFalse(ProfileBootstrapPolicy.shouldDownloadPhoto(pendingUpload: true, local: valid))
+        XCTAssertTrue(ProfileBootstrapPolicy.shouldDownloadPhoto(pendingUpload: false, local: valid))
+    }
+
+    func testLegacyCardPreferencesMigrateToCurrentMaterialsAndLayouts() throws {
+        let legacy = Data(#"{"colorway":"amethyst","layout":"landscape"}"#.utf8)
+        let presentation = try JSONDecoder().decode(CardPresentation.self, from: legacy)
+        XCTAssertEqual(presentation.colorway, .ink)
+        XCTAssertEqual(presentation.layout, .classic)
+        XCTAssertEqual(CardColorway.allCases.map(\.label), ["Tinta", "Papír", "Márkakék"])
+        XCTAssertEqual(CardLayout.allCases.map(\.label), ["Portré", "Minimál", "Klasszikus"])
+    }
+
     func testPublicProfileURLRequiresHTTPSAndStrictSlug() {
         let base = URL(string: "https://vizit.hu/p")!
         XCTAssertEqual(PublicProfileLink.make(baseURL: base, slug: "kovacs-anna")?.absoluteString,
