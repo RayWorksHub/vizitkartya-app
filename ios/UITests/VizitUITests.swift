@@ -26,13 +26,53 @@ final class VizitUITests: XCTestCase {
     }
 
     private func revealHorizontally(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<6 where !element.isHittable {
+        XCTAssertTrue(element.waitForExistence(timeout: 2))
+        let viewport = app.frame
+        for _ in 0..<6 {
+            let frame = element.frame
+            let hasUsableFrame = !frame.isNull
+                && !frame.isInfinite
+                && frame.minX.isFinite
+                && frame.midX.isFinite
+                && frame.midY.isFinite
+                && frame.width > 1
+                && frame.height > 1
+            if hasUsableFrame,
+               viewport.contains(CGPoint(x: frame.midX, y: frame.midY)) {
+                break
+            }
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.48))
             let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.48))
             start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTAssertTrue(element.waitForExistence(timeout: 2))
+        let frame = element.frame
+        XCTAssertTrue(
+            !frame.isNull
+                && !frame.isInfinite
+                && frame.midX.isFinite
+                && frame.midY.isFinite
+                && viewport.contains(CGPoint(x: frame.midX, y: frame.midY))
+        )
         XCTAssertTrue(element.isHittable)
+    }
+
+    private func assertSelected(
+        _ element: XCUIElement,
+        timeout: TimeInterval = 2,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let selected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == true"),
+            object: element
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [selected], timeout: timeout),
+            .completed,
+            "Selection did not reach the accessibility tree",
+            file: file,
+            line: line
+        )
     }
 
     private func launchClean() -> XCUIApplication {
@@ -196,7 +236,7 @@ final class VizitUITests: XCTestCase {
         ] {
             let button = app.buttons[material.identifier]
             button.tap()
-            XCTAssertTrue(button.isSelected)
+            assertSelected(button)
             capture(material.attachment, in: app)
         }
 
@@ -207,7 +247,7 @@ final class VizitUITests: XCTestCase {
         ] {
             let button = app.buttons[layout.label]
             button.tap()
-            XCTAssertTrue(button.isSelected)
+            assertSelected(button)
             capture(layout.attachment, in: app)
         }
 
@@ -227,8 +267,8 @@ final class VizitUITests: XCTestCase {
         app.buttons["Kész"].tap()
         reveal(appearance, in: app)
         appearance.tap()
-        XCTAssertTrue(app.buttons["card.material.paper"].isSelected)
-        XCTAssertTrue(app.buttons["Klasszikus"].isSelected)
+        assertSelected(app.buttons["card.material.paper"])
+        assertSelected(app.buttons["Klasszikus"])
     }
 
     func testReleaseAuditCoversPrimaryScreensAndPhotoQR() {

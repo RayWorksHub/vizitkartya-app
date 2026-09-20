@@ -15,7 +15,12 @@ struct CardAppearanceScreen: View {
             get: { CardLayout.allCases.firstIndex(of: store.value.layout) ?? 0 },
             set: {
                 guard CardLayout.allCases.indices.contains($0) else { return }
-                store.value.layout = CardLayout.allCases[$0]
+                // Replace the published value as one transaction. Mutating a
+                // member through a computed Binding can leave SwiftUI's
+                // accessibility tree one render behind the visual control.
+                var updated = store.value
+                updated.layout = CardLayout.allCases[$0]
+                store.value = updated
             }
         )
     }

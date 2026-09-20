@@ -566,7 +566,9 @@ struct VizitSegmentedControl: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityAddTraits(selection == index ? [.isButton, .isSelected] : .isButton)
+                .accessibilityValue(selection == index ? "Kiválasztva" : "Nincs kiválasztva")
+                .accessibilityAddTraits(selection == index ? .isSelected : [])
+                .accessibilityRemoveTraits(selection == index ? [] : .isSelected)
             }
         }
         .padding(VizitSpace.xxs)
