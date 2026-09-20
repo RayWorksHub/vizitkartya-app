@@ -584,17 +584,23 @@ enum QRImage {
         return addingLogo(to: UIImage(cgImage: cg))
     }
 
-    /// The centered mark requires the highest recovery level. Testing capacity
-    /// before presenting the code prevents an apparently valid but unreadable QR.
+    /// The centered mark covers less than two percent of the modules. Q is used
+    /// whenever the payload fits; dense photo vCards fall back to M, whose 15%
+    /// recovery budget still leaves wide headroom for the 12%-wide mark.
+    /// Testing the final level before presenting the code prevents an apparently
+    /// valid but unreadable QR.
     static func canEncode(_ payload: String) -> Bool {
         code(for: payload) != nil
     }
 
     private static func code(for payload: String) -> CIImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(payload.utf8)
-        filter.correctionLevel = "H"
-        return filter.outputImage
+        for level in ["Q", "M"] {
+            let filter = CIFilter.qrCodeGenerator()
+            filter.message = Data(payload.utf8)
+            filter.correctionLevel = level
+            if let output = filter.outputImage { return output }
+        }
+        return nil
     }
 
     private static func addingLogo(to qr: UIImage) -> UIImage {
@@ -604,7 +610,7 @@ enum QRImage {
         return UIGraphicsImageRenderer(size: qr.size, format: format).image { _ in
             qr.draw(in: CGRect(origin: .zero, size: qr.size))
 
-            let plateSize = min(qr.size.width, qr.size.height) * 0.14
+            let plateSize = min(qr.size.width, qr.size.height) * 0.12
             let plate = CGRect(
                 x: (qr.size.width - plateSize) / 2,
                 y: (qr.size.height - plateSize) / 2,
