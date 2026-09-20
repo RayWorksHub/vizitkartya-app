@@ -225,8 +225,15 @@ final class VizitUITests: XCTestCase {
         for identifier in ["card.material.ink", "card.material.paper", "card.material.brand"] {
             XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5), "Missing \(identifier)")
         }
-        for layout in ["Portré", "Minimál", "Klasszikus"] {
-            XCTAssertTrue(app.buttons[layout].exists, "Missing \(layout)")
+        for layout in [
+            (identifier: "card.layout.portrait", label: "Portré"),
+            (identifier: "card.layout.minimal", label: "Minimál"),
+            (identifier: "card.layout.classic", label: "Klasszikus"),
+        ] {
+            let button = app.buttons[layout.identifier]
+            XCTAssertTrue(button.exists, "Missing \(layout.identifier)")
+            XCTAssertEqual(button.label, layout.label)
+            XCTAssertTrue(button.isHittable, "Not hittable: \(layout.identifier)")
         }
 
         for material in [
@@ -241,18 +248,18 @@ final class VizitUITests: XCTestCase {
         }
 
         for layout in [
-            (label: "Portré", attachment: "VIZIT-card-layout-portrait"),
-            (label: "Minimál", attachment: "VIZIT-card-layout-minimal"),
-            (label: "Klasszikus", attachment: "VIZIT-card-layout-classic"),
+            (identifier: "card.layout.portrait", attachment: "VIZIT-card-layout-portrait"),
+            (identifier: "card.layout.minimal", attachment: "VIZIT-card-layout-minimal"),
+            (identifier: "card.layout.classic", attachment: "VIZIT-card-layout-classic"),
         ] {
-            let button = app.buttons[layout.label]
+            let button = app.buttons[layout.identifier]
             button.tap()
             assertSelected(button)
             capture(layout.attachment, in: app)
         }
 
         app.buttons["card.material.paper"].tap()
-        app.buttons["Klasszikus"].tap()
+        app.buttons["card.layout.classic"].tap()
 
         for identifier in ["card.showPhoto", "card.showQR", "card.showSocial"] {
             let toggle = app.switches[identifier]
@@ -268,7 +275,7 @@ final class VizitUITests: XCTestCase {
         reveal(appearance, in: app)
         appearance.tap()
         assertSelected(app.buttons["card.material.paper"])
-        assertSelected(app.buttons["Klasszikus"])
+        assertSelected(app.buttons["card.layout.classic"])
     }
 
     func testReleaseAuditCoversPrimaryScreensAndPhotoQR() {

@@ -549,6 +549,13 @@ struct VizitSkeleton: View {
 struct VizitSegmentedControl: View {
     let options: [String]
     @Binding var selection: Int
+    var accessibilityIdentifiers: [String]? = nil
+
+    private func accessibilityIdentifier(at index: Int, fallback: String) -> String {
+        guard let accessibilityIdentifiers,
+              accessibilityIdentifiers.indices.contains(index) else { return fallback }
+        return accessibilityIdentifiers[index]
+    }
 
     var body: some View {
         HStack(spacing: VizitSpace.xxs) {
@@ -566,6 +573,12 @@ struct VizitSegmentedControl: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // Keep every accessibility activation point inside its own
+                // equal-width visual segment, including the trailing option.
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .accessibilityLabel(title)
+                .accessibilityIdentifier(accessibilityIdentifier(at: index, fallback: title))
                 .accessibilityValue(selection == index ? "Kiválasztva" : "Nincs kiválasztva")
                 .accessibilityAddTraits(selection == index ? .isSelected : [])
                 .accessibilityRemoveTraits(selection == index ? [] : .isSelected)

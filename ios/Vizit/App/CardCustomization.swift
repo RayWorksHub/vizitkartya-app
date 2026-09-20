@@ -41,7 +41,10 @@ struct CardAppearanceScreen: View {
                         VizitSectionHeader(title: "Elrendezés")
                         VizitSegmentedControl(
                             options: CardLayout.allCases.map(\.label),
-                            selection: layoutIndex
+                            selection: layoutIndex,
+                            accessibilityIdentifiers: CardLayout.allCases.map {
+                                "card.layout.\($0.rawValue)"
+                            }
                         )
 
                         VizitSectionHeader(title: "Élő előnézet")
