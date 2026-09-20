@@ -26,7 +26,14 @@ final class NativeIntegrationTests: XCTestCase {
     }
 
     func testAppleCoreImageDecodesGeneratedQR() throws {
-        let payload = try VCard.qrPayload(profile())
+        var p = profile()
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 640)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 640, height: 640))
+        }
+        p.photoBase64 = try XCTUnwrap(source.jpegData(compressionQuality: 0.95)).base64EncodedString()
+        let payload = try XCTUnwrap(PhotoContactQR.payload(p))
+        XCTAssertTrue(payload.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
         let rendered = try XCTUnwrap(QRImage.make(payload))
         let image = try XCTUnwrap(rendered.ciImage ?? rendered.cgImage.map { CIImage(cgImage: $0) })
         let detector = try XCTUnwrap(CIDetector(ofType: CIDetectorTypeQRCode,
@@ -48,6 +55,9 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(contact.urlAddresses.map { $0.value as String }, [
             "https://facebook.com/teszt", "https://youtube.com/@teszt"
         ])
+        XCTAssertThrowsError(try ContactBridge.shareFile(source)) {
+            XCTAssertEqual($0 as? ProfileError, .missingPhoto)
+        }
     }
 
     func testSecureSessionStorageRoundTripAndRemoval() throws {
@@ -83,11 +93,17 @@ final class NativeIntegrationTests: XCTestCase {
         }
         let jpeg = try XCTUnwrap(image.jpegData(compressionQuality: 0.8))
         p.photoBase64 = jpeg.base64EncodedString()
-        let contacts = try CNContactVCardSerialization.contacts(with: Data(VCard.encode(p, includePhoto: true).utf8))
+        let payload = try XCTUnwrap(PhotoContactQR.payload(p))
+        let contacts = try CNContactVCardSerialization.contacts(with: Data(payload.utf8))
         XCTAssertEqual(contacts.count, 1)
         let imported = try XCTUnwrap(contacts.first?.imageData)
         XCTAssertNotNil(UIImage(data: imported))
         XCTAssertEqual(contacts.first?.givenName, "Elek")
+
+        let file = try ContactBridge.shareFile(p)
+        defer { ContactBridge.removeShareFile(file.url) }
+        let shared = try String(contentsOf: file.url, encoding: .utf8)
+        XCTAssertTrue(shared.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
     }
 
     func testOnlyDatabaseUniqueViolationIsRetryableAsSlugCollision() {
