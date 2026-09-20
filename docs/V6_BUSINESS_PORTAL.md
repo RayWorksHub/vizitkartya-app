@@ -44,4 +44,4 @@ használja az alkalmazás témájától függetlenül, mert minden elem a videó
 ## Verzió
 
 - Android: `7.3.0` (`7030000`)
-- iOS: `7.3.0`
+- iOS: `8.0.0` (fényképes névjegyátadás)
