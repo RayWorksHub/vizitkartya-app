@@ -196,6 +196,21 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertFalse(profile.customDomainVerified)
     }
 
+    func testLegacyPendingProfileInheritsExistingCloudSlug() {
+        var legacy = sample()
+        legacy.publicSlug = ""
+        XCTAssertEqual(
+            legacy.preparedForUpload(existingRemoteSlug: "teszt-elek").publicSlug,
+            "teszt-elek"
+        )
+
+        legacy.publicSlug = "sajat-azonosito"
+        XCTAssertEqual(
+            legacy.preparedForUpload(existingRemoteSlug: "teszt-elek").publicSlug,
+            "sajat-azonosito"
+        )
+    }
+
     func testPublicProfileURLRequiresHTTPSAndStrictSlug() {
         let base = URL(string: "https://vizit.hu/p")!
         XCTAssertEqual(PublicProfileLink.make(baseURL: base, slug: "kovacs-anna")?.absoluteString,
@@ -242,6 +257,7 @@ final class VizitCoreTests: XCTestCase {
             "https://e-nevjegy.vercel.app/p/teszt-elek"
         )
         XCTAssertFalse(CustomProfileDomain.isValid("https://example.hu/path"))
+        XCTAssertFalse(CustomProfileDomain.isValid("127.0.0.1"))
     }
 
     func testUnknownFirstUploadRevisionRequiresExplicitConflictResolution() {

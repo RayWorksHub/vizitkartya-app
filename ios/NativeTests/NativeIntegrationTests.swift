@@ -132,6 +132,14 @@ final class NativeIntegrationTests: XCTestCase {
         )
     }
 
+    func testOnlyTransientCloudFailuresRetryAutomatically() {
+        XCTAssertTrue(CloudError.networkUnavailable.isRetryable)
+        XCTAssertTrue(CloudError.server(status: 503, code: nil).isRetryable)
+        XCTAssertTrue(CloudError.server(status: 429, code: nil).isRetryable)
+        XCTAssertFalse(CloudError.server(status: 400, code: "23514").isRetryable)
+        XCTAssertFalse(CloudError.authenticationRequired.isRetryable)
+    }
+
     func testPendingPhotoSurvivesJournalReloadBeforeProfileFileWrite() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

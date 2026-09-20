@@ -179,6 +179,18 @@ public enum SocialPlatform: String, CaseIterable, Sendable {
 }
 
 public extension ContactProfile {
+    /// A profile saved by an older local-only build has no public slug. Once
+    /// the account already owns a cloud profile, an empty slug must inherit
+    /// that stable server identity instead of being sent back as an invalid
+    /// value. An explicit local slug remains an intentional user edit.
+    func preparedForUpload(existingRemoteSlug: String) -> ContactProfile {
+        var value = normalized
+        if value.publicSlug.isEmpty, PublicProfileLink.isValidSlug(existingRemoteSlug) {
+            value.publicSlug = existingRemoteSlug
+        }
+        return value
+    }
+
     func socialURL(for platform: SocialPlatform) -> String {
         switch platform {
         case .linkedin: return linkedIn
@@ -261,6 +273,7 @@ public enum CustomProfileDomain {
     public static func isValid(_ value: String) -> Bool {
         let host = normalize(value)
         guard (4...253).contains(host.count),
+              host.range(of: #"^[0-9.]+$"#, options: .regularExpression) == nil,
               host.range(
                 of: #"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"#,
                 options: .regularExpression

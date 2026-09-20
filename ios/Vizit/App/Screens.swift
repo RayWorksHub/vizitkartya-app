@@ -908,7 +908,7 @@ private struct BusinessResource: Identifiable {
     let icon: String
 }
 
-private struct BusinessCourse: Identifiable {
+private struct BusinessTopic: Identifiable {
     let id: String
     let title: String
     let category: String
@@ -919,15 +919,41 @@ private struct BusinessCourse: Identifiable {
     let videoTitle: String
     let videoSource: String
     let videoURL: String
-    let modules: [CourseModule]
+    let modules: [LearningModule]
+
+    var lessons: [CourseLesson] { modules.flatMap(\.lessons) }
 }
 
-private struct CourseModule: Identifiable {
+private struct LearningModule: Identifiable {
+    let id: String
+    let title: String
+    let lessons: [CourseLesson]
+}
+
+private struct CourseLesson: Identifiable {
     let id: String
     let title: String
     let summary: String
+    /// When nil, the topic video is divided into stable lesson chapters.
+    let videoURL: String?
     let resourceTitle: String
     let resourceURL: String
+
+    init(
+        id: String,
+        title: String,
+        summary: String,
+        videoURL: String? = nil,
+        resourceTitle: String,
+        resourceURL: String
+    ) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.videoURL = videoURL
+        self.resourceTitle = resourceTitle
+        self.resourceURL = resourceURL
+    }
 }
 
 private struct GuideLink: Identifiable {
@@ -955,7 +981,7 @@ private struct ToolkitQuestion: Identifiable {
 
 private let portalFeatures = [
     PortalFeature(id: "vosz", title: "VOSZ", description: "A Vállalkozók és Munkáltatók Országos Szövetségének hírei, videói és tanácsadói szolgáltatásai — egy helyen, magyarul.", eyebrow: "PARTNERI FORRÁSOK", icon: "briefcase.fill", destination: .vosz),
-    PortalFeature(id: "education", title: "Vállalkozói Edukáció", description: "Rövid videóleckék AI-ról, Microsoft 365-ről, cégépítésről, biztonságról, marketingről és pénzügyről. Saját tempóban.", eyebrow: "6 KURZUS · 24 LECKE", icon: "graduationcap.fill", destination: .education),
+    PortalFeature(id: "education", title: "Vállalkozói Edukáció", description: "Hat témakör, témánként két modul és négy magyar videólecke. A haladás csak tényleges megtekintés után frissül.", eyebrow: "6 TÉMA · 12 MODUL · 24 LECKE", icon: "graduationcap.fill", destination: .education),
     PortalFeature(id: "help", title: "Digitális segítség", description: "Nézd meg, hogyan indul majd egy videós konzultáció digitalizációs szakértővel, mielőtt időpontot foglalnál.", eyebrow: "BEMUTATÓ MÓD", icon: "video.fill", destination: .help),
     PortalFeature(id: "toolkit", title: "Vállalkozói eszköztár", description: "Négy kérdés a digitális felkészültségedről, és egy konkrét következő lépés, amit még ma elkezdhetsz.", eyebrow: "INTERAKTÍV", icon: "checklist", destination: .toolkit)
 ]
@@ -973,83 +999,107 @@ private let toolkitQuestions = [
     ToolkitQuestion(id: "presence", title: "Naprakész a Google Cégprofilod és az online elérhetőséged?", recommendationGuideID: "sales")
 ]
 
-private let businessCourses = [
-    BusinessCourse(
+private let businessTopics = [
+    BusinessTopic(
         id: "ai", title: "AI a mindennapi vállalkozásban", category: "Mesterséges intelligencia",
         description: "Használható promptok, automatizálási ötletek és felelős AI-használat. Megtanulod, mely feladatokat érdemes AI-ra bízni, és melyeket soha.",
         duration: "Magyar videó", level: "Kezdő", icon: "sparkles",
         videoTitle: "ChatGPT képzés – Promptolási technikák", videoSource: "VOSZ",
         videoURL: "https://www.youtube.com/watch?v=uPYOrXxTxJI",
         modules: [
-            CourseModule(id: "ai-value", title: "Hol teremt értéket az AI?", summary: "Gyűjts össze három ismétlődő szöveges feladatot, és válaszd ki azt, amelyiknél a legkisebb a hibakockázat.", resourceTitle: "VOSZ AI-videósorozat", resourceURL: "https://www.youtube.com/results?search_query=VOSZ+ChatGPT+k%C3%A9pz%C3%A9s"),
-            CourseModule(id: "ai-prompt", title: "Jó prompt 5 lépésben", summary: "Add meg a szerepet, a célt, a bemenetet, a korlátokat és a kívánt kimeneti formátumot.", resourceTitle: "Promptolási videó megnyitása", resourceURL: "https://www.youtube.com/watch?v=uPYOrXxTxJI"),
-            CourseModule(id: "ai-mail", title: "Ajánlat és e-mail gyorsítása", summary: "Készíts ellenőrzött sablont ajánlatra, utánkövetésre és ügyfélválaszra; érzékeny adatot ne másolj be.", resourceTitle: "Microsoft Copilot vállalkozásoknak", resourceURL: "https://www.microsoft.com/hu-hu/microsoft-365/business/copilot-for-microsoft-365"),
-            CourseModule(id: "ai-privacy", title: "Ellenőrzés és adatvédelem", summary: "Minden AI-kimenetet ember ellenőrizzen, és legyen belső szabály arra, milyen adat kerülhet a rendszerbe.", resourceTitle: "NAIH tájékoztatók", resourceURL: "https://www.naih.hu/")
+            LearningModule(id: "ai-foundations", title: "Lehetőségek és jó promptok", lessons: [
+                CourseLesson(id: "ai-value", title: "Hol teremt értéket az AI?", summary: "Gyűjts össze három ismétlődő szöveges feladatot, és válaszd ki azt, amelyiknél a legkisebb a hibakockázat.", resourceTitle: "VOSZ AI-videósorozat", resourceURL: "https://www.youtube.com/results?search_query=VOSZ+ChatGPT+k%C3%A9pz%C3%A9s"),
+                CourseLesson(id: "ai-prompt", title: "Jó prompt 5 lépésben", summary: "Add meg a szerepet, a célt, a bemenetet, a korlátokat és a kívánt kimeneti formátumot.", videoURL: "https://www.youtube.com/watch?v=uPYOrXxTxJI", resourceTitle: "Promptolási videó megnyitása", resourceURL: "https://www.youtube.com/watch?v=uPYOrXxTxJI")
+            ]),
+            LearningModule(id: "ai-practice", title: "Napi munka és felelős használat", lessons: [
+                CourseLesson(id: "ai-mail", title: "Ajánlat és e-mail gyorsítása", summary: "Készíts ellenőrzött sablont ajánlatra, utánkövetésre és ügyfélválaszra; érzékeny adatot ne másolj be.", resourceTitle: "Microsoft Copilot vállalkozásoknak", resourceURL: "https://www.microsoft.com/hu-hu/microsoft-365/business/copilot-for-microsoft-365"),
+                CourseLesson(id: "ai-privacy", title: "Ellenőrzés és adatvédelem", summary: "Minden AI-kimenetet ember ellenőrizzen, és legyen belső szabály arra, milyen adat kerülhet a rendszerbe.", resourceTitle: "NAIH tájékoztatók", resourceURL: "https://www.naih.hu/")
+            ])
         ]
     ),
-    BusinessCourse(
+    BusinessTopic(
         id: "m365", title: "Microsoft 365 kisvállalkozásoknak", category: "Digitális munka",
         description: "Teams, Outlook, OneDrive és SharePoint egyetlen, biztonságos rendszerben. Fiókok, jogosultságok, közös fájlkezelés és automatizmusok.",
         duration: "Magyar videók", level: "Kezdő", icon: "cloud.fill",
         videoTitle: "Microsoft 365 bevezetés és csoportok", videoSource: "Sämling Üzleti Oktatási Központ",
         videoURL: "https://www.youtube.com/watch?v=py9fGXyBZcE",
         modules: [
-            CourseModule(id: "m365-accounts", title: "Fiókok és jogosultságok", summary: "Minden munkatársnak külön fiók, szerepkör szerinti hozzáférés és bekapcsolt többtényezős védelem kell.", resourceTitle: "Microsoft 365 Vállalati verzió", resourceURL: "https://www.microsoft.com/hu-hu/microsoft-365/business"),
-            CourseModule(id: "m365-files", title: "Közös fájlkezelés OneDrive-val", summary: "Alakíts ki közös mappaszerkezetet, tulajdonost és visszaállítási rendet; ne e-mailben küldözgess fájlmásolatokat.", resourceTitle: "OneDrive magyar súgó", resourceURL: "https://support.microsoft.com/hu-hu/onedrive"),
-            CourseModule(id: "m365-teams", title: "Teams-együttműködés", summary: "Hozz létre ügyfél- vagy projektcsatornákat, és rögzítsd, melyik információ hol található.", resourceTitle: "Teams magyar súgó", resourceURL: "https://support.microsoft.com/hu-hu/teams"),
-            CourseModule(id: "m365-automation", title: "Naptár és automatizmusok", summary: "Használj közös naptárt, foglalási oldalt és egyetlen jóváhagyott automatizmust egy ismétlődő folyamathoz.", resourceTitle: "Power Automate", resourceURL: "https://www.microsoft.com/hu-hu/power-platform/products/power-automate")
+            LearningModule(id: "m365-access", title: "Fiókok és fájlok", lessons: [
+                CourseLesson(id: "m365-accounts", title: "Fiókok és jogosultságok", summary: "Minden munkatársnak külön fiók, szerepkör szerinti hozzáférés és bekapcsolt többtényezős védelem kell.", resourceTitle: "Microsoft 365 Vállalati verzió", resourceURL: "https://www.microsoft.com/hu-hu/microsoft-365/business"),
+                CourseLesson(id: "m365-files", title: "Közös fájlkezelés OneDrive-val", summary: "Alakíts ki közös mappaszerkezetet, tulajdonost és visszaállítási rendet; ne e-mailben küldözgess fájlmásolatokat.", resourceTitle: "OneDrive magyar súgó", resourceURL: "https://support.microsoft.com/hu-hu/onedrive")
+            ]),
+            LearningModule(id: "m365-collaboration", title: "Együttműködés és automatizmusok", lessons: [
+                CourseLesson(id: "m365-teams", title: "Teams-együttműködés", summary: "Hozz létre ügyfél- vagy projektcsatornákat, és rögzítsd, melyik információ hol található.", resourceTitle: "Teams magyar súgó", resourceURL: "https://support.microsoft.com/hu-hu/teams"),
+                CourseLesson(id: "m365-automation", title: "Naptár és automatizmusok", summary: "Használj közös naptárt, foglalási oldalt és egyetlen jóváhagyott automatizmust egy ismétlődő folyamathoz.", resourceTitle: "Power Automate", resourceURL: "https://www.microsoft.com/hu-hu/power-platform/products/power-automate")
+            ])
         ]
     ),
-    BusinessCourse(
+    BusinessTopic(
         id: "basics", title: "Vállalkozói alapismeretek", category: "Cégépítés",
         description: "Üzleti modell, célpiac, árazás és az első 90 nap terve. Az indítás kötelező lépéseitől a heti mérőszámokig.",
         duration: "Magyar videó", level: "Kezdő", icon: "storefront.fill",
         videoTitle: "Az egyéni vállalkozás és indítása", videoSource: "Magyar nyelvű oktatóvideó",
         videoURL: "https://www.youtube.com/watch?v=d2tyNSnyv1Q",
         modules: [
-            CourseModule(id: "basics-model", title: "Üzleti modell egy oldalon", summary: "Írd le egy mondatban a vevőt, a problémáját, az ajánlatodat, az értékesítési csatornát és a bevételi módot.", resourceTitle: "VOSZ vállalkozói információk", resourceURL: "https://www.vosz.hu/hu"),
-            CourseModule(id: "basics-launch", title: "Indítás és kötelező lépések", summary: "Ellenőrizd a tevékenységet, adózást, képesítési feltételt, kamarai bejelentést és számlázást.", resourceTitle: "NAV: egyéni vállalkozás indítása", resourceURL: "https://nav.gov.hu/Elethelyzetek-adozasa/vallalkozas/Egyeni-vallalkozas-inditasa"),
-            CourseModule(id: "basics-pricing", title: "Ideális ügyfél és árazás", summary: "Határozz meg egy konkrét célcsoportot, eredményt, költségszintet és minimális vállalható árat.", resourceTitle: "MKIK Mentorprogram", resourceURL: "https://vallalkozztudatosan.mkik.hu/"),
-            CourseModule(id: "basics-plan", title: "90 napos akcióterv", summary: "Bonts három havi célra, heti mérőszámokra és minden héten egy lezárandó ügyfélszerzési feladatra.", resourceTitle: "Vállalkozz digitálisan", resourceURL: "https://vallalkozzdigitalisan.mkik.hu/")
+            LearningModule(id: "basics-start", title: "Üzleti alapok és indulás", lessons: [
+                CourseLesson(id: "basics-model", title: "Üzleti modell egy oldalon", summary: "Írd le egy mondatban a vevőt, a problémáját, az ajánlatodat, az értékesítési csatornát és a bevételi módot.", resourceTitle: "VOSZ vállalkozói információk", resourceURL: "https://www.vosz.hu/hu"),
+                CourseLesson(id: "basics-launch", title: "Indítás és kötelező lépések", summary: "Ellenőrizd a tevékenységet, adózást, képesítési feltételt, kamarai bejelentést és számlázást.", resourceTitle: "NAV: egyéni vállalkozás indítása", resourceURL: "https://nav.gov.hu/Elethelyzetek-adozasa/vallalkozas/Egyeni-vallalkozas-inditasa")
+            ]),
+            LearningModule(id: "basics-plan-module", title: "Árazás és 90 napos terv", lessons: [
+                CourseLesson(id: "basics-pricing", title: "Ideális ügyfél és árazás", summary: "Határozz meg egy konkrét célcsoportot, eredményt, költségszintet és minimális vállalható árat.", resourceTitle: "MKIK Mentorprogram", resourceURL: "https://vallalkozztudatosan.mkik.hu/"),
+                CourseLesson(id: "basics-plan", title: "90 napos akcióterv", summary: "Bonts három havi célra, heti mérőszámokra és minden héten egy lezárandó ügyfélszerzési feladatra.", resourceTitle: "Vállalkozz digitálisan", resourceURL: "https://vallalkozzdigitalisan.mkik.hu/")
+            ])
         ]
     ),
-    BusinessCourse(
+    BusinessTopic(
         id: "security", title: "Kiberbiztonság emberi nyelven", category: "Biztonság",
         description: "Fiókvédelem, mentés, adathalászat és egy egyszerű incidens-terv. A legnagyobb védelem a legkisebb munkáért.",
         duration: "Magyar videó", level: "Kezdő", icon: "lock.shield.fill",
         videoTitle: "KiberPajzs – digitális biztonság", videoSource: "Pénziránytű / KiberPajzs",
         videoURL: "https://www.youtube.com/watch?v=2LqpB_03Jt0",
         modules: [
-            CourseModule(id: "security-mfa", title: "Többlépcsős belépés", summary: "Kapcsold be először az e-mail-, banki, közösségi és adminisztrációs fiókoknál.", resourceTitle: "KiberPajzs biztonsági tippek", resourceURL: "https://kiberpajzs.hu/hasznos-tippeket-olvasnek"),
-            CourseModule(id: "security-backup", title: "Eszközök és mentés", summary: "Automatikus frissítés, képernyőzár és legalább egy külön helyen tárolt, visszaállítással is tesztelt mentés kell.", resourceTitle: "NKI tudásbázis", resourceURL: "https://nki.gov.hu/"),
-            CourseModule(id: "security-phishing", title: "Adathalászat felismerése", summary: "Sürgetésnél állj meg, külön csatornán ellenőrizd a feladót, és ne a levélből nyisd meg a belépési oldalt.", resourceTitle: "KiberPajzs videó", resourceURL: "https://www.youtube.com/watch?v=2LqpB_03Jt0"),
-            CourseModule(id: "security-incident", title: "Incidens-terv", summary: "Írd le, kit kell hívni, hogyan zárod a fiókokat, hol van a mentés, és hogyan értesíted az érintetteket.", resourceTitle: "NKI incidensbejelentés", resourceURL: "https://nki.gov.hu/intezet/tartalom/incidens-bejelentes/")
+            LearningModule(id: "security-protection", title: "Fiókvédelem és mentés", lessons: [
+                CourseLesson(id: "security-mfa", title: "Többlépcsős belépés", summary: "Kapcsold be először az e-mail-, banki, közösségi és adminisztrációs fiókoknál.", resourceTitle: "KiberPajzs biztonsági tippek", resourceURL: "https://kiberpajzs.hu/hasznos-tippeket-olvasnek"),
+                CourseLesson(id: "security-backup", title: "Eszközök és mentés", summary: "Automatikus frissítés, képernyőzár és legalább egy külön helyen tárolt, visszaállítással is tesztelt mentés kell.", resourceTitle: "NKI tudásbázis", resourceURL: "https://nki.gov.hu/")
+            ]),
+            LearningModule(id: "security-response", title: "Csalások és incidenskezelés", lessons: [
+                CourseLesson(id: "security-phishing", title: "Adathalászat felismerése", summary: "Sürgetésnél állj meg, külön csatornán ellenőrizd a feladót, és ne a levélből nyisd meg a belépési oldalt.", videoURL: "https://www.youtube.com/watch?v=2LqpB_03Jt0", resourceTitle: "KiberPajzs videó", resourceURL: "https://www.youtube.com/watch?v=2LqpB_03Jt0"),
+                CourseLesson(id: "security-incident", title: "Incidens-terv", summary: "Írd le, kit kell hívni, hogyan zárod a fiókokat, hol van a mentés, és hogyan értesíted az érintetteket.", resourceTitle: "NKI incidensbejelentés", resourceURL: "https://nki.gov.hu/intezet/tartalom/incidens-bejelentes/")
+            ])
         ]
     ),
-    BusinessCourse(
+    BusinessTopic(
         id: "marketing", title: "Online jelenlét és ügyfélszerzés", category: "Marketing",
         description: "Pozicionálás, Google Cégprofil, négyhetes tartalomterv és mérés. Ügyfélszerzés követhető lépésekben, nem követőszámban.",
         duration: "Magyar videók", level: "Középhaladó", icon: "megaphone.fill",
         videoTitle: "Hogyan kerülhetsz fel a Google Térképre?", videoSource: "Jobbágy András",
         videoURL: "https://www.youtube.com/watch?v=-4qATDuCWgU",
         modules: [
-            CourseModule(id: "marketing-position", title: "Pozicionálási mondat", summary: "Ne szolgáltatást sorolj: mondd meg, kinek, milyen eredményt és mitől más módon adsz.", resourceTitle: "VOSZ videók", resourceURL: "https://www.youtube.com/@vosz."),
-            CourseModule(id: "marketing-profile", title: "Bizalmat építő Google Cégprofil", summary: "Tölts ki minden adatot, adj képeket, szolgáltatásokat és rendszeresen válaszolj az értékelésekre.", resourceTitle: "Google Cégprofil hozzáadása", resourceURL: "https://support.google.com/business/answer/2911778?hl=hu"),
-            CourseModule(id: "marketing-content", title: "4 hetes tartalomterv", summary: "Hetente mutass problémát, megoldást, bizonyítékot és konkrét következő lépést.", resourceTitle: "Meta Business Suite", resourceURL: "https://business.facebook.com/"),
-            CourseModule(id: "marketing-measure", title: "Mérés és javítás", summary: "Mérd a forrást, érdeklődést, ajánlatot és vásárlást; a követőszám önmagában nem üzleti eredmény.", resourceTitle: "Google Analytics", resourceURL: "https://analytics.google.com/")
+            LearningModule(id: "marketing-presence", title: "Pozicionálás és megtalálhatóság", lessons: [
+                CourseLesson(id: "marketing-position", title: "Pozicionálási mondat", summary: "Ne szolgáltatást sorolj: mondd meg, kinek, milyen eredményt és mitől más módon adsz.", resourceTitle: "VOSZ videók", resourceURL: "https://www.youtube.com/@vosz."),
+                CourseLesson(id: "marketing-profile", title: "Bizalmat építő Google Cégprofil", summary: "Tölts ki minden adatot, adj képeket, szolgáltatásokat és rendszeresen válaszolj az értékelésekre.", resourceTitle: "Google Cégprofil hozzáadása", resourceURL: "https://support.google.com/business/answer/2911778?hl=hu")
+            ]),
+            LearningModule(id: "marketing-growth", title: "Tartalom és mérés", lessons: [
+                CourseLesson(id: "marketing-content", title: "4 hetes tartalomterv", summary: "Hetente mutass problémát, megoldást, bizonyítékot és konkrét következő lépést.", resourceTitle: "Meta Business Suite", resourceURL: "https://business.facebook.com/"),
+                CourseLesson(id: "marketing-measure", title: "Mérés és javítás", summary: "Mérd a forrást, érdeklődést, ajánlatot és vásárlást; a követőszám önmagában nem üzleti eredmény.", resourceTitle: "Google Analytics", resourceURL: "https://analytics.google.com/")
+            ])
         ]
     ),
-    BusinessCourse(
+    BusinessTopic(
         id: "finance", title: "Pénzügyi tudatosság alapjai", category: "Pénzügy",
         description: "Cash-flow, költségek, számlázás és együttműködés a könyvelővel. Hogy a bevétel és a nyereség ne csússzon össze.",
         duration: "Magyar videó", level: "Kezdő", icon: "building.columns.fill",
         videoTitle: "NAV Online Számlázó Program bemutatása", videoSource: "Nemzeti Adó- és Vámhivatal",
         videoURL: "https://www.youtube.com/watch?v=U5s2bXrgnHc",
         modules: [
-            CourseModule(id: "finance-profit", title: "Bevétel, költség és nyereség", summary: "Külön kezeld a beérkezett pénzt, az áfát, a fizetendő adót, a költségeket és a tulajdonosi kivétet.", resourceTitle: "NAV vállalkozói élethelyzetek", resourceURL: "https://nav.gov.hu/Elethelyzetek-adozasa/vallalkozas"),
-            CourseModule(id: "finance-cashflow", title: "13 hetes cash-flow", summary: "Hetente vezesd a várható be- és kifizetéseket, és jelöld a bizonytalan tételeket.", resourceTitle: "Pénziránytű", resourceURL: "https://penziranytu.hu/"),
-            CourseModule(id: "finance-invoice", title: "Számlázás és adatszolgáltatás", summary: "Ellenőrizd a NAV-kapcsolatot, a számlaadatokat és azt, hogy ki figyeli a hibás adatszolgáltatást.", resourceTitle: "NAV Online Számla", resourceURL: "https://onlineszamla.nav.gov.hu/"),
-            CourseModule(id: "finance-close", title: "Havi zárás a könyvelővel", summary: "Legyen fix határidő a bizonylatokra, kintlévőségekre, adókra és a következő három hónap pénzigényére.", resourceTitle: "NAV ONYA", resourceURL: "https://onya.nav.gov.hu/")
+            LearningModule(id: "finance-basics", title: "Pénzügyi alapok és cash-flow", lessons: [
+                CourseLesson(id: "finance-profit", title: "Bevétel, költség és nyereség", summary: "Külön kezeld a beérkezett pénzt, az áfát, a fizetendő adót, a költségeket és a tulajdonosi kivétet.", resourceTitle: "NAV vállalkozói élethelyzetek", resourceURL: "https://nav.gov.hu/Elethelyzetek-adozasa/vallalkozas"),
+                CourseLesson(id: "finance-cashflow", title: "13 hetes cash-flow", summary: "Hetente vezesd a várható be- és kifizetéseket, és jelöld a bizonytalan tételeket.", resourceTitle: "Pénziránytű", resourceURL: "https://penziranytu.hu/")
+            ]),
+            LearningModule(id: "finance-operations", title: "Számlázás és havi zárás", lessons: [
+                CourseLesson(id: "finance-invoice", title: "Számlázás és adatszolgáltatás", summary: "Ellenőrizd a NAV-kapcsolatot, a számlaadatokat és azt, hogy ki figyeli a hibás adatszolgáltatást.", resourceTitle: "NAV Online Számla", resourceURL: "https://onlineszamla.nav.gov.hu/"),
+                CourseLesson(id: "finance-close", title: "Havi zárás a könyvelővel", summary: "Legyen fix határidő a bizonylatokra, kintlévőségekre, adókra és a következő három hónap pénzigényére.", resourceTitle: "NAV ONYA", resourceURL: "https://onya.nav.gov.hu/")
+            ])
         ]
     )
 ]
@@ -1256,12 +1306,12 @@ private struct EducationCatalogScreen: View {
     @AppStorage("education.completedLessonIDs") private var completedLessonIDs = ""
     private let categories = ["Mind", "AI", "Digitális munka", "Cégépítés", "Biztonság", "Marketing", "Pénzügy"]
     private var completed: Set<String> { Set(completedLessonIDs.split(separator: "|").map(String.init)) }
-    private var totalLessonCount: Int { businessCourses.reduce(0) { $0 + $1.modules.count } }
+    private var totalLessonCount: Int { businessTopics.reduce(0) { $0 + $1.lessons.count } }
     private var completedLessonCount: Int {
-        completed.intersection(Set(businessCourses.flatMap { $0.modules.map(\.id) })).count
+        completed.intersection(Set(businessTopics.flatMap { $0.lessons.map(\.id) })).count
     }
-    private var filtered: [BusinessCourse] {
-        businessCourses.filter { selectedCategory == "Mind" || (selectedCategory == "AI" && $0.id == "ai") || $0.category == selectedCategory }
+    private var filtered: [BusinessTopic] {
+        businessTopics.filter { selectedCategory == "Mind" || (selectedCategory == "AI" && $0.id == "ai") || $0.category == selectedCategory }
     }
     var body: some View {
         PortalScroll(title: "Vállalkozói Edukáció", subtitle: "Rövid, gyakorlatias tananyagok, saját tempóban.") {
@@ -1304,7 +1354,7 @@ private struct EducationCatalogScreen: View {
                         NavigationLink { CourseDetailScreen(course: course) } label: {
                             CourseCard(
                                 course: course,
-                                completedCount: completed.intersection(Set(course.modules.map(\.id))).count
+                                completedCount: completed.intersection(Set(course.lessons.map(\.id))).count
                             )
                         }
                         .buttonStyle(.plain)
@@ -1318,7 +1368,7 @@ private struct EducationCatalogScreen: View {
 }
 
 private struct CourseCard: View {
-    let course: BusinessCourse
+    let course: BusinessTopic
     let completedCount: Int
     var body: some View {
         VStack(alignment: .leading, spacing: VizitSpace.xs) {
@@ -1327,9 +1377,9 @@ private struct CourseCard: View {
             Text(course.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary).lineLimit(2)
             Text(course.description).font(VizitFont.body).foregroundStyle(VizitColor.textSecondary).lineLimit(5)
             Spacer(minLength: 0)
-            ProgressView(value: Double(completedCount), total: Double(max(course.modules.count, 1)))
+            ProgressView(value: Double(completedCount), total: Double(max(course.lessons.count, 1)))
                 .tint(VizitColor.primary)
-            Text("\(course.level) · \(completedCount)/\(course.modules.count) lecke")
+            Text("\(course.level) · \(course.modules.count) modul · \(completedCount)/\(course.lessons.count) lecke")
                 .font(VizitFont.caption)
                 .foregroundStyle(VizitColor.textMuted)
         }
@@ -1367,7 +1417,7 @@ private enum CourseTab: String, CaseIterable {
 }
 
 private struct CourseDetailScreen: View {
-    let course: BusinessCourse
+    let course: BusinessTopic
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @AppStorage("education.completedLessonIDs") private var completedLessonIDs = ""
@@ -1376,26 +1426,20 @@ private struct CourseDetailScreen: View {
     @State private var videoReady = false
     @State private var videoUnavailable = false
 
-    private var lessons: [CourseModule] { course.modules }
-    private var selectedLesson: CourseModule { lessons.first { $0.id == selectedLessonID } ?? lessons[0] }
+    private var lessons: [CourseLesson] { course.lessons }
+    private var selectedLesson: CourseLesson { lessons.first { $0.id == selectedLessonID } ?? lessons[0] }
     private var completed: Set<String> { Set(completedLessonIDs.split(separator: "|").map(String.init)) }
     private var completedLessonCount: Int { completed.intersection(Set(lessons.map(\.id))).count }
-    private var learningModules: [[CourseModule]] {
-        stride(from: 0, to: lessons.count, by: 2).map { Array(lessons[$0..<min($0 + 2, lessons.count)]) }
-    }
-    private func moduleTitle(_ index: Int) -> String {
-        index == 0 ? "Alapok és felkészülés" : "Gyakorlati alkalmazás"
-    }
     private func markLessonComplete(_ lessonID: String) {
         var next = completed
         next.insert(lessonID)
         completedLessonIDs = next.sorted().joined(separator: "|")
     }
-    private func videoURL(for lesson: CourseModule) -> String {
-        YouTubeVideoID.from(lesson.resourceURL) == nil ? course.videoURL : lesson.resourceURL
+    private func videoURL(for lesson: CourseLesson) -> String {
+        lesson.videoURL ?? course.videoURL
     }
-    private func videoChapter(for lesson: CourseModule) -> (index: Int, count: Int) {
-        if YouTubeVideoID.from(lesson.resourceURL) != nil { return (0, 1) }
+    private func videoChapter(for lesson: CourseLesson) -> (index: Int, count: Int) {
+        if lesson.videoURL != nil { return (0, 1) }
         return (lessons.firstIndex(where: { $0.id == lesson.id }) ?? 0, max(lessons.count, 1))
     }
 
@@ -1543,32 +1587,32 @@ private struct CourseDetailScreen: View {
 
     private var lessonList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(learningModules.enumerated()), id: \.offset) { moduleIndex, moduleLessons in
-                sectionHeader(moduleIndex: moduleIndex, moduleLessons: moduleLessons)
-                ForEach(Array(moduleLessons.enumerated()), id: \.element.id) { lessonIndex, lesson in
+            ForEach(Array(course.modules.enumerated()), id: \.element.id) { moduleIndex, module in
+                sectionHeader(moduleIndex: moduleIndex, module: module)
+                ForEach(Array(module.lessons.enumerated()), id: \.element.id) { lessonIndex, lesson in
                     lessonRow(lesson: lesson, number: "\(moduleIndex + 1).\(lessonIndex + 1)")
                 }
             }
         }
     }
 
-    private func sectionHeader(moduleIndex: Int, moduleLessons: [CourseModule]) -> some View {
-        let done = moduleLessons.filter { completed.contains($0.id) }.count
+    private func sectionHeader(moduleIndex: Int, module: LearningModule) -> some View {
+        let done = module.lessons.filter { completed.contains($0.id) }.count
         return HStack(spacing: VizitSpace.sm) {
-            Text("\(moduleIndex + 1). modul · \(moduleTitle(moduleIndex))")
+            Text("\(moduleIndex + 1). modul · \(module.title)")
                 .font(VizitFont.label)
                 .foregroundStyle(CoursePlayer.secondary)
             Spacer(minLength: VizitSpace.xs)
-            Text("\(done)/\(moduleLessons.count)")
+            Text("\(done)/\(module.lessons.count)")
                 .font(VizitFont.caption)
-                .foregroundStyle(done == moduleLessons.count ? CoursePlayer.accent : CoursePlayer.muted)
+                .foregroundStyle(done == module.lessons.count ? CoursePlayer.accent : CoursePlayer.muted)
         }
         .padding(.horizontal, VizitSpace.md)
         .padding(.top, VizitSpace.lg)
         .padding(.bottom, VizitSpace.xs)
     }
 
-    private func lessonRow(lesson: CourseModule, number: String) -> some View {
+    private func lessonRow(lesson: CourseLesson, number: String) -> some View {
         let isDone = completed.contains(lesson.id)
         let isCurrent = lesson.id == selectedLesson.id
         return Button { selectedLessonID = lesson.id } label: {
@@ -1652,7 +1696,7 @@ private struct CourseDetailScreen: View {
 
             VStack(alignment: .leading, spacing: VizitSpace.sm) {
                 factRow("Szint", course.level)
-                factRow("Terjedelem", "\(learningModules.count) modul · \(lessons.count) lecke")
+                factRow("Terjedelem", "\(course.modules.count) modul · \(lessons.count) lecke")
                 factRow("Nyelv", course.duration)
                 factRow("Forrás", course.videoSource)
                 factRow("Haladásod", "\(completedLessonCount) / \(lessons.count) lecke")

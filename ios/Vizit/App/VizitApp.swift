@@ -61,6 +61,8 @@ final class AppStore: ObservableObject {
     private var syncInFlight = false
     private var syncAgain = false
     private var syncFailureMessage: String?
+    private var syncRetryTask: Task<Void, Never>?
+    private var syncRetryAttempt = 0
     private let uiTesting: Bool
 
     init() {
@@ -70,6 +72,11 @@ final class AppStore: ObservableObject {
         uiTesting = false
         #endif
         if uiTesting {
+            if ProcessInfo.processInfo.arguments.contains("--ui-testing-verification") {
+                authStatus = .verificationSent("teszt@vizit.hu")
+                syncStatus = .localOnly
+                return
+            }
             do {
                 let directory = try Self.applicationDirectory().appendingPathComponent("UITests", isDirectory: true)
                 let storage = ProfileFileStore(directory: directory)
@@ -102,6 +109,11 @@ final class AppStore: ObservableObject {
     var hasProfile: Bool { !profile.displayName.isEmpty }
     var accountEmail: String { userEmail }
     var isOnline: Bool { authStatus == .authenticated }
+
+    func showSignIn() {
+        message = nil
+        authStatus = .signedOut
+    }
 
     private static func applicationDirectory() throws -> URL {
         try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -176,7 +188,6 @@ final class AppStore: ObservableObject {
             guard let cloud = self.cloud else { return }
             try await cloud.register(name: name, email: email, password: password)
             self.authStatus = .verificationSent(email.trimmingCharacters(in: .whitespacesAndNewlines))
-            self.message = "Ha ez új e-mail-cím, elküldtük a megerősítő levelet. Ha már van fiókod, lépj be vagy kérj új jelszót."
         }
     }
 
@@ -370,6 +381,9 @@ final class AppStore: ObservableObject {
 
             if metadata.pendingUpload {
                 if let remoteBundle {
+                    let uploadProfile = localProfile.preparedForUpload(
+                        existingRemoteSlug: remoteBundle.0.slug
+                    )
                     guard ProfileRevisionPolicy.mayUpload(
                         localID: metadata.profileID,
                         localRevision: metadata.remoteUpdatedAt,
@@ -384,7 +398,7 @@ final class AppStore: ObservableObject {
                         return
                     }
                     guard var remote = try await cloud.updateProfile(ownerID: id, profileID: remoteBundle.0.id,
-                                                                     profile: localProfile,
+                                                                     profile: uploadProfile,
                                                                      expectedUpdatedAt: remoteBundle.0.updatedAt) else {
                         metadata.conflict = true
                         try metadataStore.save(metadata)
@@ -396,6 +410,9 @@ final class AppStore: ObservableObject {
                     metadata.profileID = remote.id
                     metadata.remoteUpdatedAt = remote.updatedAt
                     metadata.remoteFingerprint = remote.fingerprint
+                    if profileRevision == revision {
+                        metadata.pendingProfile = uploadProfile
+                    }
                     try metadataStore.save(metadata)
                     guard userID == id else { return }
                     guard profileRevision == revision else {
@@ -405,7 +422,7 @@ final class AppStore: ObservableObject {
                         syncStatus = .pending
                         return
                     }
-                    try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
+                    try await cloud.syncSocialProfiles(profileID: remote.id, value: uploadProfile,
                                                        expected: remoteBundle.1)
                 } else {
                     let reservedID = metadata.profileID ?? UUID()
@@ -442,6 +459,9 @@ final class AppStore: ObservableObject {
                     local.customDomainVerified = remote.customDomainVerified == true
                     try storage.save(local)
                     profile = local
+                    metadata = try metadataStore.load()
+                    metadata.pendingProfile = local
+                    try metadataStore.save(metadata)
                     try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
                                                        expected: ContactProfile())
                 }
@@ -458,10 +478,13 @@ final class AppStore: ObservableObject {
                 guard userID == id else { return }
                 metadata = try metadataStore.load()
                 guard profileRevision == revision else { syncAgain = true; syncStatus = .pending; return }
-                guard let verified, verified.0.matches(profile) else { throw CloudError.profileConflict }
+                let expectedProfile = profile.preparedForUpload(
+                    existingRemoteSlug: verified?.0.slug ?? ""
+                )
+                guard let verified, verified.0.matches(expectedProfile) else { throw CloudError.profileConflict }
                 metadata.remoteUpdatedAt = verified.0.updatedAt
                 metadata.remoteFingerprint = verified.0.fingerprint
-                var photoSynced = profile
+                var photoSynced = expectedProfile
                 photoSynced.photoSyncInitialized = true
                 photoSynced.publicSlug = verified.1.publicSlug
                 photoSynced.customDomain = verified.1.customDomain
@@ -473,6 +496,7 @@ final class AppStore: ObservableObject {
                 metadata.conflict = false
                 try metadataStore.save(metadata)
                 syncStatus = .synced
+                resetSyncRetry()
             } else if let (remote, pulled) = remoteBundle {
                 try pulled.validate()
                 try storage.save(pulled)
@@ -484,6 +508,7 @@ final class AppStore: ObservableObject {
                 metadata.conflict = false
                 try metadataStore.save(metadata)
                 syncStatus = .synced
+                resetSyncRetry()
             } else {
                 if hasProfile {
                     metadata.pendingUpload = true
@@ -492,7 +517,10 @@ final class AppStore: ObservableObject {
                     try metadataStore.save(metadata)
                     syncStatus = metadata.conflict ? .conflict : .pending
                     if !metadata.conflict { syncAgain = true }
-                } else { syncStatus = .localOnly }
+                } else {
+                    syncStatus = .localOnly
+                    resetSyncRetry()
+                }
             }
         } catch let error as CloudError {
             guard userID == id else { return }
@@ -502,7 +530,12 @@ final class AppStore: ObservableObject {
                     try? metadataStore.save(latest)
                 }
                 syncStatus = .conflict
-            } else { syncStatus = .failed }
+            } else if error.isRetryable {
+                syncStatus = .pending
+                scheduleSyncRetry()
+            } else {
+                syncStatus = .failed
+            }
             let text = error.localizedDescription
             syncFailureMessage = text
             message = text
@@ -562,6 +595,9 @@ final class AppStore: ObservableObject {
     func dismissMessage() { message = nil }
 
     private func clearUser() {
+        syncRetryTask?.cancel()
+        syncRetryTask = nil
+        syncRetryAttempt = 0
         profile = ContactProfile()
         profileRevision &+= 1
         fileStore = nil
@@ -570,6 +606,25 @@ final class AppStore: ObservableObject {
         userEmail = ""
         storageError = nil
         syncStatus = .localOnly
+    }
+
+    private func scheduleSyncRetry() {
+        guard syncRetryTask == nil, authStatus == .authenticated else { return }
+        let delays: [UInt64] = [3, 10, 30, 120]
+        let delay = delays[min(syncRetryAttempt, delays.count - 1)]
+        syncRetryAttempt = min(syncRetryAttempt + 1, delays.count - 1)
+        syncRetryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.syncRetryTask = nil
+            await self.synchronize()
+        }
+    }
+
+    private func resetSyncRetry() {
+        syncRetryTask?.cancel()
+        syncRetryTask = nil
+        syncRetryAttempt = 0
     }
 
     @discardableResult
@@ -627,8 +682,11 @@ struct AppGate: View {
             case .launching:
                 LaunchScreen()
 
-            case .signedOut, .verificationSent:
+            case .signedOut:
                 AuthScreen()
+
+            case .verificationSent(let email):
+                EmailVerificationScreen(email: email)
 
             case .passwordRecovery:
                 PasswordChangeScreen()

@@ -62,6 +62,24 @@ final class VizitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
     }
 
+    func testRegistrationConfirmationHasADedicatedDestination() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--ui-testing-verification"]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Ellenőrizd az e-mail-fiókodat"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["auth.verification.email"].label, "teszt@vizit.hu")
+        XCTAssertTrue(app.buttons["auth.verification.back"].exists)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "VIZIT-email-verification"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        app.buttons["auth.verification.back"].tap()
+        XCTAssertTrue(app.buttons["auth.submit"].waitForExistence(timeout: 5))
+    }
+
     func testCreatePersistAndRequirePhotoBeforeSharing() {
         let app = launchClean()
         let edit = app.buttons["card.edit"]

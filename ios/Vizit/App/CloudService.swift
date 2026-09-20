@@ -473,7 +473,12 @@ final class CloudService: @unchecked Sendable {
     private func request<Response: Decodable>(path: [String], method: String = "GET",
                                               query: [URLQueryItem] = [], body: Encodable? = nil,
                                               prefer: String? = nil) async throws -> Response {
-        let session = try await validSession()
+        let session: Session
+        do {
+            session = try await validSession()
+        } catch {
+            throw CloudError.authenticationRequired
+        }
         guard let finalURL = RESTURLBuilder.make(baseURL: configuration.supabaseURL,
                                                  path: path, query: query) else {
             throw CloudError.invalidRequest
@@ -488,7 +493,15 @@ final class CloudService: @unchecked Sendable {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(AnyEncodable(body))
         }
-        let (data, response) = try await http.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await http.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw CloudError.networkUnavailable
+        }
         guard let httpResponse = response as? HTTPURLResponse,
               (200..<300).contains(httpResponse.statusCode) else {
             let payload = try? JSONDecoder().decode(PostgRESTErrorPayload.self, from: data)
@@ -498,7 +511,11 @@ final class CloudService: @unchecked Sendable {
         if Response.self == EmptyResponse.self, data.isEmpty {
             return EmptyResponse() as! Response
         }
-        return try JSONDecoder().decode(Response.self, from: data)
+        do {
+            return try JSONDecoder().decode(Response.self, from: data)
+        } catch {
+            throw CloudError.invalidResponse
+        }
     }
 }
 
@@ -511,7 +528,9 @@ private struct AnyEncodable: Encodable {
 }
 
 enum CloudError: LocalizedError {
-    case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled, providerUnavailable
+    case invalidCallback, invalidRequest, invalidResponse, emptyResponse
+    case authenticationRequired, networkUnavailable
+    case emailConfirmationDisabled, providerUnavailable
     case profileConflict
     case passwordResetCooldown(Int)
     case server(status: Int, code: String?)
@@ -521,12 +540,26 @@ enum CloudError: LocalizedError {
         return status == 409 && code == "23505"
     }
 
+    var isRetryable: Bool {
+        switch self {
+        case .networkUnavailable:
+            return true
+        case .server(let status, _):
+            return status == 408 || status == 425 || status == 429 || (500...599).contains(status)
+        default:
+            return false
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .invalidCallback: return "A bejelentkezési hivatkozás érvénytelen."
         case .profileConflict: return "A profil közben másik eszközön megváltozott. Válaszd ki a megtartandó változatot."
         case .invalidRequest: return "A kérés most nem küldhető el. Próbáld újra."
+        case .invalidResponse: return "A kiszolgáló válasza nem olvasható. A helyi névjegyedet megőriztük."
         case .emptyResponse: return "A kiszolgáló nem adott vissza mentett profilt."
+        case .authenticationRequired: return "A felhőmunkamenet lejárt. Jelentkezz be újra; a helyi névjegyedet megőriztük."
+        case .networkUnavailable: return "Nincs elérhető hálózati kapcsolat. A módosítás helyben megmaradt, és automatikusan újrapróbáljuk."
         case .emailConfirmationDisabled: return "A kiszolgálón nincs kötelező e-mail-megerősítés. A munkamenetet biztonsági okból megszakítottuk."
         case .providerUnavailable: return "A Google-bejelentkezés ebben a verzióban nem érhető el."
         case .passwordResetCooldown(let seconds):

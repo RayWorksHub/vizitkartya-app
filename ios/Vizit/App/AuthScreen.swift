@@ -45,13 +45,6 @@ struct AuthScreen: View {
 
                         modeSelector
 
-                        if let address = verificationAddress {
-                            VizitBanner(
-                                text: "Megerősítő linket küldtünk ide: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót.",
-                                tone: .info
-                            )
-                        }
-
                         fields
 
                         if mode == .register { legalSection }
@@ -236,11 +229,6 @@ struct AuthScreen: View {
         .padding(.top, VizitSpace.xs)
     }
 
-    private var verificationAddress: String? {
-        if case .verificationSent(let address) = store.authStatus { return address }
-        return nil
-    }
-
     private var buildVersionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
@@ -419,5 +407,77 @@ struct PasswordChangeScreen: View {
 
     private func change() {
         Task { await store.changePassword(password, confirmation: confirmation) }
+    }
+}
+
+/// Registration completion is intentionally its own state instead of a banner
+/// inside the sign-in form. This keeps the next action unambiguous and mirrors
+/// the confirmation destination used by the web app.
+struct EmailVerificationScreen: View {
+    @EnvironmentObject private var store: AppStore
+    let email: String
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(spacing: VizitSpace.lg) {
+                        VizitBrandLockup(maxHeight: 96)
+                            .padding(.top, VizitSpace.xs)
+
+                        VizitIconChip(
+                            systemImage: "envelope.badge",
+                            tint: VizitColor.primary,
+                            background: VizitColor.primarySubtle,
+                            size: 72
+                        )
+                        .accessibilityHidden(true)
+
+                        VStack(spacing: VizitSpace.sm) {
+                            Text("Ellenőrizd az e-mail-fiókodat")
+                                .font(VizitFont.h1)
+                                .foregroundStyle(VizitColor.textPrimary)
+                                .multilineTextAlignment(.center)
+
+                            Text("Megerősítő hivatkozást küldtünk ide:")
+                                .font(VizitFont.body)
+                                .foregroundStyle(VizitColor.textSecondary)
+
+                            Text(email)
+                                .font(VizitFont.label)
+                                .foregroundStyle(VizitColor.textPrimary)
+                                .multilineTextAlignment(.center)
+                                .textSelection(.enabled)
+                                .accessibilityIdentifier("auth.verification.email")
+
+                            Text("Nyisd meg a levélben kapott hivatkozást ezen a készüléken. Ha nem találod, ellenőrizd a levélszemét mappát is.")
+                                .font(VizitFont.bodySmall)
+                                .foregroundStyle(VizitColor.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        VizitBanner(
+                            text: "A profilod csak a cím megerősítése után jön létre. A hivatkozás egyszer használható.",
+                            tone: .info
+                        )
+
+                        VizitButton(
+                            title: "Vissza a belépéshez",
+                            systemImage: "arrow.left",
+                            kind: .secondary
+                        ) {
+                            store.showSignIn()
+                        }
+                        .accessibilityIdentifier("auth.verification.back")
+                    }
+                    .padding(.horizontal, VizitSpace.lg)
+                    .padding(.bottom, VizitSpace.xl)
+                    .frame(maxWidth: 540)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+        }
     }
 }

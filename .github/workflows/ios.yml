@@ -2,7 +2,7 @@ name: iOS secure IPA
 
 on:
   push:
-    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj, release/ios-8-photo-contact, release/ios-8.1-full-ui]
+    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, feature/ios-web-complete-design-sync-20260920, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj, release/ios-8-photo-contact, release/ios-8.1-full-ui]
     paths: ['ios/**', 'config/**', '.github/workflows/ios.yml']
   pull_request:
     branches: [main, develop]
@@ -44,7 +44,9 @@ jobs:
           assert values['publicProfileBaseUrl'] == os.environ['VIZIT_PUBLIC_PROFILE_BASE_URL']
           with urllib.request.urlopen(values['publicProfileBaseUrl'] + '/csukardi-rajmund', timeout=20) as response:
               assert response.status == 200
-              assert 'Mentés a kontaktok közé' in response.read(1000000).decode()
+              html = response.read(1000000).decode()
+              assert 'VIZIT' in html
+              assert any(label in html for label in ('Mentés a Kontaktokba', 'Mentés a kontaktok közé'))
           print('Configured public endpoint: PASS; no production writes')
           PYCONFIG
 
@@ -103,6 +105,23 @@ jobs:
           xcodebuild -version
           swift --version
           swift test --package-path ios
+
+      - name: Validate branded app icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          icon_dir='ios/Vizit/Assets.xcassets/AppIcon.appiconset'
+          for spec in 20:20 29:29 40:40 58:58 60:60 76:76 80:80 87:87 120:120 152:152 167:167 180:180 1024:1024; do
+            file="$icon_dir/AppIcon-${spec%%:*}.png"
+            expected="${spec##*:}"
+            test -s "$file"
+            width="$(sips -g pixelWidth "$file" | awk '/pixelWidth/ { print $2 }')"
+            height="$(sips -g pixelHeight "$file" | awk '/pixelHeight/ { print $2 }')"
+            alpha="$(sips -g hasAlpha "$file" | awk '/hasAlpha/ { print $2 }')"
+            test "$width" = "$expected" && test "$height" = "$expected"
+            test "$alpha" = 'no'
+          done
+          echo 'Complete opaque VIZIT app-icon set: PASS'
 
       - name: Resolve exact Swift dependencies
         run: |
@@ -163,7 +182,7 @@ jobs:
           failed = result.get('failedTests')
           passed = result.get('passedTests')
           skipped = result.get('skippedTests', 0)
-          expected = 21
+          expected = 23
           if failed != 0 or passed != expected or skipped != 0:
               raise SystemExit(f'Invalid test summary: passed={passed}, failed={failed}, skipped={skipped}')
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
