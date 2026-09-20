@@ -56,13 +56,13 @@ final class VizitUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["auth.forgotPassword"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["auth.version"].exists)
-        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 7.3.0"))
+        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 8.0.0"))
         app.buttons["auth.forgotPassword"].tap()
         XCTAssertTrue(app.textFields["auth.reset.email"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
     }
 
-    func testCreatePersistAndShowQR() {
+    func testCreatePersistAndRequirePhotoBeforeSharing() {
         let app = launchClean()
         let edit = app.buttons["card.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
@@ -82,9 +82,10 @@ final class VizitUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["card.name"].label, "Teszt Elek")
         app.tabBars.buttons["Megosztás"].tap()
-        XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Profilkép szükséges"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.images["share.qr"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "VIZIT-contact-QR"
+        screenshot.name = "VIZIT-photo-required"
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
