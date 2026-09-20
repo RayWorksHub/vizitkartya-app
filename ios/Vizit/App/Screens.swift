@@ -280,18 +280,20 @@ struct ShareScreen: View {
     @State private var showContact = false
     @State private var showFullScreenQR = false
     @State private var showScanner = false
+    @State private var editingProfile = false
     @State private var error: String?
     @State private var modeIndex = 0
-    @State private var embeddedPhotoQRPayload: String?
+    @State private var photoQRPayload: String?
 
-    /// Three codes, three jobs: the contact card without a photo, the same card
-    /// with one, and the public address. Only the first is always available.
+    /// VIZIT 8 never offers a contact hand-off that silently drops the photo.
+    /// The direct code carries an optimized photo offline; the profile code
+    /// reaches the public page whose vCard download also contains the photo.
     private enum QRMode: Int, CaseIterable {
-        case contact, photo, profile
-        static var allTitles: [String] { ["Kontakt", "Fényképes", "Profil"] }
+        case photo, profile
+        static var allTitles: [String] { ["Fényképes", "Profil"] }
     }
 
-    private var mode: QRMode { QRMode(rawValue: modeIndex) ?? .contact }
+    private var mode: QRMode { QRMode(rawValue: modeIndex) ?? .photo }
     private var usePublicProfile: Bool { mode == .profile }
 
     /// What actually leaves the device: the stored profile minus whatever the
@@ -318,11 +320,13 @@ struct ShareScreen: View {
                             actionGrid
                         } else {
                             VizitEmptyState(
-                                systemImage: mode == .photo ? "person.crop.circle.badge.exclamationmark" : "qrcode",
+                                systemImage: sharedProfile.photoBase64.isEmpty
+                                    ? "person.crop.circle.badge.exclamationmark"
+                                    : "qrcode",
                                 title: emptyTitle,
                                 message: emptyMessage,
-                                actionTitle: mode == .contact ? nil : "Vissza a Kontakt QR-hoz",
-                                action: mode == .contact ? nil : { modeIndex = QRMode.contact.rawValue }
+                                actionTitle: emptyActionTitle,
+                                action: emptyAction
                             )
                         }
 
@@ -330,7 +334,7 @@ struct ShareScreen: View {
                         VizitPanel {
                             VStack(alignment: .leading, spacing: VizitSpace.sm) {
                                 VizitStatusPill(text: "NFC-kártyaemuláció nem elérhető", tone: .info)
-                                Text("Az iOS nem enged Androidhoz hasonló NFC-kártyaemulációt. iPhone-on a Kontakt QR, az AirDrop és a HTTPS-profil a támogatott átadási módok.")
+                                Text("Az iOS nem enged Androidhoz hasonló NFC-kártyaemulációt. iPhone-on a fényképes QR, az AirDrop és a fényképes HTTPS-profil a támogatott átadási módok.")
                                     .font(VizitFont.bodySmall)
                                     .foregroundStyle(VizitColor.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -350,8 +354,9 @@ struct ShareScreen: View {
             }
             .navigationBarHidden(true)
             .task(id: sharedProfile) {
-                embeddedPhotoQRPayload = PhotoContactQR.payload(sharedProfile)
+                photoQRPayload = PhotoContactQR.payload(sharedProfile)
             }
+            .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
@@ -404,11 +409,9 @@ struct ShareScreen: View {
     private var captionText: String {
         switch mode {
         case .profile:
-            return "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
+            return "A nyilvános névjegyoldalt nyitja meg, ahonnan a névjegy profilképpel együtt menthető."
         case .photo:
             return "A teljes névjegyed a profilképeddel együtt, internet nélkül is beolvasható."
-        case .contact:
-            return "A teljes névjegyed profilkép nélkül, hogy a kód gyorsan beolvasható maradjon."
         }
     }
 
@@ -438,28 +441,39 @@ struct ShareScreen: View {
     }
 
     private var emptyTitle: String {
+        if sharedProfile.photoBase64.isEmpty { return "Profilkép szükséges" }
         switch mode {
         case .profile: return "Nincs még publikus profil"
-        case .photo: return "A profilkép nem fér bele a kódba"
-        case .contact: return "A Kontakt QR nem állítható elő"
+        case .photo: return "A fényképes QR nem állítható elő"
         }
     }
 
     private var emptyMessage: String {
+        if sharedProfile.photoBase64.isEmpty {
+            return "A VIZIT 8 minden névjegyet fényképpel ad át. Tölts fel profilképet a névjegyed szerkesztésénél."
+        }
         switch mode {
         case .profile:
-            return "A Profil QR-hez engedélyezd a publikus profilt, adj meg profilazonosítót, és várd meg a sikeres szinkront."
+            return "A Profil QR-hez engedélyezd a publikus profilt, majd várd meg a profil és a fénykép sikeres szinkronját."
         case .photo:
-            return "A névjegyed adatai már kitöltik a QR kapacitását. Válassz kisebb profilképet, vagy maradj a Kontakt módnál — abból semmilyen adat nem marad ki, csak a kép."
-        case .contact:
-            // Naming the real cause: an empty code because every reachable field
-            // is switched off looks identical to one because the profile is empty.
             if (!store.profile.phone.isEmpty || !store.profile.email.isEmpty),
                sharedProfile.phone.isEmpty, sharedProfile.email.isEmpty {
                 return "Az Adatláthatóságban a telefonszám és az e-mail-cím is ki van kapcsolva, így nem marad mit a kódba tenni."
             }
-            return "Előbb töltsd ki a névjegyed alapadatait: a névre és egy elérhetőségre mindenképp szükség van."
+            return "A kép és a névjegy együtt meghaladja a biztonságosan beolvasható QR méretét. Rövidítsd a hosszú mezőket; az alkalmazás nem hagyja el a profilképet."
         }
+    }
+
+    private var emptyActionTitle: String? {
+        if sharedProfile.photoBase64.isEmpty { return "Profilkép beállítása" }
+        if mode == .profile { return "Fényképes QR megnyitása" }
+        return nil
+    }
+
+    private var emptyAction: (() -> Void)? {
+        if sharedProfile.photoBase64.isEmpty { return { editingProfile = true } }
+        if mode == .profile { return { modeIndex = QRMode.photo.rawValue } }
+        return nil
     }
 
     private var currentQRImage: UIImage? {
@@ -470,13 +484,13 @@ struct ShareScreen: View {
     private var qrPayload: String? {
         switch mode {
         case .profile: return publicURL?.absoluteString
-        case .photo: return embeddedPhotoQRPayload
-        case .contact: return try? VCard.qrPayload(sharedProfile)
+        case .photo: return photoQRPayload
         }
     }
 
     private var publicURL: URL? {
-        guard store.profile.isPublic, store.syncStatus == .synced,
+        guard !sharedProfile.photoBase64.isEmpty,
+              store.profile.isPublic, store.syncStatus == .synced,
               let base = store.configuration?.publicProfileBaseURL else { return nil }
         return PublicProfileLink.preferred(
             baseURL: base,
@@ -487,6 +501,10 @@ struct ShareScreen: View {
     }
 
     private func shareVCard() {
+        guard !sharedProfile.photoBase64.isEmpty else {
+            error = "A névjegy csak profilképpel osztható meg."
+            return
+        }
         do {
             let file = try ContactBridge.shareFile(sharedProfile)
             temporaryURL = file.url
@@ -605,13 +623,13 @@ enum QRImage {
     }
 }
 
-private enum PhotoContactQR {
+enum PhotoContactQR {
     static func payload(_ profile: ContactProfile) -> String? {
         guard !profile.photoBase64.isEmpty,
               let bytes = Data(base64Encoded: profile.photoBase64),
               let source = UIImage(data: bytes) else { return nil }
 
-        for side in [64, 56, 48, 40, 32] {
+        for side in [72, 64, 56, 48, 40, 32, 28, 24, 20, 16] {
             let size = CGSize(width: side, height: side)
             let format = UIGraphicsImageRendererFormat.default()
             format.scale = 1
@@ -628,7 +646,7 @@ private enum PhotoContactQR {
                     height: drawSize.height
                 ))
             }
-            for quality in [0.55, 0.45, 0.35, 0.25, 0.18] {
+            for quality in [0.65, 0.55, 0.45, 0.35, 0.25, 0.18, 0.12, 0.08] {
                 guard let jpeg = image.jpegData(compressionQuality: quality) else { continue }
                 var candidate = profile
                 candidate.photoBase64 = jpeg.base64EncodedString()
