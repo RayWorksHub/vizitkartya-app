@@ -38,6 +38,7 @@ enum ContactBridge {
     }
 
     static func shareFile(_ profile: ContactProfile) throws -> ShareFile {
+        guard !profile.normalized.photoBase64.isEmpty else { throw ProfileError.missingPhoto }
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("VIZIT-share-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
