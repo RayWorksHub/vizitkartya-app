@@ -168,7 +168,7 @@ struct VizitDigitalCard: View {
     /// A miniature of the contact QR, drawn only when the payload is valid —
     /// a placeholder square would promise a scan that cannot happen.
     @ViewBuilder private var cardQR: some View {
-        if let payload = try? VCard.qrPayload(visible),
+        if let payload = PhotoContactQR.payload(visible),
            let image = CardQRThumbnail.make(payload) {
             Image(uiImage: image)
                 .interpolation(.none)
