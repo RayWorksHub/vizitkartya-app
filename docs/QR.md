@@ -1,29 +1,31 @@
 # QR
 
-Két mód készül ugyanabból a lokális profilból.
+Az iOS 8.0 két módot készít ugyanabból a lokális profilból. Mindkét módnál
+kötelező a profilkép; nincs csendes visszaesés kép nélküli névjegyre.
 
-## Kontakt QR
+## Fényképes kontakt QR
 
-`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges QR-mód. Szabványos vCard 3.0 szöveg, legfeljebb 2200 UTF-8 bájtos gyakorlati payloaddal. Internet nélkül generálható. A generátor M hibajavítást, 4 modul quiet zone-t és középre helyezett, fehér alapon megjelenő VIZIT V-logót használ. Fizikai kamera/QR kompatibilitási teszt továbbra is szükséges Androidon és iPhone-on.
+`IMPLEMENTED`, `TESTED`: ez az alapértelmezett és elsődleges iOS QR-mód.
+Szabványos vCard 3.0 szöveg, legfeljebb 2200 UTF-8 bájtos gyakorlati
+payloaddal. A profilképet több méret- és minőségi lépcsőben optimalizálja, de
+soha nem hagyja el. Internet nélkül generálható. A generátor M hibajavítást,
+4 modul quiet zone-t és középre helyezett, fehér alapon megjelenő VIZIT
+V-logót használ.
 
 ## VIZIT profil QR
 
 `PARTIALLY SUPPORTED`: validált, normalizált HTTPS URL `https://<profile-host>/p/{slug}` generálása és az Android App Link intent elkészült. A publikus profiloldal és a domain `assetlinks.json` még szükséges a teljes end-to-end működéshez.
 
-## Fényképes kontakt QR
-
-A QR-kód maga tartalmazza a `BEGIN:VCARD` névjegyet és az erősen optimalizált
-JPEG profilképet. Nem tartalmaz `https://` hivatkozást, mert azt a rendszerkamerák
-weboldalként osztályozzák még a szerver válasza előtt. Ha a kép az optimalizálás
-után sem fér el biztonságosan, az alkalmazás hagyományos Kontakt QR-t jelenít meg,
-és nem nevezi fényképesnek.
+Ha a fénykép az optimalizálás után sem fér el biztonságosan, az alkalmazás
+nem készít kép nélküli QR-t: rövidítendő mezőket jelez. A kód nem tartalmaz
+`https://` hivatkozást, ezért a rendszerkamera közvetlen névjegyként ismeri fel.
 
 ## UX
 
 Megvalósítva:
 
 - nagy kontrasztú fekete-fehér QR és 4 modul quiet zone;
-- elsődleges Kontakt QR / másodlagos VIZIT profil QR módváltás;
+- elsődleges fényképes kontakt QR / másodlagos VIZIT profil QR módváltás;
 - teljes képernyős QR;
 - teljes képernyőn ideiglenes maximális fényerő, kilépéskor visszaállítással;
 - QR megosztása PNG-ként;
