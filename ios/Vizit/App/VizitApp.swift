@@ -226,6 +226,17 @@ final class AppStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    func changeEmail(_ email: String) async -> Bool {
+        if let issue = AuthValidation.email(email) { message = issue; return false }
+        return await performAuth(
+            defaultError: "Az e-mail-cím módosítása nem sikerült. Ellenőrizd a kapcsolatot."
+        ) {
+            try await self.cloud?.changeEmail(email)
+            self.message = "Megerősítő levelet küldtünk az új e-mail-címre. A cím csak a jóváhagyás után változik meg."
+        }
+    }
+
     func logout() async {
         busy = true
         defer { busy = false }

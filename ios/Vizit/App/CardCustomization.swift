@@ -6,6 +6,7 @@ import SwiftUI
 /// preview of the owner's own card rather than abstract swatches.
 struct CardAppearanceScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var store: CardPresentationStore
     let profile: ContactProfile
 
@@ -28,7 +29,7 @@ struct CardAppearanceScreen: View {
                                 .foregroundStyle(VizitColor.textMuted)
                                 .frame(maxWidth: .infinity, alignment: .center)
                         }
-                        .animation(.easeInOut(duration: 0.2), value: store.value)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.value)
 
                         VizitSectionHeader(title: "Színvilág")
                         colorways

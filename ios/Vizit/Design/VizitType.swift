@@ -1,24 +1,23 @@
 import SwiftUI
 
-/// VIZIT type ramp, mirroring the VIZIT/* text styles in Figma.
-///
-/// Every style is built on a relative text style so Dynamic Type keeps working:
-/// the numbers below are the default sizes, and the system scales them with the
-/// user's preferred content size. San Francisco is used deliberately — the ramp
-/// is shared with Android, the typeface is native to each platform.
+/// VIZIT type ramp, mirroring the VIZIT/* text styles in the supplied design.
+/// Inter is bundled with the app, while `relativeTo` keeps every size tied to
+/// Dynamic Type instead of freezing the design at one accessibility setting.
 enum VizitFont {
-    static let display = Font.system(size: 34, weight: .bold).leading(.tight)
-    static let h1 = Font.system(size: 28, weight: .bold).leading(.tight)
-    static let h2 = Font.system(size: 22, weight: .semibold)
-    static let h3 = Font.system(size: 18, weight: .semibold)
-    static let title = Font.system(size: 17, weight: .semibold)
-    static let body = Font.system(size: 15, weight: .regular)
-    static let bodyStrong = Font.system(size: 15, weight: .semibold)
-    static let bodySmall = Font.system(size: 13, weight: .regular)
-    static let label = Font.system(size: 13, weight: .semibold)
-    static let button = Font.system(size: 15, weight: .semibold)
-    static let caption = Font.system(size: 11, weight: .medium)
-    static let overline = Font.system(size: 11, weight: .bold)
+    private static let family = "Inter-Regular"
+
+    static let display = Font.custom(family, size: 34, relativeTo: .largeTitle).weight(.bold).leading(.tight)
+    static let h1 = Font.custom(family, size: 28, relativeTo: .title).weight(.bold).leading(.tight)
+    static let h2 = Font.custom(family, size: 22, relativeTo: .title2).weight(.semibold)
+    static let h3 = Font.custom(family, size: 18, relativeTo: .title3).weight(.semibold)
+    static let title = Font.custom(family, size: 17, relativeTo: .headline).weight(.semibold)
+    static let body = Font.custom(family, size: 15, relativeTo: .body)
+    static let bodyStrong = Font.custom(family, size: 15, relativeTo: .body).weight(.semibold)
+    static let bodySmall = Font.custom(family, size: 13, relativeTo: .subheadline)
+    static let label = Font.custom(family, size: 13, relativeTo: .subheadline).weight(.semibold)
+    static let button = Font.custom(family, size: 15, relativeTo: .headline).weight(.semibold)
+    static let caption = Font.custom(family, size: 11, relativeTo: .caption).weight(.medium)
+    static let overline = Font.custom(family, size: 11, relativeTo: .caption).weight(.bold)
 }
 
 extension View {

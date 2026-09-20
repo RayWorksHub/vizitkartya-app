@@ -269,6 +269,12 @@ final class CloudService: @unchecked Sendable {
         try? authStorage.remove(key: Self.passwordResetRequestedAtKey)
     }
 
+    func changeEmail(_ email: String) async throws {
+        _ = try await client.auth.update(user: UserAttributes(
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+        ))
+    }
+
     private func isPasswordRecovery(_ url: URL) -> Bool {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
             .contains(where: { $0.name == "flow" && $0.value == "recovery" }) == true

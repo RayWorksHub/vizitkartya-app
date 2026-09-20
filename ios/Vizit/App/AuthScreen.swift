@@ -14,6 +14,7 @@ private enum AuthMode: String, CaseIterable, Identifiable {
 /// with the brand lockup and the digital card promise instead of decoration.
 struct AuthScreen: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var mode: AuthMode = .login
     @State private var name = ""
     @State private var email = ""
@@ -25,7 +26,7 @@ struct AuthScreen: View {
 
     private func select(_ next: AuthMode) {
         guard next != mode else { return }
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
             mode = next
             password = ""
             confirmation = ""

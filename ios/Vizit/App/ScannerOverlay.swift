@@ -13,6 +13,7 @@ struct ScannerOverlay<Actions: View>: View {
     private static var bracket: CGFloat { 34 }
 
     @State private var sweep: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var accent: Color { Color(uiColor: UIColor(hex: 0x0FBEE6)) }
 
@@ -51,13 +52,13 @@ struct ScannerOverlay<Actions: View>: View {
                                 )
                             )
                             .frame(width: side - 8, height: 2)
-                            .offset(y: sweep)
+                            .offset(y: reduceMotion ? 0 : sweep)
                     }
                 }
                 .frame(width: side, height: side)
                 .accessibilityHidden(true)
                 .onAppear {
-                    guard isSweeping else { return }
+                    guard isSweeping, !reduceMotion else { return }
                     sweep = -side / 2 + 6
                     withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
                         sweep = side / 2 - 6

@@ -15,6 +15,27 @@ struct ProfileEditor: View {
     @State private var error: String?
     @State private var loadingPhoto = false
 
+    private var defaultProfileAddress: String {
+        guard !draft.publicSlug.isEmpty,
+              let base = store.configuration?.publicProfileBaseURL,
+              let url = PublicProfileLink.make(baseURL: base, slug: draft.publicSlug) else {
+            return "Az egyedi azonosítót az első sikeres mentéskor automatikusan létrehozzuk."
+        }
+        return url.absoluteString
+    }
+
+    private var domainValidationError: String? {
+        guard !draft.customDomain.isEmpty,
+              !CustomProfileDomain.isValid(draft.customDomain) else { return nil }
+        return "Csak a hostnevet add meg, útvonal és https:// nélkül. Például: nevjegy.cegem.hu"
+    }
+
+    private func socialValidationError(_ platform: SocialPlatform, value: String) -> String? {
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !platform.isValidProfileURL(value) else { return nil }
+        return "Teljes https://\(platform.label.lowercased()).com profilhivatkozást adj meg."
+    }
+
     var body: some View {
         NavigationStack {
             VizitScreen {
@@ -245,7 +266,9 @@ struct ProfileEditor: View {
                 VizitTextField(
                     label: "LinkedIn",
                     text: $draft.linkedIn,
+                    systemImage: SocialPlatform.linkedin.systemImage,
                     placeholder: "https://…",
+                    error: socialValidationError(.linkedin, value: draft.linkedIn),
                     keyboard: .URL,
                     autocapitalization: .never,
                     submitLabel: .next
@@ -254,7 +277,9 @@ struct ProfileEditor: View {
                 VizitTextField(
                     label: "Facebook",
                     text: $draft.facebook,
+                    systemImage: SocialPlatform.facebook.systemImage,
                     placeholder: "https://…",
+                    error: socialValidationError(.facebook, value: draft.facebook),
                     keyboard: .URL,
                     autocapitalization: .never,
                     submitLabel: .next
@@ -263,7 +288,9 @@ struct ProfileEditor: View {
                 VizitTextField(
                     label: "Instagram",
                     text: $draft.instagram,
+                    systemImage: SocialPlatform.instagram.systemImage,
                     placeholder: "https://…",
+                    error: socialValidationError(.instagram, value: draft.instagram),
                     keyboard: .URL,
                     autocapitalization: .never,
                     submitLabel: .next
@@ -272,7 +299,9 @@ struct ProfileEditor: View {
                 VizitTextField(
                     label: "TikTok",
                     text: $draft.tiktok,
+                    systemImage: SocialPlatform.tiktok.systemImage,
                     placeholder: "https://…",
+                    error: socialValidationError(.tiktok, value: draft.tiktok),
                     keyboard: .URL,
                     autocapitalization: .never,
                     submitLabel: .next
@@ -281,7 +310,9 @@ struct ProfileEditor: View {
                 VizitTextField(
                     label: "YouTube",
                     text: $draft.youtube,
+                    systemImage: SocialPlatform.youtube.systemImage,
                     placeholder: "https://…",
+                    error: socialValidationError(.youtube, value: draft.youtube),
                     keyboard: .URL,
                     autocapitalization: .never,
                     submitLabel: .next
@@ -318,9 +349,7 @@ struct ProfileEditor: View {
                             Text("Automatikus profilcím")
                                 .font(VizitFont.label)
                                 .foregroundStyle(VizitColor.textSecondary)
-                            Text(draft.publicSlug.isEmpty
-                                 ? "Az egyedi azonosítót az első mentéskor a nevedből hozzuk létre."
-                                 : "e-nevjegy.vercel.app/p/\(draft.publicSlug)")
+                            Text(defaultProfileAddress)
                                 .font(VizitFont.bodySmall)
                                 .foregroundStyle(VizitColor.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -337,13 +366,42 @@ struct ProfileEditor: View {
                             }
                         ),
                         placeholder: "nevjegy.cegem.hu",
-                        helper: draft.customDomain.isEmpty ? nil : (draft.customDomainVerified
-                            ? "Ellenőrzött domain · ezt használja a QR és az NFC."
-                            : "Beállításra vár · addig a biztos VIZIT-cím marad aktív."),
+                        helper: domainValidationError == nil && !draft.customDomain.isEmpty
+                            ? (draft.customDomainVerified
+                               ? "Ellenőrzött domain · ezt használja a nyilvános profil linkje."
+                               : "Ellenőrzésre vár · addig a biztos VIZIT-cím marad aktív.")
+                            : nil,
+                        error: domainValidationError,
                         keyboard: .URL,
                         autocapitalization: .never,
                         submitLabel: .done
                     )
+
+                    VizitPanel {
+                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                            if draft.customDomain.isEmpty {
+                                VizitStatusPill(text: "Alapértelmezett VIZIT-cím", tone: .info)
+                                Text("Nem kötelező saját domaint megadni. A profil linkje az automatikus VIZIT-címen működik.")
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                            } else if domainValidationError != nil {
+                                VizitStatusPill(text: "Formailag hibás domain", tone: .error)
+                                Text("A hibás érték nem kerül használatba; a már működő VIZIT-link változatlan marad.")
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                            } else if draft.customDomainVerified {
+                                VizitStatusPill(text: "Ellenőrzött saját domain", tone: .success)
+                                Text("A következő sikeres szinkron után a profil linkje a saját címet használja.")
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                            } else {
+                                VizitStatusPill(text: "Tulajdonjog-ellenőrzés függőben", tone: .warning)
+                                Text("Az üzemeltető DNS-ellenőrzése után válik aktívvá. Addig egyetlen megosztott hivatkozás sem törik el.")
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                            }
+                        }
+                    }
                 }
             }
         }

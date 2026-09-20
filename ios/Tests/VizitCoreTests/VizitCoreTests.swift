@@ -64,7 +64,11 @@ final class VizitCoreTests: XCTestCase {
     }
     func testInsecureSocialProfileFailsValidation() {
         var p = sample(); p.instagram = "http://instagram.com/teszt"
-        XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .invalidURL) }
+        XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .invalidSocial(.instagram)) }
+        p.instagram = "https://example.com/not-an-instagram-profile"
+        XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .invalidSocial(.instagram)) }
+        p.instagram = "https://www.instagram.com/teszt"
+        XCTAssertNoThrow(try p.validate())
     }
     func testSafeLinksRejectExecutableAndCredentialURLs() {
         for value in ["javascript:alert(1)", "file:///etc/passwd", "http://example.com", "https://user:password@example.com", "https:///", "https://exa mple.com", "https://example.com\n"] {

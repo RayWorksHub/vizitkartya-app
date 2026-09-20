@@ -110,8 +110,13 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
                   p.phone.unicodeScalars.allSatisfy({ CharacterSet(charactersIn: "+0123456789 ()-./").contains($0) })
             else { throw ProfileError.invalidPhone }
         }
-        for link in [p.website] + p.socialProfiles.map({ $0.url }) where !link.isEmpty {
-            guard SafeLink.https(link) != nil else { throw ProfileError.invalidURL }
+        if !p.website.isEmpty, SafeLink.https(p.website) == nil {
+            throw ProfileError.invalidURL
+        }
+        for social in p.socialProfiles where !social.url.isEmpty {
+            guard social.platform.isValidProfileURL(social.url) else {
+                throw ProfileError.invalidSocial(social.platform)
+            }
         }
         if !p.photoBase64.isEmpty {
             guard let data = Data(base64Encoded: p.photoBase64), data.count <= 256 * 1024
@@ -148,6 +153,29 @@ public enum SocialPlatform: String, CaseIterable, Sendable {
         case .youtube: return 5
         }
     }
+
+    public var systemImage: String {
+        switch self {
+        case .linkedin: return "briefcase.fill"
+        case .facebook: return "person.2.fill"
+        case .instagram: return "camera.fill"
+        case .tiktok: return "music.note"
+        case .youtube: return "play.rectangle.fill"
+        }
+    }
+
+    public func isValidProfileURL(_ value: String) -> Bool {
+        guard let host = SafeLink.https(value)?.host?.lowercased() else { return false }
+        let allowed: [String]
+        switch self {
+        case .linkedin: allowed = ["linkedin.com", "lnkd.in"]
+        case .facebook: allowed = ["facebook.com", "fb.com", "fb.me"]
+        case .instagram: allowed = ["instagram.com"]
+        case .tiktok: allowed = ["tiktok.com"]
+        case .youtube: allowed = ["youtube.com", "youtu.be"]
+        }
+        return allowed.contains { host == $0 || host.hasSuffix(".\($0)") }
+    }
 }
 
 public extension ContactProfile {
@@ -178,6 +206,7 @@ public extension ContactProfile {
 
 public enum ProfileError: Error, LocalizedError, Equatable {
     case missingName, missingContact, invalidEmail, invalidPhone, invalidURL
+    case invalidSocial(SocialPlatform)
     case invalidField, missingPhoto, invalidPhoto, invalidSlug, invalidDomain, oversizedQR, unsupportedFile, damagedFile
 
     public var errorDescription: String? {
@@ -187,6 +216,8 @@ public enum ProfileError: Error, LocalizedError, Equatable {
         case .invalidEmail: return "Ellenőrizd az e-mail-cím formátumát."
         case .invalidPhone: return "Ellenőrizd a telefonszámot; számokat, szóközt és + ( ) - . / jeleket használhatsz."
         case .invalidURL: return "A hivatkozások teljes, https:// kezdetű webcímek legyenek."
+        case .invalidSocial(let platform):
+            return "A \(platform.label)-mezőbe teljes, hivatalos \(platform.label)-profilhivatkozást adj meg."
         case .invalidField: return "Egy mező túl hosszú, sortörést vagy vezérlőkaraktert tartalmaz."
         case .missingPhoto: return "A névjegy megosztásához tölts fel profilképet."
         case .invalidPhoto: return "A profilkép nem olvasható vagy túl nagy. Válassz új képet."

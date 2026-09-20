@@ -1,4 +1,4 @@
-# VIZIT iOS 8.0
+# VIZIT iOS 8.1
 
 Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az aktív VIZIT Supabase-projekthez csatlakozik, az Androidon elérhető névjegyfolyamatokat az iOS platformbiztonsági korlátai között valósítja meg.
 
@@ -9,7 +9,12 @@ Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az a
 - A Supabase-munkamenet kSecAttrAccessibleWhenUnlockedThisDeviceOnly kulcstár-elemként tárolódik.
 - Felhasználónként elkülönített, atomi és teljes fájlvédelemmel mentett helyi profil; a könyvtár ki van zárva az eszközmentésből.
 - Helyi-first profilmentés és optimista konkurenciavezérlés az adatbázis updated_at értékével. Ütközéskor a helyi példány nem íródik felül.
-- Nyilvános profil engedélyezése, fényképes kontakt QR, fényképes HTTPS-profil QR, képes .vcf-megosztás és manuálisan jóváhagyott Kontaktokba mentés.
+- Nyilvános profil engedélyezése automatikus azonosítóval és opcionális, ellenőrzött saját domainnel.
+- Egyetlen elsődleges QR: fényképet is tartalmazó vCard, amelyet az iPhone és az Android natív kontaktként tud megnyitni. A nyilvános profil külön másolható hivatkozás.
+- Képes .vcf-megosztás és manuálisan jóváhagyott Kontaktokba mentés.
+- LinkedIn-, Facebook-, Instagram-, TikTok- és YouTube-profilok ellenőrzött, szinkronizált és vCardba kerülő integrációja.
+- Vállalkozói Portál VOSZ-forrásokkal, magyar videós edukációval, bemutató videóhívással, digitális állapotfelméréssel és konkrét szolgáltatási útmutatókkal.
+- A kurzusok témákra, modulokra és videóleckékre tagolódnak; egy lecke csak legalább 90% tényleges lejátszás után lesz kész.
 - Kamerás QR-beolvasás; HTTPS-link csak felhasználói megerősítés után nyílik meg.
 - Szerveroldali fióktörlés JWT-ellenőrzéssel, avatar-takarítással és az Auth-felhasználóhoz kapcsolt sorok kaszkádos törlésével.
 
@@ -48,12 +53,12 @@ Az artifact aláíratlan IPA. Sideloadly/AltStore a saját Apple ID-val újra tu
 
 A `VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED=true` repository-változó és a
 `[testflight]` kiadási commit együtt engedélyezi az aláírt App Store-archívum
-ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 8.0.0**.
+ellenőrzését és TestFlight-feltöltését. A jelenlegi kiadás: **VIZIT 8.1.0**.
 
-A 8.0-s iOS-kiadásban nincs kép nélküli névjegyátadás: a közvetlen QR
-optimalizált JPEG profilképet tartalmaz, a Profil QR pedig csak szinkronizált
-fényképes profilhoz érhető el. Ha ez nem garantálható, az app nem készít
-félrevezető QR-kódot.
+A 8.1-es iOS-kiadásban nincs kép nélküli névjegyátadás: az egyetlen elsődleges
+QR optimalizált JPEG profilképet tartalmaz. A nyilvános profil nem második QR,
+hanem külön hivatkozás. Ha a fényképes névjegy nem kódolható biztonságosan, az
+app nem készít félrevezető QR-kódot.
 
 ## Kötelező fizikai készülékteszt
 

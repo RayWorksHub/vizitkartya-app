@@ -2,7 +2,7 @@ name: iOS secure IPA
 
 on:
   push:
-    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj, release/ios-8-photo-contact]
+    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj, release/ios-8-photo-contact, release/ios-8.1-full-ui]
     paths: ['ios/**', 'config/**', '.github/workflows/ios.yml']
   pull_request:
     branches: [main, develop]
@@ -163,7 +163,7 @@ jobs:
           failed = result.get('failedTests')
           passed = result.get('passedTests')
           skipped = result.get('skippedTests', 0)
-          expected = 20
+          expected = 21
           if failed != 0 or passed != expected or skipped != 0:
               raise SystemExit(f'Invalid test summary: passed={passed}, failed={failed}, skipped={skipped}')
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
@@ -231,6 +231,8 @@ jobs:
           executable="$app/VIZIT"
           test -d "$app"
           test -f "$executable"
+          test -f "$app/Inter.ttf"
+          test -f "$app/OFL.txt"
           plutil -lint "$app/Info.plist"
           test -f "$app/PrivacyInfo.xcprivacy"
           file "$executable" | tee "$RUNNER_TEMP/VIZIT-binary.txt"
@@ -243,6 +245,7 @@ jobs:
           test "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
           test "$(plutil -extract VIZITGoogleSignInEnabled raw "$app/Info.plist")" = "$VIZIT_GOOGLE_SIGN_IN_ENABLED"
           test "$(plutil -extract VIZITPublicProfileBaseURL raw "$app/Info.plist")" = "$VIZIT_PUBLIC_PROFILE_BASE_URL"
+          test "$(plutil -extract UIAppFonts.0 raw "$app/Info.plist")" = 'Inter.ttf'
           package="$RUNNER_TEMP/ipa"
           mkdir -p "$package/Payload"
           ditto "$app" "$package/Payload/VIZIT.app"

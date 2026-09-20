@@ -56,7 +56,7 @@ final class VizitUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["auth.forgotPassword"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["auth.version"].exists)
-        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 8.0.0"))
+        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 8.1.0"))
         app.buttons["auth.forgotPassword"].tap()
         XCTAssertTrue(app.textFields["auth.reset.email"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
@@ -108,5 +108,21 @@ final class VizitUITests: XCTestCase {
         app.buttons["Mégse"].tap()
         XCTAssertTrue(app.buttons["card.edit"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["card.name"].exists)
+    }
+
+    func testBusinessPortalExposesAllFourFunctionalAreas() {
+        let app = launchClean()
+        let portal = app.buttons["home.businessPortal"]
+        XCTAssertTrue(portal.waitForExistence(timeout: 10))
+        portal.tap()
+
+        for identifier in ["portal.vosz", "portal.education", "portal.help", "portal.toolkit"] {
+            XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5), "Missing \(identifier)")
+        }
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "VIZIT-business-portal"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 }

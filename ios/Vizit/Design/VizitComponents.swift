@@ -19,6 +19,7 @@ struct VizitButton: View {
     let action: () -> Void
 
     @State private var pressed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var active: Bool { isEnabled && !isLoading }
 
@@ -65,8 +66,8 @@ struct VizitButton: View {
                         .stroke(VizitColor.borderStrong, lineWidth: 1)
                 }
             }
-            .scaleEffect(pressed && active ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.12), value: pressed)
+            .scaleEffect(pressed && active && !reduceMotion ? 0.97 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: pressed)
         }
         .buttonStyle(.plain)
         .disabled(!active)
@@ -107,6 +108,7 @@ struct VizitIconButton: View {
 struct VizitTextField: View {
     let label: String
     @Binding var text: String
+    var systemImage: String?
     var placeholder: String = ""
     var helper: String?
     var error: String?
@@ -133,9 +135,15 @@ struct VizitTextField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: VizitSpace.xxs + 2) {
-            Text(label)
-                .font(VizitFont.label)
-                .foregroundStyle(isEnabled ? VizitColor.textSecondary : VizitColor.textDisabled)
+            HStack(spacing: VizitSpace.xxs) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .accessibilityHidden(true)
+                }
+                Text(label)
+            }
+            .font(VizitFont.label)
+            .foregroundStyle(isEnabled ? VizitColor.textSecondary : VizitColor.textDisabled)
 
             HStack(spacing: VizitSpace.sm) {
                 Group {

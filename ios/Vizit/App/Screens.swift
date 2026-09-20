@@ -64,6 +64,7 @@ struct HomeScreen: View {
                                 systemImage: "book.closed",
                                 supporting: "VOSZ, edukáció, digitális segítség és eszköztár"
                             ) { showKnowledgeHub = true }
+                            .accessibilityIdentifier("home.businessPortal")
                         }
                     }
                     .padding(.horizontal, VizitSpace.md)
@@ -282,19 +283,8 @@ struct ShareScreen: View {
     @State private var showScanner = false
     @State private var editingProfile = false
     @State private var error: String?
-    @State private var modeIndex = 0
+    @State private var copiedProfileLink = false
     @State private var photoQRPayload: String?
-
-    /// VIZIT 8 never offers a contact hand-off that silently drops the photo.
-    /// The direct code carries an optimized photo offline; the profile code
-    /// reaches the public page whose vCard download also contains the photo.
-    private enum QRMode: Int, CaseIterable {
-        case photo, profile
-        static var allTitles: [String] { ["Fényképes", "Profil"] }
-    }
-
-    private var mode: QRMode { QRMode(rawValue: modeIndex) ?? .photo }
-    private var usePublicProfile: Bool { mode == .profile }
 
     /// What actually leaves the device: the stored profile minus whatever the
     /// owner switched off in Adatláthatóság.
@@ -307,13 +297,11 @@ struct ShareScreen: View {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
                         VStack(alignment: .leading, spacing: VizitSpace.xs) {
                             VizitLargeTitle("Megosztás")
-                            Text("Mutasd a QR-kódot, küldd el a linket, vagy oszd meg a névjegyfájlt. A fogadó félnek nem kell VIZIT.")
+                            Text("A QR-kód mindig a teljes, fényképes névjegyet adja át. Beolvasás után a telefon saját kontaktmentője nyílik meg.")
                                 .font(VizitFont.body)
                                 .foregroundStyle(VizitColor.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-
-                        VizitSegmentedControl(options: QRMode.allTitles, selection: $modeIndex)
 
                         if currentQRImage != nil {
                             qrIsland
@@ -330,11 +318,36 @@ struct ShareScreen: View {
                             )
                         }
 
+                        VizitSectionHeader(title: "További módok")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Profil linkje",
+                                systemImage: "link",
+                                supporting: profileLinkSupportingText
+                            ) { handleProfileLink() }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Névjegyfájl megosztása",
+                                systemImage: "square.and.arrow.up",
+                                supporting: "Fényképes .vcf · AirDrop, üzenet vagy e-mail"
+                            ) { shareVCard() }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Mentés a Kontaktokba",
+                                systemImage: "person.crop.circle.badge.plus",
+                                supporting: "A fényképes névjegy előnézetével"
+                            ) { openContactEditor() }
+                        }
+
+                        if copiedProfileLink {
+                            VizitBanner(text: "A profil hivatkozását a vágólapra másoltuk.", tone: .success)
+                        }
+
                         VizitSectionHeader(title: "iPhone-on")
                         VizitPanel {
                             VStack(alignment: .leading, spacing: VizitSpace.sm) {
                                 VizitStatusPill(text: "NFC-kártyaemuláció nem elérhető", tone: .info)
-                                Text("Az iOS nem enged Androidhoz hasonló NFC-kártyaemulációt. iPhone-on a fényképes QR, az AirDrop és a fényképes HTTPS-profil a támogatott átadási módok.")
+                                Text("Az iOS nem enged Androidhoz hasonló NFC-kártyaemulációt. A támogatott átadás a fényképes QR, az AirDrop, a .vcf és a külön profilhivatkozás.")
                                     .font(VizitFont.bodySmall)
                                     .foregroundStyle(VizitColor.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -407,12 +420,7 @@ struct ShareScreen: View {
     }
 
     private var captionText: String {
-        switch mode {
-        case .profile:
-            return "A nyilvános névjegyoldalt nyitja meg, ahonnan a névjegy profilképpel együtt menthető."
-        case .photo:
-            return "A teljes névjegyed a profilképeddel együtt, internet nélkül is beolvasható."
-        }
+        "Beolvasás után közvetlenül megnyílik a fényképes névjegy mentése. Internet és VIZIT alkalmazás nem szükséges."
     }
 
     private var actionGrid: some View {
@@ -421,20 +429,8 @@ struct ShareScreen: View {
                 VizitButton(title: "Teljes képernyő", systemImage: "arrow.up.left.and.arrow.down.right", kind: .secondary) {
                     showFullScreenQR = true
                 }
-                VizitButton(title: "Megosztás", systemImage: "square.and.arrow.up", kind: .secondary) {
+                VizitButton(title: "Névjegyfájl", systemImage: "square.and.arrow.up", kind: .secondary) {
                     shareVCard()
-                }
-            }
-            HStack(spacing: VizitSpace.sm) {
-                VizitButton(title: "Kontaktokba", systemImage: "person.crop.circle.badge.plus", kind: .secondary) {
-                    showContact = true
-                }
-                if usePublicProfile, let url = publicURL {
-                    VizitButton(title: "Link másolása", systemImage: "doc.on.doc", kind: .secondary) {
-                        UIPasteboard.general.string = url.absoluteString
-                    }
-                } else {
-                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
                 }
             }
         }
@@ -442,37 +438,27 @@ struct ShareScreen: View {
 
     private var emptyTitle: String {
         if sharedProfile.photoBase64.isEmpty { return "Profilkép szükséges" }
-        switch mode {
-        case .profile: return "Nincs még publikus profil"
-        case .photo: return "A fényképes QR nem állítható elő"
-        }
+        return "A fényképes QR nem állítható elő"
     }
 
     private var emptyMessage: String {
         if sharedProfile.photoBase64.isEmpty {
             return "A VIZIT 8 minden névjegyet fényképpel ad át. Tölts fel profilképet a névjegyed szerkesztésénél."
         }
-        switch mode {
-        case .profile:
-            return "A Profil QR-hez engedélyezd a publikus profilt, majd várd meg a profil és a fénykép sikeres szinkronját."
-        case .photo:
-            if (!store.profile.phone.isEmpty || !store.profile.email.isEmpty),
-               sharedProfile.phone.isEmpty, sharedProfile.email.isEmpty {
-                return "Az Adatláthatóságban a telefonszám és az e-mail-cím is ki van kapcsolva, így nem marad mit a kódba tenni."
-            }
-            return "A kép és a névjegy együtt meghaladja a biztonságosan beolvasható QR méretét. Rövidítsd a hosszú mezőket; az alkalmazás nem hagyja el a profilképet."
+        if (!store.profile.phone.isEmpty || !store.profile.email.isEmpty),
+           sharedProfile.phone.isEmpty, sharedProfile.email.isEmpty {
+            return "Az Adatláthatóságban a telefonszám és az e-mail-cím is ki van kapcsolva, így nem marad mit a kódba tenni."
         }
+        return "A kép és a névjegy együtt meghaladja a biztonságosan beolvasható QR méretét. Rövidítsd a hosszú mezőket; az alkalmazás nem hagyja el a profilképet."
     }
 
     private var emptyActionTitle: String? {
         if sharedProfile.photoBase64.isEmpty { return "Profilkép beállítása" }
-        if mode == .profile { return "Fényképes QR megnyitása" }
         return nil
     }
 
     private var emptyAction: (() -> Void)? {
         if sharedProfile.photoBase64.isEmpty { return { editingProfile = true } }
-        if mode == .profile { return { modeIndex = QRMode.photo.rawValue } }
         return nil
     }
 
@@ -482,10 +468,7 @@ struct ShareScreen: View {
     }
 
     private var qrPayload: String? {
-        switch mode {
-        case .profile: return publicURL?.absoluteString
-        case .photo: return photoQRPayload
-        }
+        photoQRPayload
     }
 
     private var publicURL: URL? {
@@ -498,6 +481,31 @@ struct ShareScreen: View {
             customDomain: store.profile.customDomain,
             customDomainVerified: store.profile.customDomainVerified
         )
+    }
+
+    private var profileLinkSupportingText: String {
+        if let publicURL { return publicURL.absoluteString }
+        if sharedProfile.photoBase64.isEmpty { return "Előbb állíts be profilképet" }
+        if !store.profile.isPublic { return "Kapcsold be a nyilvános profilt" }
+        if store.syncStatus != .synced { return "Sikeres szinkronizálás után másolható" }
+        return "A profilhivatkozás még nem érhető el"
+    }
+
+    private func handleProfileLink() {
+        guard let publicURL else {
+            editingProfile = true
+            return
+        }
+        UIPasteboard.general.string = publicURL.absoluteString
+        copiedProfileLink = true
+    }
+
+    private func openContactEditor() {
+        guard !sharedProfile.photoBase64.isEmpty else {
+            error = "A névjegy csak profilképpel menthető."
+            return
+        }
+        showContact = true
     }
 
     private func shareVCard() {
@@ -567,16 +575,26 @@ enum QRImage {
     }()
 
     static func make(_ payload: String) -> UIImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(payload.utf8)
-        filter.correctionLevel = "M"
-        guard let code = filter.outputImage else { return nil }
+        guard let code = code(for: payload) else { return nil }
         let scale: CGFloat = 10
         let scaled = code.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let quietZone = CIImage(color: .white).cropped(to: scaled.extent.insetBy(dx: -4 * scale, dy: -4 * scale))
         let output = scaled.composited(over: quietZone)
         guard let cg = context.createCGImage(output, from: output.extent) else { return nil }
         return addingLogo(to: UIImage(cgImage: cg))
+    }
+
+    /// The centered mark requires the highest recovery level. Testing capacity
+    /// before presenting the code prevents an apparently valid but unreadable QR.
+    static func canEncode(_ payload: String) -> Bool {
+        code(for: payload) != nil
+    }
+
+    private static func code(for payload: String) -> CIImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        filter.correctionLevel = "H"
+        return filter.outputImage
     }
 
     private static func addingLogo(to qr: UIImage) -> UIImage {
@@ -651,7 +669,8 @@ enum PhotoContactQR {
                 var candidate = profile
                 candidate.photoBase64 = jpeg.base64EncodedString()
                 if let value = try? VCard.qrPayload(candidate, includePhoto: true),
-                   value.contains("PHOTO;ENCODING=b;TYPE=JPEG:") {
+                   value.contains("PHOTO;ENCODING=b;TYPE=JPEG:"),
+                   QRImage.canEncode(value) {
                     return value
                 }
             }
@@ -922,6 +941,12 @@ private struct ToolkitGuide: Identifiable {
     let links: [GuideLink]
 }
 
+private struct ToolkitQuestion: Identifiable {
+    let id: String
+    let title: String
+    let recommendationGuideID: String
+}
+
 private let portalFeatures = [
     PortalFeature(id: "vosz", title: "VOSZ", description: "A Vállalkozók és Munkáltatók Országos Szövetségének hírei, videói és tanácsadói szolgáltatásai — egy helyen, magyarul.", eyebrow: "PARTNERI FORRÁSOK", icon: "briefcase.fill", destination: .vosz),
     PortalFeature(id: "education", title: "Vállalkozói Edukáció", description: "Rövid videóleckék AI-ról, Microsoft 365-ről, cégépítésről, biztonságról, marketingről és pénzügyről. Saját tempóban.", eyebrow: "6 KURZUS · 24 LECKE", icon: "graduationcap.fill", destination: .education),
@@ -933,6 +958,13 @@ private let businessResources = [
     BusinessResource(id: "vosz-youtube", title: "VOSZ videók", description: "Vállalkozói hírek, interjúk és gyakorlati videók.", url: "https://youtube.com/@vosz.?si=k2EmMlI8Q5ttlPZC", icon: "play.rectangle.fill"),
     BusinessResource(id: "vosz", title: "VOSZ információk", description: "Érdekképviselet, tanácsadás, programok és aktuális hírek.", url: "https://www.vosz.hu/hu", icon: "briefcase.fill"),
     BusinessResource(id: "voszport", title: "VOSZPort", description: "Digitális ügyintézési és tudásmegosztási felület.", url: "https://voszport.com/", icon: "globe.europe.africa.fill")
+]
+
+private let toolkitQuestions = [
+    ToolkitQuestion(id: "mail", title: "Van külön céges e-mail-címed?", recommendationGuideID: "office"),
+    ToolkitQuestion(id: "mfa", title: "Bekapcsoltad a kétlépcsős belépést?", recommendationGuideID: "security"),
+    ToolkitQuestion(id: "backup", title: "Van rendszeres, visszaállítással tesztelt mentésed?", recommendationGuideID: "security"),
+    ToolkitQuestion(id: "presence", title: "Naprakész a Google Cégprofilod és az online elérhetőséged?", recommendationGuideID: "sales")
 ]
 
 private let businessCourses = [
@@ -1139,6 +1171,8 @@ struct BusinessHubScreen: View {
                                 ForEach(portalFeatures) { feature in
                                     NavigationLink { destination(for: feature.destination) } label: { PortalFeatureCard(feature: feature) }
                                         .buttonStyle(.plain)
+                                        .accessibilityLabel(feature.title)
+                                        .accessibilityIdentifier("portal.\(feature.id)")
                                 }
                             }
                             .padding(.horizontal, VizitSpace.md)
@@ -1213,12 +1247,33 @@ private struct VoszCenterScreen: View {
 
 private struct EducationCatalogScreen: View {
     @State private var selectedCategory = "Mind"
-    private let categories = ["Mind", "AI", "Digitális munka", "Cégépítés", "Biztonság"]
+    @AppStorage("education.completedLessonIDs") private var completedLessonIDs = ""
+    private let categories = ["Mind", "AI", "Digitális munka", "Cégépítés", "Biztonság", "Marketing", "Pénzügy"]
+    private var completed: Set<String> { Set(completedLessonIDs.split(separator: "|").map(String.init)) }
+    private var totalLessonCount: Int { businessCourses.reduce(0) { $0 + $1.modules.count } }
+    private var completedLessonCount: Int {
+        completed.intersection(Set(businessCourses.flatMap { $0.modules.map(\.id) })).count
+    }
     private var filtered: [BusinessCourse] {
         businessCourses.filter { selectedCategory == "Mind" || (selectedCategory == "AI" && $0.id == "ai") || $0.category == selectedCategory }
     }
     var body: some View {
         PortalScroll(title: "Vállalkozói Edukáció", subtitle: "Rövid, gyakorlatias tananyagok, saját tempóban.") {
+            VizitPanel {
+                VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                    HStack {
+                        Text("A haladásod").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                        Spacer()
+                        Text("\(completedLessonCount) / \(totalLessonCount) lecke")
+                            .font(VizitFont.caption.monospacedDigit())
+                            .foregroundStyle(VizitColor.primary)
+                    }
+                    ProgressView(value: Double(completedLessonCount), total: Double(max(totalLessonCount, 1)))
+                        .tint(VizitColor.primary)
+                        .accessibilityLabel("Kurzusteljesítés")
+                        .accessibilityValue("\(completedLessonCount) a \(totalLessonCount) leckéből")
+                }
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: VizitSpace.xs) {
                     ForEach(categories, id: \.self) { category in
@@ -1240,7 +1295,13 @@ private struct EducationCatalogScreen: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: VizitSpace.sm) {
                     ForEach(filtered) { course in
-                        NavigationLink { CourseDetailScreen(course: course) } label: { CourseCard(course: course) }.buttonStyle(.plain)
+                        NavigationLink { CourseDetailScreen(course: course) } label: {
+                            CourseCard(
+                                course: course,
+                                completedCount: completed.intersection(Set(course.modules.map(\.id))).count
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, VizitSpace.md)
@@ -1252,6 +1313,7 @@ private struct EducationCatalogScreen: View {
 
 private struct CourseCard: View {
     let course: BusinessCourse
+    let completedCount: Int
     var body: some View {
         VStack(alignment: .leading, spacing: VizitSpace.xs) {
             VizitIconChip(systemImage: course.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle, size: 56)
@@ -1259,7 +1321,11 @@ private struct CourseCard: View {
             Text(course.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary).lineLimit(2)
             Text(course.description).font(VizitFont.body).foregroundStyle(VizitColor.textSecondary).lineLimit(5)
             Spacer(minLength: 0)
-            Text("\(course.level)  ·  \(course.modules.count) lecke").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+            ProgressView(value: Double(completedCount), total: Double(max(course.modules.count, 1)))
+                .tint(VizitColor.primary)
+            Text("\(course.level) · \(completedCount)/\(course.modules.count) lecke")
+                .font(VizitFont.caption)
+                .foregroundStyle(VizitColor.textMuted)
         }
         .padding(VizitSpace.md)
         .frame(width: PortalMetrics.courseWidth, height: PortalMetrics.courseHeight, alignment: .topLeading)
@@ -1301,6 +1367,8 @@ private struct CourseDetailScreen: View {
     @AppStorage("education.completedLessonIDs") private var completedLessonIDs = ""
     @State private var selectedLessonID: String?
     @State private var tab: CourseTab = .lessons
+    @State private var videoReady = false
+    @State private var videoUnavailable = false
 
     private var lessons: [CourseModule] { course.modules }
     private var selectedLesson: CourseModule { lessons.first { $0.id == selectedLessonID } ?? lessons[0] }
@@ -1312,13 +1380,17 @@ private struct CourseDetailScreen: View {
     private func moduleTitle(_ index: Int) -> String {
         index == 0 ? "Alapok és felkészülés" : "Gyakorlati alkalmazás"
     }
-    private func markSelectedLessonComplete() {
+    private func markLessonComplete(_ lessonID: String) {
         var next = completed
-        next.insert(selectedLesson.id)
+        next.insert(lessonID)
         completedLessonIDs = next.sorted().joined(separator: "|")
     }
     private func videoURL(for lesson: CourseModule) -> String {
         YouTubeVideoID.from(lesson.resourceURL) == nil ? course.videoURL : lesson.resourceURL
+    }
+    private func videoChapter(for lesson: CourseModule) -> (index: Int, count: Int) {
+        if YouTubeVideoID.from(lesson.resourceURL) != nil { return (0, 1) }
+        return (lessons.firstIndex(where: { $0.id == lesson.id }) ?? 0, max(lessons.count, 1))
     }
 
     var body: some View {
@@ -1342,12 +1414,61 @@ private struct CourseDetailScreen: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { if selectedLessonID == nil { selectedLessonID = lessons.first?.id } }
+        .onChange(of: selectedLessonID) { _ in
+            videoReady = false
+            videoUnavailable = false
+        }
     }
 
     /// The video, full width and edge to edge, with the only way back overlaid on it.
     private var stage: some View {
-        YouTubeLessonPlayer(url: videoURL(for: selectedLesson), onCompleted: markSelectedLessonComplete)
-            .id(selectedLesson.id)
+        let lesson = selectedLesson
+        let chapter = videoChapter(for: lesson)
+        return ZStack {
+            YouTubeLessonPlayer(
+                url: videoURL(for: lesson),
+                chapterIndex: chapter.index,
+                chapterCount: chapter.count,
+                onReady: { videoReady = true },
+                onCompleted: { markLessonComplete(lesson.id) },
+                onError: { videoUnavailable = true }
+            )
+            .id(lesson.id)
+            .opacity(videoUnavailable ? 0 : 1)
+
+            if !videoReady && !videoUnavailable {
+                VStack(spacing: VizitSpace.sm) {
+                    ProgressView().tint(.white)
+                    Text("Magyar videólecke betöltése…")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(Color.white.opacity(0.74))
+                }
+                .allowsHitTesting(false)
+            }
+
+            if videoUnavailable {
+                VStack(spacing: VizitSpace.sm) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(CoursePlayer.accent)
+                    Text("A videó most nem érhető el")
+                        .font(VizitFont.h3)
+                        .foregroundStyle(CoursePlayer.text)
+                    Text("A lecke és a haladás megmarad. Próbáld újra, vagy nyisd meg a magyar videót a böngészőben.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(CoursePlayer.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Megnyitás böngészőben") {
+                        guard let url = SafeLink.https(videoURL(for: lesson)) else { return }
+                        openURL(url)
+                    }
+                    .font(VizitFont.label)
+                    .foregroundStyle(CoursePlayer.accent)
+                    .frame(minHeight: VizitMetrics.minTouchTarget)
+                }
+                .padding(VizitSpace.xl)
+            }
+        }
             .frame(maxWidth: .infinity)
             .aspectRatio(16 / 9, contentMode: .fit)
             .background(Color.black)
@@ -1368,7 +1489,7 @@ private struct CourseDetailScreen: View {
     private var courseHeader: some View {
         VStack(alignment: .leading, spacing: VizitSpace.xxs) {
             Text(course.title)
-                .font(.system(size: 22, weight: .bold))
+                .font(VizitFont.h2)
                 .foregroundStyle(CoursePlayer.text)
                 .fixedSize(horizontal: false, vertical: true)
             Text(course.videoSource)
@@ -1387,7 +1508,7 @@ private struct CourseDetailScreen: View {
                 Button { tab = item } label: {
                     VStack(spacing: VizitSpace.xs) {
                         Text(item.title)
-                            .font(.system(size: 15, weight: item == tab ? .bold : .regular))
+                            .font(item == tab ? VizitFont.bodyStrong : VizitFont.body)
                             .foregroundStyle(item == tab ? CoursePlayer.text : CoursePlayer.secondary)
                         Rectangle()
                             .fill(item == tab ? CoursePlayer.accent : Color.clear)
@@ -1429,7 +1550,7 @@ private struct CourseDetailScreen: View {
         let done = moduleLessons.filter { completed.contains($0.id) }.count
         return HStack(spacing: VizitSpace.sm) {
             Text("\(moduleIndex + 1). modul · \(moduleTitle(moduleIndex))")
-                .font(.system(size: 13, weight: .semibold))
+                .font(VizitFont.label)
                 .foregroundStyle(CoursePlayer.secondary)
             Spacer(minLength: VizitSpace.xs)
             Text("\(done)/\(moduleLessons.count)")
@@ -1447,12 +1568,12 @@ private struct CourseDetailScreen: View {
         return Button { selectedLessonID = lesson.id } label: {
             HStack(alignment: .top, spacing: VizitSpace.sm) {
                 Text(number)
-                    .font(.system(size: 14, weight: .regular))
+                    .font(VizitFont.bodySmall.monospacedDigit())
                     .foregroundStyle(CoursePlayer.muted)
                     .frame(width: 30, alignment: .leading)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(lesson.title)
-                        .font(.system(size: 16, weight: isCurrent ? .semibold : .regular))
+                        .font(isCurrent ? VizitFont.bodyStrong : VizitFont.body)
                         .foregroundStyle(CoursePlayer.text)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1494,7 +1615,7 @@ private struct CourseDetailScreen: View {
                             .frame(width: 30)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(lesson.resourceTitle)
-                                .font(.system(size: 16))
+                                .font(VizitFont.body)
                                 .foregroundStyle(CoursePlayer.text)
                                 .multilineTextAlignment(.leading)
                             Text(lesson.title)
@@ -1571,15 +1692,24 @@ private enum YouTubeVideoID {
 
 private struct YouTubeLessonPlayer: UIViewRepresentable {
     let url: String
+    let chapterIndex: Int
+    let chapterCount: Int
+    let onReady: () -> Void
     let onCompleted: () -> Void
+    let onError: () -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(onCompleted: onCompleted) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onReady: onReady, onCompleted: onCompleted, onError: onError)
+    }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = [.video, .audio]
+        configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(context.coordinator, name: "lessonCompleted")
+        configuration.userContentController.add(context.coordinator, name: "lessonReady")
+        configuration.userContentController.add(context.coordinator, name: "lessonError")
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.isOpaque = false
         view.backgroundColor = .black
@@ -1588,41 +1718,102 @@ private struct YouTubeLessonPlayer: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.onReady = onReady
         context.coordinator.onCompleted = onCompleted
-        guard let videoID = YouTubeVideoID.from(url), context.coordinator.videoID != videoID else { return }
-        context.coordinator.videoID = videoID
-        webView.loadHTMLString(Self.html(videoID: videoID), baseURL: URL(string: "https://www.youtube-nocookie.com"))
+        context.coordinator.onError = onError
+        guard let videoID = YouTubeVideoID.from(url) else {
+            DispatchQueue.main.async { onError() }
+            return
+        }
+        let signature = "\(videoID):\(chapterIndex):\(chapterCount)"
+        guard context.coordinator.signature != signature else { return }
+        context.coordinator.signature = signature
+        webView.loadHTMLString(
+            Self.html(videoID: videoID, chapterIndex: chapterIndex, chapterCount: chapterCount),
+            // A real HTTPS document origin is required by the YouTube iframe
+            // API. Without it the player may reject WKWebView as an unidentified
+            // client with error 153 even though the video itself is available.
+            baseURL: URL(string: "https://e-nevjegy.vercel.app")
+        )
     }
 
     static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "lessonCompleted")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "lessonReady")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "lessonError")
         webView.stopLoading()
     }
 
-    private static func html(videoID: String) -> String {
+    private static func html(videoID: String, chapterIndex: Int, chapterCount: Int) -> String {
         let safeID = videoID.replacingOccurrences(of: "'", with: "")
+        let safeCount = max(chapterCount, 1)
+        let safeIndex = min(max(chapterIndex, 0), safeCount - 1)
         return """
         <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
         <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
         <body><div id="player"></div><script src="https://www.youtube.com/iframe_api"></script><script>
-        var player, watched=0, tick=0;
-        function onYouTubeIframeAPIReady(){ player=new YT.Player('player',{videoId:'\(safeID)',playerVars:{playsinline:1,rel:0},events:{onStateChange:onState}}); }
-        function onState(e){
-          if(e.data===YT.PlayerState.PLAYING && !tick){ tick=setInterval(()=>{watched+=1;},1000); }
-          if(e.data!==YT.PlayerState.PLAYING && tick){clearInterval(tick);tick=0;}
-          if(e.data===YT.PlayerState.ENDED){ const d=player.getDuration(); if(d>0 && watched/d>=0.9){window.webkit.messageHandlers.lessonCompleted.postMessage('done');} }
+        var player, tick=0, lastTime=0, segmentStart=0, segmentEnd=0, sent=false;
+        const watchedBuckets=new Set(), bucketCount=100;
+        const chapterIndex=\(safeIndex), chapterCount=\(safeCount);
+        function onYouTubeIframeAPIReady(){
+          player=new YT.Player('player',{videoId:'\(safeID)',host:'https://www.youtube-nocookie.com',playerVars:{playsinline:1,rel:0,modestbranding:1,origin:'https://e-nevjegy.vercel.app'},events:{onReady:onReady,onStateChange:onState,onError:onError}});
         }
+        function onReady(){
+          const duration=player.getDuration();
+          segmentStart=duration*(chapterIndex/chapterCount);
+          segmentEnd=duration*((chapterIndex+1)/chapterCount);
+          if(segmentStart>0.5){player.seekTo(segmentStart,true);}
+          window.webkit.messageHandlers.lessonReady.postMessage('ready');
+        }
+        function stopTick(){if(tick){clearInterval(tick);tick=0;}}
+        function finishIfWatched(){
+          if(!sent && watchedBuckets.size/bucketCount>=0.9){sent=true;window.webkit.messageHandlers.lessonCompleted.postMessage('done');}
+        }
+        function recordRange(from,to){
+          const length=Math.max(1,segmentEnd-segmentStart);
+          const first=Math.max(0,Math.floor(((from-segmentStart)/length)*bucketCount));
+          const last=Math.min(bucketCount-1,Math.floor(((to-segmentStart)/length)*bucketCount));
+          for(let index=first;index<=last;index++){watchedBuckets.add(index);}
+        }
+        function track(){
+          const current=player.getCurrentTime();
+          const delta=current-lastTime;
+          if(delta>0 && delta<1.5){recordRange(lastTime,current);}
+          lastTime=current;
+          if(segmentEnd>0 && current>=segmentEnd-0.25){
+            stopTick(); player.pauseVideo(); finishIfWatched();
+            if(!sent){player.seekTo(segmentStart,true);}
+          }
+        }
+        function onState(e){
+          if(e.data===YT.PlayerState.PLAYING && !tick){lastTime=player.getCurrentTime();tick=setInterval(track,500);}
+          if(e.data!==YT.PlayerState.PLAYING){stopTick();}
+          if(e.data===YT.PlayerState.ENDED){finishIfWatched();}
+        }
+        function onError(){stopTick();window.webkit.messageHandlers.lessonError.postMessage('error');}
         </script></body></html>
         """
     }
 
     final class Coordinator: NSObject, WKScriptMessageHandler {
-        var videoID: String?
+        var signature: String?
+        var onReady: () -> Void
         var onCompleted: () -> Void
-        init(onCompleted: @escaping () -> Void) { self.onCompleted = onCompleted }
+        var onError: () -> Void
+        init(onReady: @escaping () -> Void, onCompleted: @escaping () -> Void, onError: @escaping () -> Void) {
+            self.onReady = onReady
+            self.onCompleted = onCompleted
+            self.onError = onError
+        }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == "lessonCompleted" else { return }
-            DispatchQueue.main.async { self.onCompleted() }
+            DispatchQueue.main.async {
+                switch message.name {
+                case "lessonReady": self.onReady()
+                case "lessonCompleted": self.onCompleted()
+                case "lessonError": self.onError()
+                default: break
+                }
+            }
         }
     }
 }
@@ -1633,6 +1824,10 @@ private struct DigitalHelpScreen: View {
     @State private var camera = true
     var body: some View {
         PortalScroll(title: "Digitális segítség", subtitle: "Szakértői videókonzultáció élményének interaktív előnézete.") {
+            VizitBanner(
+                text: "Bemutató mód. Itt ellenőrizheted a hívás felületét; valódi szakértőhöz még nem kapcsolunk, és engedélyt sem kérünk.",
+                tone: .warning
+            )
             VStack(spacing: VizitSpace.lg) {
                 HStack { Text(inCall ? "KAPCSOLÓDVA · DEMÓ" : "BEMUTATÓ MÓD").vizitOverline(); Spacer(); Text(inCall ? "00:24" : "ELŐNÉZET").font(VizitFont.caption) }
                     .foregroundStyle(Color.white.opacity(0.82))
@@ -1652,7 +1847,7 @@ private struct DigitalHelpScreen: View {
             .padding(VizitSpace.lg).frame(maxWidth: .infinity, minHeight: 500)
             .background(VizitColor.ink).clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
             if !inCall { VizitButton(title: "Próbahívás indítása", systemImage: "video.fill") { inCall = true } }
-            Text("Ez a 6.1 verzió interaktív bemutatója: nem kapcsol valódi tanácsadóhoz és nem továbbít hangot vagy videót.")
+            Text("A VIZIT 8.1 interaktív próbája nem továbbít hangot vagy videót. Éles foglaláskor külön, egyértelmű hozzájárulás előzi meg a kamera- és mikrofonengedélyt.")
                 .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
         }
     }
@@ -1676,89 +1871,229 @@ private struct CallControl: View {
 
 private struct BusinessToolkitScreen: View {
     @Environment(\.openURL) private var openURL
-    @State private var completedGuideIDs = Set<String>()
-    private var score: Int { completedGuideIDs.count * 100 / toolkitGuides.count }
+    @AppStorage("toolkit.answer.mail") private var mailAnswer = -1
+    @AppStorage("toolkit.answer.mfa") private var mfaAnswer = -1
+    @AppStorage("toolkit.answer.backup") private var backupAnswer = -1
+    @AppStorage("toolkit.answer.presence") private var presenceAnswer = -1
+    @AppStorage("toolkit.openedGuideIDs") private var openedGuideIDs = ""
+    @State private var expandedGuideIDs = Set<String>()
+
+    private var answers: [String: Int] {
+        ["mail": mailAnswer, "mfa": mfaAnswer, "backup": backupAnswer, "presence": presenceAnswer]
+    }
+
+    private var answeredCount: Int { answers.values.filter { $0 >= 0 }.count }
+    private var yesCount: Int { answers.values.filter { $0 == 1 }.count }
+    private var openedGuides: Set<String> { Set(openedGuideIDs.split(separator: "|").map(String.init)) }
+    private var recommendedGuide: ToolkitGuide? {
+        let guideID = toolkitQuestions.first(where: { answers[$0.id] == 0 })?.recommendationGuideID
+            ?? toolkitQuestions.first(where: { answers[$0.id] == -1 })?.recommendationGuideID
+            ?? "sales"
+        return toolkitGuides.first(where: { $0.id == guideID })
+    }
+
     var body: some View {
         PortalScroll(
             title: "Vállalkozói eszköztár",
-            subtitle: "Válassz célt, hajtsd végre a lépéseket, majd nyisd meg közvetlenül a szükséges hivatalos szolgáltatást."
+            subtitle: "Négy kérdés a digitális felkészültségedről. A válaszaid alapján konkrét következő lépést és hivatalos szolgáltatásokat kapsz."
         ) {
-            VizitPanel {
-                HStack(spacing: VizitSpace.md) {
-                    Text("\(score)%").font(VizitFont.h3).foregroundStyle(VizitColor.onPrimary)
-                        .frame(width: 68, height: 68).background(VizitColor.primary).clipShape(Circle())
-                    VStack(alignment: .leading) {
-                        Text("Megvalósítási állapot").font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
-                        Text("\(completedGuideIDs.count)/\(toolkitGuides.count) útmutató teljesítve")
-                            .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+            HStack(spacing: VizitSpace.md) {
+                VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                    Text("Digitális állapotod")
+                        .font(VizitFont.h3)
+                        .foregroundStyle(.white)
+                    Text(answeredCount < toolkitQuestions.count
+                         ? "Válaszolj még \(toolkitQuestions.count - answeredCount) kérdésre."
+                         : yesCount == toolkitQuestions.count
+                            ? "Erős alapokkal dolgozol."
+                            : "\(toolkitQuestions.count - yesCount) terület fejleszthető.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(Color.white.opacity(0.76))
+                }
+                Spacer(minLength: 0)
+                Text("\(yesCount)/\(toolkitQuestions.count)")
+                    .font(VizitFont.h3.monospacedDigit())
+                    .foregroundStyle(VizitColor.accent)
+                    .frame(width: 68, height: 68)
+                    .background(Color.white.opacity(0.10))
+                    .clipShape(Circle())
+                    .accessibilityLabel("\(yesCount) igen válasz \(toolkitQuestions.count) kérdésből")
+            }
+            .padding(VizitSpace.md)
+            .background(VizitColor.ink)
+            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+
+            VizitGroup {
+                ForEach(Array(toolkitQuestions.enumerated()), id: \.element.id) { index, question in
+                    if index > 0 { VizitDivider() }
+                    HStack(alignment: .center, spacing: VizitSpace.sm) {
+                        Text(question.title)
+                            .font(VizitFont.body)
+                            .foregroundStyle(VizitColor.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: VizitSpace.xs)
+                        answerControl(for: question)
                     }
+                    .padding(VizitSpace.md)
                 }
             }
+
+            if let guide = recommendedGuide {
+                VizitSectionHeader(title: "A következő lépésed")
+                Button {
+                    expandedGuideIDs.insert(guide.id)
+                } label: {
+                    HStack(alignment: .top, spacing: VizitSpace.sm) {
+                        VizitIconChip(systemImage: guide.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle)
+                        VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                            Text(guide.title)
+                                .font(VizitFont.label)
+                                .foregroundStyle(VizitColor.textPrimary)
+                            Text(guide.result)
+                                .font(VizitFont.bodySmall)
+                                .foregroundStyle(VizitColor.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Konkrét útmutató megnyitása")
+                                .font(VizitFont.label)
+                                .foregroundStyle(VizitColor.primary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(VizitColor.primary)
+                    }
+                    .padding(VizitSpace.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(VizitColor.primarySubtle)
+                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            VizitSectionHeader(title: "Gyakorlati útmutatók")
             ForEach(toolkitGuides) { guide in
-                let completed = completedGuideIDs.contains(guide.id)
-                VStack(alignment: .leading, spacing: VizitSpace.md) {
+                DisclosureGroup(
+                    isExpanded: Binding(
+                        get: { expandedGuideIDs.contains(guide.id) },
+                        set: { expanded in
+                            if expanded { expandedGuideIDs.insert(guide.id) }
+                            else { expandedGuideIDs.remove(guide.id) }
+                        }
+                    )
+                ) {
+                    VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                            Text("ELÉRENDŐ EREDMÉNY").vizitOverline().foregroundStyle(VizitColor.primary)
+                            Text(guide.result).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textPrimary)
+                        }
+                        .padding(VizitSpace.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(VizitColor.primarySubtle)
+                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+
+                        Text("Lépésről lépésre").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                        ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
+                            HStack(alignment: .top, spacing: VizitSpace.sm) {
+                                Text("\(index + 1)")
+                                    .font(VizitFont.caption.monospacedDigit())
+                                    .foregroundStyle(VizitColor.textSecondary)
+                                    .frame(width: 26, height: 26)
+                                    .background(VizitColor.controlTrack)
+                                    .clipShape(Circle())
+                                Text(step)
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+
+                        Text("Hivatalos szolgáltatások").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                        VizitGroup {
+                            ForEach(Array(guide.links.enumerated()), id: \.element.id) { index, link in
+                                if index > 0 { VizitDivider() }
+                                VizitRow(label: link.title, systemImage: "arrow.up.forward.app", supporting: link.description) {
+                                    open(link, for: guide.id)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, VizitSpace.md)
+                } label: {
                     HStack(alignment: .top, spacing: VizitSpace.sm) {
                         VizitIconChip(systemImage: guide.icon, tint: VizitColor.primary, background: VizitColor.primarySubtle)
                         VStack(alignment: .leading, spacing: VizitSpace.xxs) {
                             Text(guide.title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
                             Text(guide.description).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
-                        }
-                        Spacer(minLength: 0)
-                        if completed { Image(systemName: "checkmark.circle.fill").foregroundStyle(VizitColor.success) }
-                    }
-                    VStack(alignment: .leading, spacing: VizitSpace.xxs) {
-                        Text("ELÉRENDŐ EREDMÉNY").vizitOverline().foregroundStyle(VizitColor.primary)
-                        Text(guide.result).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textPrimary)
-                    }
-                    .padding(VizitSpace.sm).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(VizitColor.primarySubtle)
-                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
-
-                    Text("Lépések").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                    ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
-                        HStack(alignment: .top, spacing: VizitSpace.sm) {
-                            Text("\(index + 1)").font(VizitFont.caption).foregroundStyle(VizitColor.textSecondary)
-                                .frame(width: 24, height: 24).background(VizitColor.controlTrack).clipShape(Circle())
-                            Text(step).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-
-                    Text("Közvetlen linkek").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                    VizitGroup {
-                        ForEach(Array(guide.links.enumerated()), id: \.element.id) { index, link in
-                            if index > 0 { VizitDivider() }
-                            VizitRow(label: link.title, systemImage: "link", supporting: link.description) {
-                                guard let url = SafeLink.https(link.url) else { return }
-                                openURL(url)
+                            if openedGuides.contains(guide.id) {
+                                VizitStatusPill(text: "Elkezdve", tone: .success)
                             }
                         }
                     }
-                    VizitButton(
-                        title: completed ? "Teljesítve" : "Útmutató teljesítve",
-                        systemImage: "checkmark.circle",
-                        kind: completed ? .tertiary : .secondary
-                    ) {
-                        if completed { completedGuideIDs.remove(guide.id) } else { completedGuideIDs.insert(guide.id) }
-                    }
                 }
-                .padding(VizitSpace.md).background(VizitColor.surface)
+                .tint(VizitColor.primary)
+                .padding(VizitSpace.md)
+                .background(VizitColor.surface)
                 .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous).stroke(VizitColor.border, lineWidth: 1) }
+                .overlay {
+                    RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous)
+                        .stroke(VizitColor.border, lineWidth: 1)
+                }
             }
+
             VizitPanel {
-                HStack(alignment: .top, spacing: VizitSpace.sm) {
-                    VizitIconChip(systemImage: "rocket.fill", tint: VizitColor.primary, background: VizitColor.primarySubtle)
-                    VStack(alignment: .leading, spacing: VizitSpace.xxs) {
-                        Text(score < 50 ? "Következő lépés: válassz egy útmutatót" : "Következő lépés: mérd az eredményt").font(VizitFont.label)
-                        Text(score < 50 ? "Ne mindent egyszerre: kezdd azzal, amelyik most a legtöbb hibát vagy elveszett időt okozza." : "Harminc nap múlva ellenőrizd, csökkent-e a hiba, az átfutási idő vagy a költség.")
-                            .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
-                    }
+                HStack(spacing: VizitSpace.md) {
+                    VizitIconChip(systemImage: "checkmark.shield", tint: VizitColor.primary, background: VizitColor.primarySubtle)
+                    Text("Az eszköztár nem jelöl önkényesen készre semmit. A válaszaid megmaradnak, a külső szolgáltatás megnyitása pedig csak „Elkezdve” állapotot jelent.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.textSecondary)
                 }
             }
             Text("A linkek hivatalos vagy széles körben használt külső szolgáltatásokhoz vezetnek. Az adózási és jogi döntést egyeztesd könyvelővel vagy jogi szakértővel.")
                 .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
         }
+    }
+
+    private func answerControl(for question: ToolkitQuestion) -> some View {
+        HStack(spacing: 2) {
+            answerButton("Igen", value: 1, question: question)
+            answerButton("Nem", value: 0, question: question)
+        }
+        .padding(3)
+        .background(VizitColor.controlTrack)
+        .clipShape(Capsule())
+        .accessibilityElement(children: .contain)
+    }
+
+    private func answerButton(_ title: String, value: Int, question: ToolkitQuestion) -> some View {
+        let selected = answers[question.id] == value
+        return Button { setAnswer(value, for: question.id) } label: {
+            Text(title)
+                .font(VizitFont.caption)
+                .foregroundStyle(selected ? VizitColor.textPrimary : VizitColor.textSecondary)
+                .padding(.horizontal, VizitSpace.xs)
+                .frame(minHeight: VizitMetrics.minTouchTarget)
+                .background(selected ? VizitColor.surface : Color.clear)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func setAnswer(_ value: Int, for id: String) {
+        switch id {
+        case "mail": mailAnswer = value
+        case "mfa": mfaAnswer = value
+        case "backup": backupAnswer = value
+        case "presence": presenceAnswer = value
+        default: break
+        }
+    }
+
+    private func open(_ link: GuideLink, for guideID: String) {
+        guard let url = SafeLink.https(link.url) else { return }
+        var opened = openedGuides
+        opened.insert(guideID)
+        openedGuideIDs = opened.sorted().joined(separator: "|")
+        openURL(url)
     }
 }
 
@@ -1796,6 +2131,10 @@ struct SettingsScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var themeMode: ThemeMode
+    @State private var editingProfile = false
+    @State private var changingEmail = false
+    @State private var emailDraft = ""
+    @State private var confirmPasswordReset = false
     @State private var customizing = false
     @State private var adjustingVisibility = false
     @State private var confirmReset = false
@@ -1822,6 +2161,33 @@ struct SettingsScreen: View {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
                         VizitLargeTitle("Beállítások")
 
+                        VizitSectionHeader(title: "Fiók")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Profil",
+                                systemImage: "person.crop.circle",
+                                supporting: store.profile.displayName.isEmpty
+                                    ? "Névjegyadatok beállítása"
+                                    : store.profile.displayName
+                            ) { editingProfile = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "E-mail",
+                                systemImage: "envelope",
+                                value: store.accountEmail,
+                                supporting: "Bejelentkezési cím módosítása"
+                            ) {
+                                emailDraft = store.accountEmail
+                                changingEmail = true
+                            }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Jelszó",
+                                systemImage: "lock",
+                                supporting: "Biztonságos módosító link kérése"
+                            ) { confirmPasswordReset = true }
+                        }
+
                         VizitSectionHeader(title: "Névjegy")
                         VizitGroup {
                             VizitRow(
@@ -1835,6 +2201,15 @@ struct SettingsScreen: View {
                                 systemImage: "eye",
                                 supporting: "\(presentation.value.sharedFieldCount) mező látható a \(CardPresentation.optionalFieldCount)-ből"
                             ) { adjustingVisibility = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Nyilvános profil és saját domain",
+                                systemImage: "globe",
+                                value: store.profile.isPublic ? "Be" : "Ki",
+                                supporting: store.profile.customDomainVerified
+                                    ? store.profile.customDomain
+                                    : "Automatikus VIZIT-cím"
+                            ) { editingProfile = true }
                         }
 
                         VizitSectionHeader(title: "Megjelenés")
@@ -1895,20 +2270,19 @@ struct SettingsScreen: View {
                                 if let issue = store.storageError {
                                     VizitBanner(text: issue, tone: .error)
                                 }
+                                if let configuration = store.configuration {
+                                    HStack(spacing: VizitSpace.lg) {
+                                        Link("Adatkezelési tájékoztató", destination: configuration.privacyPolicyURL)
+                                        Link("ÁSZF", destination: configuration.termsURL)
+                                    }
+                                    .font(VizitFont.label)
+                                    .foregroundStyle(VizitColor.primary)
+                                }
                             }
                         }
 
-                        VizitSectionHeader(title: "Fiók", tone: VizitColor.error)
+                        VizitSectionHeader(title: "Veszélyes műveletek", tone: VizitColor.error)
                         VizitGroup(danger: true) {
-                            if !store.accountEmail.isEmpty {
-                                VizitRow(
-                                    label: "Belépve",
-                                    systemImage: "person.crop.circle",
-                                    value: store.accountEmail,
-                                    showsChevron: false
-                                )
-                                VizitDivider()
-                            }
                             VizitRow(
                                 label: "Helyi gyorsítótár törlése",
                                 systemImage: "trash",
@@ -1945,6 +2319,28 @@ struct SettingsScreen: View {
                 }
             }
             .navigationBarHidden(true)
+            .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
+            .sheet(isPresented: $changingEmail) { emailChangeSheet }
+            .sheet(isPresented: $customizing) {
+                CardAppearanceScreen(store: presentation, profile: store.profile)
+            }
+            .sheet(isPresented: $adjustingVisibility) {
+                DataVisibilityScreen(
+                    store: presentation,
+                    profile: store.profile,
+                    isPublicProfile: store.profile.isPublic
+                )
+            }
+            .confirmationDialog(
+                "Jelszómódosító e-mailt küldünk a bejelentkezési címedre.",
+                isPresented: $confirmPasswordReset,
+                titleVisibility: .visible
+            ) {
+                Button("E-mail küldése") {
+                    Task { _ = await store.requestPasswordReset(email: store.accountEmail) }
+                }
+                Button("Mégse", role: .cancel) {}
+            }
             .confirmationDialog(
                 "Törlöd a helyi gyorsítótárat és a profilképet erről az iPhone-ról?",
                 isPresented: $confirmReset,
@@ -1969,6 +2365,55 @@ struct SettingsScreen: View {
             )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+        }
+    }
+
+    private var emailChangeSheet: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        VizitBanner(
+                            text: "Az új cím csak a megerősítő levél jóváhagyása után lép életbe. Addig a jelenlegi címmel tudsz belépni.",
+                            tone: .info
+                        )
+                        VizitTextField(
+                            label: "Új e-mail-cím",
+                            text: $emailDraft,
+                            placeholder: "nev@pelda.hu",
+                            keyboard: .emailAddress,
+                            contentType: .emailAddress,
+                            autocapitalization: .never,
+                            submitLabel: .send
+                        ) {
+                            submitEmailChange()
+                        }
+                        VizitButton(
+                            title: "Megerősítő e-mail küldése",
+                            systemImage: "paperplane",
+                            isLoading: store.busy,
+                            isEnabled: !store.busy,
+                            action: submitEmailChange
+                        )
+                    }
+                    .padding(VizitSpace.md)
+                    .frame(maxWidth: 540)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationTitle("E-mail módosítása")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Mégse") { changingEmail = false }
+                }
+            }
+        }
+    }
+
+    private func submitEmailChange() {
+        Task {
+            if await store.changeEmail(emailDraft) { changingEmail = false }
         }
     }
 

@@ -1,8 +1,9 @@
 import Foundation
 
 public enum VCard {
-    /// Contact QR intentionally contains no photograph: embedding one makes the
-    /// QR too dense. The explicit file-sharing route can include the picture.
+    /// The caller chooses whether to include a photograph. VIZIT's public
+    /// hand-off routes require it; plain encoding remains available for safe
+    /// parsing and legacy import tests.
     public static func encode(_ profile: ContactProfile, includePhoto: Bool = false) throws -> String {
         try profile.validate()
         let p = profile.normalized
