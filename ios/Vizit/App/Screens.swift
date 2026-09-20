@@ -20,16 +20,14 @@ struct HomeScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.lg) {
-                        VizitBrandHeader(style: .full)
-                            .padding(.top, VizitSpace.xs)
-                            .padding(.bottom, VizitSpace.xs)
+                        VizitLargeTitle(title: "VIZIT", tracking: 4) {
+                            VizitIdentityChip(profile: store.profile) { selectedTab = .card }
+                        }
 
-                        VizitUserBadge(
+                        VizitDigitalCard(
                             profile: store.profile,
                             nameIdentifier: store.hasProfile ? "card.name" : nil
-                        ) { selectedTab = .card }
-
-                        VizitDigitalCard(profile: store.profile)
+                        )
                             .onTapGesture { selectedTab = .card }
 
                         VizitButton(
@@ -141,12 +139,13 @@ struct CardScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.lg) {
-                        VizitBrandHeader(style: .compact)
-
-                        Text("Névjegyem")
-                            .font(VizitFont.h1)
-                            .foregroundStyle(VizitColor.textPrimary)
-                            .padding(.top, VizitSpace.md)
+                        VizitLargeTitle(title: "Névjegyem") {
+                            Button(store.hasProfile ? "Szerkesztés" : "Létrehozás") { editing = true }
+                                .font(VizitFont.label)
+                                .foregroundStyle(VizitColor.primary)
+                                .frame(minHeight: VizitMetrics.minTouchTarget)
+                                .disabled(store.storageError != nil)
+                        }
 
                         VizitDigitalCard(profile: store.profile)
 
@@ -251,7 +250,15 @@ struct ShareScreen: View {
     @State private var modeIndex = 0
     @State private var embeddedPhotoQRPayload: String?
 
-    private var usePublicProfile: Bool { modeIndex == 1 }
+    /// Three codes, three jobs: the contact card without a photo, the same card
+    /// with one, and the public address. Only the first is always available.
+    private enum QRMode: Int, CaseIterable {
+        case contact, photo, profile
+        static var allTitles: [String] { ["Kontakt", "Fényképes", "Profil"] }
+    }
+
+    private var mode: QRMode { QRMode(rawValue: modeIndex) ?? .contact }
+    private var usePublicProfile: Bool { mode == .profile }
 
     var body: some View {
         NavigationStack {
@@ -259,35 +266,25 @@ struct ShareScreen: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
                         VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                            VizitBrandHeader(style: .compact)
-
-                            Text("Megosztás")
-                                .font(VizitFont.h1)
-                                .foregroundStyle(VizitColor.textPrimary)
+                            VizitLargeTitle("Megosztás")
                             Text("Mutasd a QR-kódot, küldd el a linket, vagy oszd meg a névjegyfájlt. A fogadó félnek nem kell VIZIT.")
                                 .font(VizitFont.body)
                                 .foregroundStyle(VizitColor.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.top, VizitSpace.md)
 
-                        VizitSegmentedControl(
-                            options: [embeddedPhotoQRPayload != nil ? "Fényképes QR" : "Kontakt QR", "Profil QR"],
-                            selection: $modeIndex
-                        )
+                        VizitSegmentedControl(options: QRMode.allTitles, selection: $modeIndex)
 
                         if currentQRImage != nil {
                             qrIsland
                             actionGrid
                         } else {
                             VizitEmptyState(
-                                systemImage: "qrcode",
-                                title: usePublicProfile ? "Nincs még publikus profil" : "A Kontakt QR nem állítható elő",
-                                message: usePublicProfile
-                                    ? "A Profil QR-hez engedélyezd a publikus profilt, adj meg profilazonosítót, és várd meg a sikeres szinkront."
-                                    : "Előbb töltsd ki a névjegyed alapadatait.",
-                                actionTitle: usePublicProfile ? "Kontakt QR megnyitása" : nil,
-                                action: usePublicProfile ? { modeIndex = 0 } : nil
+                                systemImage: mode == .photo ? "person.crop.circle.badge.exclamationmark" : "qrcode",
+                                title: emptyTitle,
+                                message: emptyMessage,
+                                actionTitle: mode == .contact ? nil : "Vissza a Kontakt QR-hoz",
+                                action: mode == .contact ? nil : { modeIndex = QRMode.contact.rawValue }
                             )
                         }
 
@@ -367,13 +364,14 @@ struct ShareScreen: View {
     }
 
     private var captionText: String {
-        if usePublicProfile {
+        switch mode {
+        case .profile:
             return "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
+        case .photo:
+            return "A teljes névjegyed a profilképeddel együtt, internet nélkül is beolvasható."
+        case .contact:
+            return "A teljes névjegyed profilkép nélkül, hogy a kód gyorsan beolvasható maradjon."
         }
-        if embeddedPhotoQRPayload != nil {
-            return "Beolvasás után közvetlenül megnyílik a profilképes névjegy mentése."
-        }
-        return "vCard kontakt QR – profilkép nélkül, hogy gyorsan beolvasható maradjon."
     }
 
     private var actionGrid: some View {
@@ -401,15 +399,36 @@ struct ShareScreen: View {
         }
     }
 
+    private var emptyTitle: String {
+        switch mode {
+        case .profile: return "Nincs még publikus profil"
+        case .photo: return "A profilkép nem fér bele a kódba"
+        case .contact: return "A Kontakt QR nem állítható elő"
+        }
+    }
+
+    private var emptyMessage: String {
+        switch mode {
+        case .profile:
+            return "A Profil QR-hez engedélyezd a publikus profilt, adj meg profilazonosítót, és várd meg a sikeres szinkront."
+        case .photo:
+            return "A névjegyed adatai már kitöltik a QR kapacitását. Válassz kisebb profilképet, vagy maradj a Kontakt módnál — abból semmilyen adat nem marad ki, csak a kép."
+        case .contact:
+            return "Előbb töltsd ki a névjegyed alapadatait: a névre és egy elérhetőségre mindenképp szükség van."
+        }
+    }
+
     private var currentQRImage: UIImage? {
         guard let payload = qrPayload else { return nil }
         return QRImage.make(payload)
     }
 
     private var qrPayload: String? {
-        if usePublicProfile { return publicURL?.absoluteString }
-        if let embeddedPhotoQRPayload { return embeddedPhotoQRPayload }
-        return try? VCard.qrPayload(store.profile)
+        switch mode {
+        case .profile: return publicURL?.absoluteString
+        case .photo: return embeddedPhotoQRPayload
+        case .contact: return try? VCard.qrPayload(store.profile)
+        }
     }
 
     private var publicURL: URL? {
@@ -991,9 +1010,8 @@ struct BusinessHubScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.lg) {
-                        VizitBrandHeader(style: .compact).padding(.top, VizitSpace.xs)
                         VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                            Text("Vállalkozói Portál").font(VizitFont.display).foregroundStyle(VizitColor.textPrimary)
+                            VizitLargeTitle("Vállalkozói Portál")
                             Text("Tanulás, hiteles források és digitális segítség a vállalkozásod következő lépéséhez.")
                                 .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
                         }
@@ -1683,12 +1701,7 @@ struct SettingsScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
-                        VizitBrandHeader(style: .compact)
-
-                        Text("Beállítások")
-                            .font(VizitFont.h1)
-                            .foregroundStyle(VizitColor.textPrimary)
-                            .padding(.top, VizitSpace.md)
+                        VizitLargeTitle("Beállítások")
 
                         VizitSectionHeader(title: "Megjelenés")
                         VizitGroup {

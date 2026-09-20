@@ -45,9 +45,8 @@ import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.Vizit
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
-import hu.rayworks.vizit.ui.design.components.VizitUserBadge
+import hu.rayworks.vizit.ui.design.components.VizitIdentityChip
+import hu.rayworks.vizit.ui.design.components.VizitLargeTitle
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitDigitalCard
 import hu.rayworks.vizit.ui.design.components.VizitIconChip
@@ -92,14 +91,14 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.height(Vizit.space.xs))
 
-            VizitBrandHeader(style = VizitBrandHeaderStyle.Full)
-
-            VizitUserBadge(
-                displayName = profile.resolvedDisplayName,
-                initials = profile.initials,
-                photoBase64 = profile.photoBase64,
-                onClick = onOpenCard,
-            )
+            VizitLargeTitle(title = "VIZIT", letterSpacing = 4.0) {
+                VizitIdentityChip(
+                    initials = profile.initials,
+                    photoBase64 = profile.photoBase64,
+                    displayName = profile.resolvedDisplayName,
+                    onClick = onOpenCard,
+                )
+            }
 
             Box(modifier = Modifier.clickable(role = Role.Button, onClick = onOpenCard)) {
                 VizitDigitalCard(

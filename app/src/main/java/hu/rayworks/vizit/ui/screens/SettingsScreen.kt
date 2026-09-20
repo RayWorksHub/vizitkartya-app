@@ -43,8 +43,7 @@ import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.ThemeMode
 import hu.rayworks.vizit.ui.design.Vizit
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
+import hu.rayworks.vizit.ui.design.components.VizitLargeTitle
 import hu.rayworks.vizit.ui.design.components.VizitBanner
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
@@ -104,7 +103,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
         Spacer(Modifier.height(Vizit.space.xs))
-        VizitBrandHeader(style = VizitBrandHeaderStyle.Compact)
+        VizitLargeTitle(title = "Beállítások")
 
         Text("Beállítások", style = Vizit.type.h1, color = colors.textPrimary)
 

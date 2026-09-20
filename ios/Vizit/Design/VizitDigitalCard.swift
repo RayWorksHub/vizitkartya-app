@@ -9,6 +9,8 @@ import SwiftUI
 ///  - the same in light and dark, because the card *is* the brand.
 struct VizitDigitalCard: View {
     let profile: ContactProfile
+    /// Applied to the name itself, so UI tests can read it as a static text.
+    var nameIdentifier: String?
 
     private var subtitle: String {
         [profile.jobTitle, profile.company].filter { !$0.isEmpty }.joined(separator: " · ")
@@ -23,6 +25,19 @@ struct VizitDigitalCard: View {
     }
 
     var body: some View {
+        // With a name identifier the card is the screen's identity surface, so
+        // its name has to stay an addressable element. Without one it reads as
+        // a single object, which is the better VoiceOver experience.
+        if nameIdentifier == nil {
+            surface
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityText)
+        } else {
+            surface.accessibilityElement(children: .contain)
+        }
+    }
+
+    private var surface: some View {
         ZStack(alignment: .leading) {
             LinearGradient(
                 stops: [
@@ -48,6 +63,7 @@ struct VizitDigitalCard: View {
                             .foregroundStyle(.white)
                             .lineLimit(2)
                             .minimumScaleFactor(0.8)
+                            .vizitIdentifier(nameIdentifier)
                         if !subtitle.isEmpty {
                             Text(subtitle)
                                 .font(VizitFont.bodySmall)
@@ -89,8 +105,6 @@ struct VizitDigitalCard: View {
         .aspectRatio(343.0 / 216.0, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
         .vizitShadow(VizitElevation.card)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
     }
 
     private var avatar: some View {

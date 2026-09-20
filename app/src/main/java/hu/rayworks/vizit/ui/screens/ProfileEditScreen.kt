@@ -3,6 +3,7 @@ package hu.rayworks.vizit.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -29,6 +31,7 @@ import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -46,8 +51,6 @@ import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.PhotoProcessor
 import hu.rayworks.vizit.ui.design.Vizit
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeader
-import hu.rayworks.vizit.ui.design.components.VizitBrandHeaderStyle
 import hu.rayworks.vizit.ui.design.components.VizitButton
 import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
 import hu.rayworks.vizit.ui.design.components.VizitDivider
@@ -106,16 +109,24 @@ fun ProfileEditScreen(
                 .padding(horizontal = Vizit.space.md),
             verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
         ) {
-            VizitBrandHeader(
-                style = VizitBrandHeaderStyle.Compact,
-                onBack = onClose,
-            )
-
-            Text(
-                text = "Névjegy szerkesztése",
-                style = Vizit.type.h2,
-                color = colors.textPrimary,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Vissza",
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(24.dp).clickable(onClick = onClose),
+                )
+                Text(
+                    text = "Névjegy szerkesztése",
+                    style = Vizit.type.h2,
+                    color = colors.textPrimary,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                )
+            }
 
             // --- Photo
             VizitSectionHeader("Profilkép")

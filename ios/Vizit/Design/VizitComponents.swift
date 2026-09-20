@@ -589,3 +589,57 @@ extension View {
         modifier(VizitOptionalIdentifier(identifier: identifier))
     }
 }
+
+/// The screen's own title, rendered the way the platform renders one: large,
+/// left-aligned, with an optional action or identity chip on the trailing edge.
+/// Primary screens carry the brand here instead of a separate header block, so
+/// the brand costs nothing but the title line it already needed.
+struct VizitLargeTitle<Trailing: View>: View {
+    let title: String
+    var tracking: CGFloat = 0
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: VizitSpace.sm) {
+            Text(title)
+                .font(.system(size: 32, weight: .bold))
+                .tracking(tracking)
+                .foregroundStyle(VizitColor.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: VizitSpace.xs)
+            trailing()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, VizitSpace.xs)
+    }
+}
+
+extension VizitLargeTitle where Trailing == EmptyView {
+    init(_ title: String, tracking: CGFloat = 0) {
+        self.init(title: title, tracking: tracking) { EmptyView() }
+    }
+}
+
+/// The signed-in person as a tappable chip beside the title. It replaces the
+/// full greeting row on Home: same destination, a fraction of the height.
+struct VizitIdentityChip: View {
+    let profile: ContactProfile
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VizitAvatar(profile: profile, size: 34)
+                .overlay {
+                    Circle().stroke(VizitColor.border, lineWidth: 1)
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .frame(width: VizitMetrics.minTouchTarget, height: VizitMetrics.minTouchTarget)
+        .accessibilityLabel(
+            profile.displayName.isEmpty
+                ? "Névjegy beállítása"
+                : "Megnyitás: \(profile.displayName) névjegye"
+        )
+    }
+}
