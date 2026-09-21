@@ -154,12 +154,11 @@ struct AuthScreen: View {
 
     private var legalSection: some View {
         VStack(alignment: .leading, spacing: VizitSpace.sm) {
-            Toggle(isOn: $legalAccepted) {
-                Text("Elfogadom az Általános Szerződési Feltételeket és az Adatkezelési tájékoztatót.")
-                    .font(VizitFont.bodySmall)
-                    .foregroundStyle(VizitColor.textSecondary)
-            }
-            .tint(VizitColor.primary)
+            VizitCheckbox(
+                title: "Elfogadom az Általános Szerződési Feltételeket és az Adatkezelési tájékoztatót.",
+                isOn: $legalAccepted
+            )
+            .accessibilityIdentifier("auth.legalAccepted")
 
             if let config = store.configuration {
                 HStack(spacing: VizitSpace.lg) {
