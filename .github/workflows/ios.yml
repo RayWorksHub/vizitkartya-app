@@ -19,7 +19,6 @@ jobs:
   upload:
     runs-on: macos-15
     timeout-minutes: 60
-    environment: testflight-production
     env:
       VIZIT_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
       VIZIT_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
