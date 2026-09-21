@@ -14,6 +14,7 @@ public struct ContactProfile: Codable, Equatable, Sendable {
     public var address = ""
     public var linkedIn = ""
     public var photoBase64 = ""
+    public var photoSyncInitialized = false
     public var publicSlug = ""
     public var isPublic = false
 
@@ -21,7 +22,7 @@ public struct ContactProfile: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case fullName, firstName, lastName, jobTitle, company, phone, email
-        case website, address, linkedIn, photoBase64, publicSlug, isPublic
+        case website, address, linkedIn, photoBase64, photoSyncInitialized, publicSlug, isPublic
     }
 
     /// Explicit decoding keeps profiles created by the earlier local-only iOS
@@ -39,6 +40,7 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         address = try values.decodeIfPresent(String.self, forKey: .address) ?? ""
         linkedIn = try values.decodeIfPresent(String.self, forKey: .linkedIn) ?? ""
         photoBase64 = try values.decodeIfPresent(String.self, forKey: .photoBase64) ?? ""
+        photoSyncInitialized = try values.decodeIfPresent(Bool.self, forKey: .photoSyncInitialized) ?? false
         publicSlug = try values.decodeIfPresent(String.self, forKey: .publicSlug) ?? ""
         isPublic = try values.decodeIfPresent(Bool.self, forKey: .isPublic) ?? false
     }
@@ -175,5 +177,37 @@ public enum SafeLink {
               parts.scheme?.lowercased() == "https", let host = parts.host, !host.isEmpty,
               parts.user == nil, parts.password == nil else { return nil }
         return parts.url
+    }
+}
+
+
+/// A bounded JPEG is stored atomically with the owner's RLS-protected profile.
+/// Private photos are not uploaded to the globally public avatar bucket.
+public enum ProfilePhoto {
+    public static func inlineURL(_ base64: String) throws -> String {
+        guard !base64.isEmpty else { return "" }
+        guard let bytes = Data(base64Encoded: base64), bytes.count <= 256 * 1024,
+              bytes.count >= 3, Array(bytes.prefix(3)) == [0xff, 0xd8, 0xff],
+              bytes.base64EncodedString() == base64 else { throw ProfileError.invalidPhoto }
+        return "data:image/jpeg;base64," + base64
+    }
+
+    public static func trustedStorageURL(_ text: String, origin: URL) -> URL? {
+        guard let url = SafeLink.https(text), url.host == origin.host, url.port == origin.port,
+              url.query == nil, url.fragment == nil,
+              !url.path.contains(".."),
+              url.path.range(of: #"^/storage/v1/object/public/avatars/[a-fA-F0-9-]{36}/[a-zA-Z0-9_.-]+$"#,
+                             options: .regularExpression) != nil else { return nil }
+        return url
+    }
+}
+
+public enum ContactQRLink {
+    public static func make(publicURL: URL) -> URL? {
+        guard SafeLink.https(publicURL.absoluteString) != nil else { return nil }
+        var parts = URLComponents(url: publicURL, resolvingAgainstBaseURL: false)
+        parts?.queryItems = [URLQueryItem(name: "contact", value: "1")]
+        parts?.fragment = nil
+        return parts?.url
     }
 }

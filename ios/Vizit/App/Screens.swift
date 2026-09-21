@@ -228,7 +228,7 @@ struct ShareScreen: View {
 
                                     if store.profile.isPublic, publicURL != nil {
                                         Picker("QR típusa", selection: $usePublicProfile) {
-                                            Text("Kontakt QR").tag(false)
+                                            Text(photoContactURL != nil ? "Fényképes QR" : "Kontakt QR").tag(false)
                                             Text("Profil QR").tag(true)
                                         }
                                         .pickerStyle(.segmented)
@@ -237,11 +237,13 @@ struct ShareScreen: View {
                                     qrContent
 
                                     VStack(spacing: 5) {
-                                        Text(usePublicProfile ? "Nyilvános VIZIT-profil" : "Kontakt QR")
+                                        Text(usePublicProfile ? "Nyilvános VIZIT-profil" : (photoContactURL != nil ? "Névjegy profilképpel" : "Offline Kontakt QR"))
                                             .font(.headline)
                                         Text(usePublicProfile
                                              ? "A QR-kód a nyilvános profil biztonságos webcímét adja át."
-                                             : "A fogadó telefon kamerája közvetlenül névjegyként tudja felismerni.")
+                                             : (photoContactURL != nil
+                                                ? "Beolvasás után a névjegyoldalon a képpel együtt menthető a kontakt."
+                                                : "Közvetlen, internet nélküli névjegyátadás – profilkép nélkül."))
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                             .multilineTextAlignment(.center)
@@ -271,7 +273,7 @@ struct ShareScreen: View {
 
                             VizitCard {
                                 DisclosureGroup("Milyen adatokat ad át?") {
-                                    Text("A nevet, telefonszámot, e-mail-címet, céget, beosztást, címet és hivatkozásokat. A profilkép a QR-ban nincs benne, az AirDroppal küldött névjegyben viszont igen.")
+                                    Text("A szinkronizált, nyilvános profil fényképes QR-ja megnyitja a névjegyoldalt, ahonnan a kép is elmenthető. Ehhez a fogadó telefonnak internet kell. A nem nyilvános vagy még nem szinkronizált profil Offline Kontakt QR-ja csak szöveget ad át. AirDroppal a kép közvetlenül a névjegyfájlban érkezik.")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                         .padding(.top, 10)
@@ -349,13 +351,21 @@ struct ShareScreen: View {
     }
 
     private var qrPayload: String? {
-        if usePublicProfile, let url = publicURL { return url.absoluteString }
+        if usePublicProfile { return publicURL?.absoluteString }
+        if let url = photoContactURL { return url.absoluteString }
         return try? VCard.qrPayload(store.profile)
     }
 
     private var publicURL: URL? {
-        guard let base = store.configuration?.publicProfileBaseURL else { return nil }
+        guard store.profile.isPublic, store.syncStatus == .synced,
+              let base = store.configuration?.publicProfileBaseURL else { return nil }
         return PublicProfileLink.make(baseURL: base, slug: store.profile.publicSlug)
+    }
+
+    private var photoContactURL: URL? {
+        guard !store.profile.photoBase64.isEmpty, store.profile.photoSyncInitialized,
+              let url = publicURL else { return nil }
+        return ContactQRLink.make(publicURL: url)
     }
 
     private func secondaryAction(title: String, icon: String, action: @escaping () -> Void) -> some View {

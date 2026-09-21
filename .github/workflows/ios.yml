@@ -2,7 +2,7 @@ name: iOS secure IPA
 
 on:
   push:
-    branches: [feature/ios-secure-beta]
+    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo]
     paths: ['ios/**', '.github/workflows/ios.yml']
   pull_request:
     branches: [develop]
@@ -31,7 +31,7 @@ jobs:
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://vizit.hu/p
+      VIZIT_PUBLIC_PROFILE_BASE_URL: https://vizit-kartya.hu/p
 
     steps:
       - uses: actions/checkout@v4
@@ -151,7 +151,7 @@ jobs:
           failed = result.get('failedTests')
           passed = result.get('passedTests')
           skipped = result.get('skippedTests', 0)
-          expected = 12
+          expected = 13
           if failed != 0 or passed != expected or skipped != 0:
               raise SystemExit(f'Invalid test summary: passed={passed}, failed={failed}, skipped={skipped}')
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
@@ -284,7 +284,7 @@ jobs:
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://vizit.hu/p
+      VIZIT_PUBLIC_PROFILE_BASE_URL: https://vizit-kartya.hu/p
       APPLE_TEAM_ID: K7BC6R47KA
       APPLE_BUNDLE_ID: hu.rayworks.vizit.ios.dev
       APPLE_PROFILE_NAME: VIZIT App Store
