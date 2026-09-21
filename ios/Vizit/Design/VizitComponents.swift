@@ -197,6 +197,57 @@ struct VizitTextField: View {
     }
 }
 
+// MARK: - Selection controls
+
+/// Checkbox primitive from the Figma component library. Unlike a platform
+/// switch it communicates explicit consent / selection and keeps the whole row
+/// tappable with a minimum 44pt target.
+struct VizitCheckbox: View {
+    let title: String
+    @Binding var isOn: Bool
+    var isEnabled = true
+
+    var body: some View {
+        Button {
+            guard isEnabled else { return }
+            isOn.toggle()
+        } label: {
+            HStack(alignment: .top, spacing: VizitSpace.sm) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isOn ? VizitColor.primary : VizitColor.surface)
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .stroke(
+                            isOn ? VizitColor.primary : VizitColor.borderStrong,
+                            lineWidth: isOn ? 1 : 1.5
+                        )
+                    if isOn {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(VizitColor.textOnBrand)
+                    }
+                }
+                .frame(width: 22, height: 22)
+                .padding(.vertical, 1)
+
+                Text(title)
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(isEnabled ? VizitColor.textSecondary : VizitColor.textDisabled)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: VizitMetrics.minTouchTarget, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
 // MARK: - Surfaces
 
 /// Restrained panel: hairline border, no shadow. The app is not built out of
