@@ -122,7 +122,7 @@ public enum CardLayout: String, CaseIterable, Codable, Sendable {
     public var label: String {
         switch self {
         case .portrait: return "Portré"
-        case .minimal: return "Minimál"
+        case .minimal: return "Minimal"
         case .classic: return "Klasszikus"
         }
     }
