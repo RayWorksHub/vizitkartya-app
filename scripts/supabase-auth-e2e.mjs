@@ -345,10 +345,14 @@ try {
   assert(Array.isArray(publicSocialRows) && publicSocialRows.length === 1, 'published social link is readable by the website')
 
   expectOk(
-    await request('/rest/v1/profile_events?select=id', {
+    await request('/rest/v1/profile_events', {
       method: 'POST',
       token: null,
-      headers: { Prefer: 'return=representation' },
+      // Anonymous visitors may create events for public profiles, but the
+      // events themselves are intentionally readable only by the owner.
+      // Asking PostgREST to return the inserted row would therefore apply the
+      // SELECT policy and turn a valid INSERT into a 401/42501 response.
+      headers: { Prefer: 'return=minimal' },
       json: { profile_id: profileId, event_type: 'view', link_key: 'e2e' },
     }),
     'record public profile view',
