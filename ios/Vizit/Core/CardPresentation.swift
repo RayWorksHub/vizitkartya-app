@@ -13,6 +13,8 @@ public struct CardPresentation: Codable, Equatable, Sendable {
     public var showsPhoto = true
     public var showsQR = false
     public var showsSocial = false
+    public var companyLogoBase64 = ""
+    public var sectionOrder: [CardSection] = CardSection.allCases
 
     // Which fields leave the device at all — on the shared card, in the QR and
     // in the vCard.
@@ -26,7 +28,7 @@ public struct CardPresentation: Codable, Equatable, Sendable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case colorway, layout, showsPhoto, showsQR, showsSocial
+        case colorway, layout, showsPhoto, showsQR, showsSocial, companyLogoBase64, sectionOrder
         case sharesCompany, sharesEmail, sharesPhone, sharesWebsite, sharesSocial, sharesAddress
     }
 
@@ -51,6 +53,8 @@ public struct CardPresentation: Codable, Equatable, Sendable {
         showsPhoto = true
         showsQR = false
         showsSocial = false
+        companyLogoBase64 = try values.decodeIfPresent(String.self, forKey: .companyLogoBase64) ?? ""
+        sectionOrder = try values.decodeIfPresent([CardSection].self, forKey: .sectionOrder) ?? CardSection.allCases
         sharesCompany = try values.decodeIfPresent(Bool.self, forKey: .sharesCompany) ?? true
         sharesEmail = try values.decodeIfPresent(Bool.self, forKey: .sharesEmail) ?? true
         sharesPhone = try values.decodeIfPresent(Bool.self, forKey: .sharesPhone) ?? true
@@ -66,6 +70,8 @@ public struct CardPresentation: Codable, Equatable, Sendable {
         try values.encode(showsPhoto, forKey: .showsPhoto)
         try values.encode(showsQR, forKey: .showsQR)
         try values.encode(showsSocial, forKey: .showsSocial)
+        try values.encode(companyLogoBase64, forKey: .companyLogoBase64)
+        try values.encode(sectionOrder, forKey: .sectionOrder)
         try values.encode(sharesCompany, forKey: .sharesCompany)
         try values.encode(sharesEmail, forKey: .sharesEmail)
         try values.encode(sharesPhone, forKey: .sharesPhone)
@@ -114,6 +120,22 @@ public enum CardColorway: String, CaseIterable, Codable, Sendable {
     }
 
     public var isLight: Bool { self == .paper }
+}
+
+public enum CardSection: String, CaseIterable, Codable, Sendable, Identifiable {
+    case identity, company, contact, social, address
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .identity: return "Személyes adatok"
+        case .company: return "Munkahely"
+        case .contact: return "Elérhetőségek"
+        case .social: return "Közösségi profilok"
+        case .address: return "Cím"
+        }
+    }
 }
 
 public enum CardLayout: String, CaseIterable, Codable, Sendable {
