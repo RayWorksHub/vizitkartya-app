@@ -772,7 +772,7 @@ enum PhotoContactQR {
               let bytes = Data(base64Encoded: profile.photoBase64),
               let source = UIImage(data: bytes) else { return nil }
 
-        for side in [72, 64, 56, 48, 40, 32, 28, 24, 20, 16] {
+        for side in [72, 64, 56, 48, 40, 32, 28, 24, 20, 16, 12, 10, 8, 6, 4] {
             let size = CGSize(width: side, height: side)
             let format = UIGraphicsImageRendererFormat.default()
             format.scale = 1
@@ -790,7 +790,8 @@ enum PhotoContactQR {
                 ))
             }
             for quality in [0.65, 0.55, 0.45, 0.35, 0.25, 0.18, 0.12, 0.08] {
-                guard let jpeg = image.jpegData(compressionQuality: quality) else { continue }
+                guard let encoded = image.jpegData(compressionQuality: quality),
+                      let jpeg = jpegWithoutMetadata(encoded) else { continue }
                 var candidate = profile
                 candidate.photoBase64 = jpeg.base64EncodedString()
                 if let value = try? VCard.qrPayload(candidate, includePhoto: true),
@@ -799,6 +800,57 @@ enum PhotoContactQR {
                     return value
                 }
             }
+        }
+        return nil
+    }
+
+    /// `UIImage.jpegData` may attach a multi-kilobyte ICC/EXIF payload even to
+    /// a tiny thumbnail. Those application segments describe the source image,
+    /// not the pixels Contacts needs, and can by themselves overflow a level-H
+    /// QR code. Preserve the actual JPEG image/colour-transform segments while
+    /// removing only metadata segments before embedding the photo in the vCard.
+    private static func jpegWithoutMetadata(_ data: Data) -> Data? {
+        let bytes = [UInt8](data)
+        guard bytes.count >= 4, bytes[0] == 0xff, bytes[1] == 0xd8 else { return nil }
+
+        var output = Data([0xff, 0xd8])
+        var index = 2
+        while index < bytes.count {
+            let markerStart = index
+            guard bytes[index] == 0xff else { return nil }
+            while index < bytes.count, bytes[index] == 0xff { index += 1 }
+            guard index < bytes.count else { return nil }
+
+            let marker = bytes[index]
+            index += 1
+
+            // Start-of-scan owns the entropy-coded remainder, where 0xff bytes
+            // no longer follow the regular segment-length grammar.
+            if marker == 0xda {
+                output.append(contentsOf: bytes[markerStart...])
+                return output
+            }
+            if marker == 0xd9 {
+                output.append(contentsOf: bytes[markerStart..<index])
+                return output
+            }
+            if marker == 0x01 || (0xd0...0xd7).contains(marker) {
+                output.append(contentsOf: bytes[markerStart..<index])
+                continue
+            }
+
+            guard index + 1 < bytes.count else { return nil }
+            let length = Int(bytes[index]) << 8 | Int(bytes[index + 1])
+            guard length >= 2, index + length <= bytes.count else { return nil }
+            let segmentEnd = index + length
+
+            // APP1...APP13, APP15 and COM are EXIF/XMP/ICC/vendor metadata.
+            // APP0 (JFIF) and APP14 (Adobe colour transform) remain intact.
+            let metadata = (0xe1...0xed).contains(marker) || marker == 0xef || marker == 0xfe
+            if !metadata {
+                output.append(contentsOf: bytes[markerStart..<segmentEnd])
+            }
+            index = segmentEnd
         }
         return nil
     }
