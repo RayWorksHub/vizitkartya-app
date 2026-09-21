@@ -174,14 +174,6 @@ async function signIn(email) {
   return session.access_token
 }
 
-async function rpc(name, token, parameters = {}) {
-  return request(`/rest/v1/rpc/${name}`, {
-    method: 'POST',
-    token,
-    json: parameters,
-  })
-}
-
 async function upload(bucket, path, token) {
   const result = await request(`/storage/v1/object/${bucket}/${path}`, {
     method: 'POST',
@@ -232,105 +224,150 @@ async function deleteUserAsAdmin(userId) {
   })
 }
 
-const emptySnapshot = (displayName) => ({
-  firstName: 'E2E',
-  lastName: 'User',
-  displayName,
-  company: '',
-  jobTitle: '',
-  bio: '',
-  displayImagePath: null,
-  contactImagePath: null,
-  logoPath: null,
-  publicSlug: null,
-  isPublic: false,
-  fieldOrder: [],
-  fieldVisibility: {},
-  contacts: [],
-  addresses: [],
-  links: [],
-})
-
 try {
   const acceptedUser = await registerConfirmedUser('accepted', {
-    privacy_policy_version: privacyPolicyVersion,
+    display_name: 'VIZIT E2E',
+    privacy_version: privacyPolicyVersion,
     terms_version: termsVersion,
   })
-  const gatedUser = await createConfirmedUser('gated', {})
+  const isolationUser = await createConfirmedUser('isolation', {})
   const acceptedToken = await signIn(acceptedUser.email)
-  const gatedToken = await signIn(gatedUser.email)
+  const isolationToken = await signIn(isolationUser.email)
 
-  const acceptedCheck = expectOk(
-    await rpc('has_legal_acceptance', acceptedToken, {
-      p_privacy_policy_version: privacyPolicyVersion,
-      p_terms_version: termsVersion,
-    }),
-    'accepted legal check',
-  )
-  assert(acceptedCheck === true, 'signup metadata records legal acceptance')
-
-  const gatedPull = await rpc('get_my_profile_snapshot', gatedToken)
-  assert(!gatedPull.response.ok && gatedPull.data?.code === '42501', 'profile pull is legally gated')
-
-  expectOk(
-    await rpc('accept_legal_documents', gatedToken, {
-      p_privacy_policy_version: privacyPolicyVersion,
-      p_terms_version: termsVersion,
-    }),
-    'accept legal documents',
+  assert(
+    acceptedUser.user_metadata?.privacy_version === privacyPolicyVersion
+      && acceptedUser.user_metadata?.terms_version === termsVersion,
+    'signup stores the legal document versions used by the iOS client',
   )
 
-  const operationId = randomUUID()
-  const applied = expectOk(
-    await rpc('sync_profile_snapshot', gatedToken, {
-      p_operation_id: operationId,
-      p_base_version: 0,
-      p_snapshot: emptySnapshot('VIZIT E2E'),
+  const consentRows = expectOk(
+    await request(`/rest/v1/privacy_consents?select=user_id,privacy_version&user_id=eq.${acceptedUser.id}`, {
+      token: acceptedToken,
     }),
-    'profile sync',
+    'signup consent lookup',
   )
-  assert(applied?.status === 'applied' && applied?.serverVersion === 1, 'profile sync applies version 1')
+  assert(
+    Array.isArray(consentRows)
+      && consentRows.length === 1
+      && consentRows[0]?.privacy_version === privacyPolicyVersion,
+    'signup trigger records the accepted privacy version',
+  )
 
-  const retry = expectOk(
-    await rpc('sync_profile_snapshot', gatedToken, {
-      p_operation_id: operationId,
-      p_base_version: 0,
-      p_snapshot: emptySnapshot('VIZIT E2E'),
+  const profileId = randomUUID()
+  const profileSlug = `vizit-e2e-${runId}`
+  const customDomain = `e2e-${runId}.vizit.invalid`
+  const profileRows = expectOk(
+    await request('/rest/v1/profiles?select=id,owner_id,slug,display_name,is_public,custom_domain,custom_domain_verified', {
+      method: 'POST',
+      token: acceptedToken,
+      headers: { Prefer: 'return=representation' },
+      json: {
+        id: profileId,
+        owner_id: acceptedUser.id,
+        slug: profileSlug,
+        display_name: 'VIZIT E2E',
+        job_title: 'Tesztelő',
+        company: 'VIZIT',
+        bio: 'Izolált DEV release E2E profil.',
+        public_email: acceptedUser.email,
+        phone: '+36 30 000 0000',
+        website: 'https://vizit.hu',
+        address: 'Budapest',
+        is_public: false,
+        custom_domain: customDomain,
+      },
     }),
-    'profile sync retry',
+    'create private profile',
   )
-  assert(JSON.stringify(retry) === JSON.stringify(applied), 'profile sync retry is idempotent')
+  const profile = profileRows?.[0]
+  assert(
+    profile?.id === profileId
+      && profile?.owner_id === acceptedUser.id
+      && profile?.slug === profileSlug
+      && profile?.is_public === false
+      && profile?.custom_domain === customDomain
+      && profile?.custom_domain_verified === false,
+    'owner creates a private profile with protected custom-domain state',
+  )
 
-  const conflict = expectOk(
-    await rpc('sync_profile_snapshot', gatedToken, {
-      p_operation_id: randomUUID(),
-      p_base_version: 0,
-      p_snapshot: emptySnapshot('Stale client'),
+  const socialRows = expectOk(
+    await request('/rest/v1/social_links?select=id,profile_id,platform,url', {
+      method: 'POST',
+      token: acceptedToken,
+      headers: { Prefer: 'return=representation' },
+      json: {
+        profile_id: profileId,
+        platform: 'linkedin',
+        label: 'LinkedIn',
+        url: 'https://www.linkedin.com/in/vizit-e2e',
+        sort_order: 0,
+        enabled: true,
+      },
     }),
-    'profile conflict',
+    'create social link',
   )
-  assert(conflict?.status === 'conflict' && conflict?.serverVersion === 1, 'stale sync returns conflict')
+  const socialLinkId = socialRows?.[0]?.id
+  assert(typeof socialLinkId === 'string', 'social link is persisted')
 
   const foreignRows = expectOk(
-    await request(`/rest/v1/profiles?select=user_id&user_id=eq.${acceptedUser.id}`, {
-      token: gatedToken,
+    await request(`/rest/v1/profiles?select=id&id=eq.${profileId}`, {
+      token: isolationToken,
     }),
     'cross-user profile read',
   )
-  assert(Array.isArray(foreignRows) && foreignRows.length === 0, 'RLS hides another user profile')
+  assert(Array.isArray(foreignRows) && foreignRows.length === 0, 'RLS hides another private profile')
 
-  const restoredToken = await signIn(gatedUser.email)
-  const restoredProfile = expectOk(
-    await rpc('get_my_profile_snapshot', restoredToken),
+  const updatedRows = expectOk(
+    await request(`/rest/v1/profiles?id=eq.${profileId}&owner_id=eq.${acceptedUser.id}&select=id,display_name,is_public,views_count`, {
+      method: 'PATCH',
+      token: acceptedToken,
+      headers: { Prefer: 'return=representation' },
+      json: { display_name: 'VIZIT E2E Frissítve', is_public: true },
+    }),
+    'publish profile',
+  )
+  assert(
+    updatedRows?.[0]?.display_name === 'VIZIT E2E Frissítve'
+      && updatedRows?.[0]?.is_public === true,
+    'owner update publishes the profile',
+  )
+
+  const publicRows = expectOk(
+    await request(`/rest/v1/profiles?select=id,slug,display_name&id=eq.${profileId}`, { token: null }),
+    'anonymous public profile read',
+  )
+  assert(Array.isArray(publicRows) && publicRows.length === 1, 'published profile is readable by the website')
+
+  const publicSocialRows = expectOk(
+    await request(`/rest/v1/social_links?select=id,platform,url&id=eq.${socialLinkId}`, { token: null }),
+    'anonymous social link read',
+  )
+  assert(Array.isArray(publicSocialRows) && publicSocialRows.length === 1, 'published social link is readable by the website')
+
+  expectOk(
+    await request('/rest/v1/profile_events?select=id', {
+      method: 'POST',
+      token: null,
+      headers: { Prefer: 'return=representation' },
+      json: { profile_id: profileId, event_type: 'view', link_key: 'e2e' },
+    }),
+    'record public profile view',
+  )
+
+  const restoredToken = await signIn(acceptedUser.email)
+  const restoredRows = expectOk(
+    await request(`/rest/v1/profiles?select=id,display_name,views_count&id=eq.${profileId}`, {
+      token: restoredToken,
+    }),
     'profile restore after a new login',
   )
   assert(
-    restoredProfile?.serverVersion === 1 && restoredProfile?.snapshot?.displayName === 'VIZIT E2E',
-    'a new login restores the synced profile',
+    restoredRows?.[0]?.display_name === 'VIZIT E2E Frissítve'
+      && Number(restoredRows?.[0]?.views_count) === 1,
+    'a new login restores the profile and the public view counter is updated',
   )
 
-  await upload('profile-private', `${acceptedUser.id}/e2e/nested/private.txt`, acceptedToken)
-  await upload('profile-public', `${acceptedUser.id}/e2e/nested/public.txt`, acceptedToken)
+  await upload('avatars', `${acceptedUser.id}/e2e/nested/avatar.txt`, acceptedToken)
 
   if (scope === 'FULL') {
     const deletion = await request('/functions/v1/delete-account', {
@@ -348,15 +385,32 @@ try {
     assert(deletedUser.response.status === 404, 'the Auth user is deleted')
 
     const remainingProfiles = expectOk(
-      await request(`/rest/v1/profiles?select=user_id&user_id=eq.${acceptedUser.id}`, {
+      await request(`/rest/v1/profiles?select=id&owner_id=eq.${acceptedUser.id}`, {
         apiKey: serviceRoleKey,
         token: serviceRoleKey,
       }),
       'deleted profile lookup',
     )
     assert(Array.isArray(remainingProfiles) && remainingProfiles.length === 0, 'profile rows cascade on deletion')
-    assert((await listStorage('profile-private', acceptedUser.id)).length === 0, 'private media is deleted')
-    assert((await listStorage('profile-public', acceptedUser.id)).length === 0, 'public media is deleted')
+
+    const remainingConsents = expectOk(
+      await request(`/rest/v1/privacy_consents?select=user_id&user_id=eq.${acceptedUser.id}`, {
+        apiKey: serviceRoleKey,
+        token: serviceRoleKey,
+      }),
+      'deleted consent lookup',
+    )
+    assert(Array.isArray(remainingConsents) && remainingConsents.length === 0, 'consent rows cascade on deletion')
+
+    const remainingSocialLinks = expectOk(
+      await request(`/rest/v1/social_links?select=id&profile_id=eq.${profileId}`, {
+        apiKey: serviceRoleKey,
+        token: serviceRoleKey,
+      }),
+      'deleted social-link lookup',
+    )
+    assert(Array.isArray(remainingSocialLinks) && remainingSocialLinks.length === 0, 'social links cascade on deletion')
+    assert((await listStorage('avatars', acceptedUser.id)).length === 0, 'avatar media is deleted')
   }
 
   console.log(`VIZIT Supabase DEV ${scope} E2E: PASS`)
