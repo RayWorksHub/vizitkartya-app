@@ -1,369 +1,22 @@
-name: iOS secure IPA
+name: VIZIT Direct TestFlight
 
 on:
   push:
-    branches: [feature/ios-secure-beta, feature/vizit-public-profile-photo, feature/ios-web-complete-design-sync-20260920, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj, release/ios-8-photo-contact, release/ios-8.1-full-ui]
-    paths: ['ios/**', 'config/**', 'scripts/**', '.github/workflows/ios.yml']
-  pull_request:
-    branches: [main, develop]
-    paths: ['ios/**', 'config/**', 'scripts/**', '.github/workflows/ios.yml']
-  workflow_dispatch:
-    inputs:
-      release_action:
-        description: Verification only, or create an undistributed TestFlight candidate
-        required: true
-        type: choice
-        default: verify_only
-        options:
-          - verify_only
-          - upload_testflight
-      release_commit:
-        description: Exact 40-character commit SHA to upload
-        required: false
-        type: string
-      physical_device_commit:
-        description: Optional audit field after this exact TestFlight build passes on a physical iPhone
-        required: false
-        type: string
-      design_review_commit:
-        description: Same commit SHA after reviewing every named screenshot against the pinned Figma boards
-        required: false
-        type: string
-      release_confirmation:
-        description: For upload, type exactly UPLOAD VIZIT TO TESTFLIGHT
-        required: false
-        type: string
+    branches:
+      - feature/ios-web-complete-design-sync-20260920
+    paths:
+      - .github/workflows/ios.yml
+      - ios/**
 
 permissions:
   contents: read
 
 concurrency:
-  group: ios-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' || inputs.release_action == 'verify_only' }}
+  group: vizit-direct-testflight
+  cancel-in-progress: true
 
 jobs:
-  test-and-build:
-    if: false
-    runs-on: macos-15
-    timeout-minutes: 40
-    env:
-      # Supabase publishable keys are designed to ship in clients. Authorization
-      # is enforced by RLS; service-role credentials must never appear here.
-      VIZIT_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
-      VIZIT_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
-      VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
-      VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
-      VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
-      VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
-      VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
-      VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up current Node.js LTS
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Validate pinned design and release source contract
-        run: |
-          set -euo pipefail
-          node --check scripts/verify-ios-release.mjs
-          python3 -m py_compile scripts/app-store-connect-build-status.py
-          python3 scripts/app-store-connect-build-status.py --self-test
-          node scripts/verify-ios-release.mjs source
-
-      - name: Validate shared Supabase source and Auth configuration
-        env:
-          ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL: ${{ env.VIZIT_SUPABASE_URL }}
-          ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY: ${{ env.VIZIT_SUPABASE_KEY }}
-          ORG_GRADLE_PROJECT_VIZIT_DEV_GOOGLE_WEB_CLIENT_ID: ''
-        run: |
-          set -euo pipefail
-          node --check scripts/supabase-auth-e2e.mjs
-          node scripts/check-supabase-source.mjs
-          node scripts/check-supabase-auth-config.mjs
-
-      - name: Verify shared public endpoint configuration
-        run: |
-          python3 - <<'PYCONFIG'
-          import os, urllib.request
-          values = dict(line.strip().split('=',1) for line in open('config/sharing.properties') if '=' in line and not line.startswith('#'))
-          assert values['publicProfileBaseUrl'] == os.environ['VIZIT_PUBLIC_PROFILE_BASE_URL']
-          with urllib.request.urlopen(values['publicProfileBaseUrl'] + '/csukardi-rajmund', timeout=20) as response:
-              assert response.status == 200
-              html = response.read(1000000).decode()
-              assert 'VIZIT' in html
-              assert any(label in html for label in ('Mentés a Kontaktokba', 'Mentés a kontaktok közé'))
-          print('Configured public endpoint: PASS; no production writes')
-          PYCONFIG
-
-      - name: Select App Store-compatible Xcode
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcode_app=/Applications/Xcode_26.3.app
-          test -d "$xcode_app" || { echo "Required Xcode 26.3 is not installed"; exit 1; }
-          sudo xcode-select -s "$xcode_app/Contents/Developer"
-          xcodebuild -version
-          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
-          test "${sdk_version%%.*}" -ge 26 || { echo "iOS 26 SDK or later is required"; exit 1; }
-          echo "iPhoneOS SDK $sdk_version: PASS"
-
-      - name: Validate build configuration and live Auth policy
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in VIZIT_SUPABASE_URL VIZIT_SUPABASE_KEY VIZIT_AUTH_SCHEME VIZIT_PRIVACY_POLICY_URL VIZIT_PRIVACY_POLICY_VERSION VIZIT_TERMS_URL VIZIT_TERMS_VERSION; do
-            test -n "${!name}" || { echo "Missing required configuration: $name"; exit 1; }
-          done
-          test "$VIZIT_AUTH_SCHEME" = 'hu.rayworks.vizit.ios.dev.auth' || { echo 'Unsafe or stale auth callback scheme'; exit 1; }
-          node - <<'NODE'
-          const values = [
-            process.env.VIZIT_SUPABASE_URL,
-            process.env.VIZIT_PRIVACY_POLICY_URL,
-            process.env.VIZIT_TERMS_URL,
-            process.env.VIZIT_PUBLIC_PROFILE_BASE_URL,
-          ]
-          for (const value of values) {
-            const url = new URL(value)
-            if (url.protocol !== 'https:' || url.username || url.password) {
-              throw new Error('Every configured service URL must be credential-free HTTPS')
-            }
-          }
-          NODE
-          response="$RUNNER_TEMP/auth-settings.json"
-          status="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' --header "apikey: $VIZIT_SUPABASE_KEY" "$VIZIT_SUPABASE_URL/auth/v1/settings")"
-          test "$status" = 200 || { echo "Supabase Auth settings check failed: HTTP $status"; exit 1; }
-          node - "$response" <<'NODE'
-          const fs = require('fs')
-          const settings = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-          if (settings.disable_signup !== false) throw new Error('User signup is disabled')
-          if (settings.mailer_autoconfirm !== false) throw new Error('Email confirmation is disabled')
-          if (settings.external?.email !== true) throw new Error('Email/password provider is disabled')
-          const googleExpected = process.env.VIZIT_GOOGLE_SIGN_IN_ENABLED === 'YES'
-          if (googleExpected && settings.external?.google !== true) throw new Error('Google provider is disabled')
-          if (!googleExpected && settings.external?.google === true) throw new Error('Google provider is live but hidden by this build')
-          console.log('Live Supabase Auth policy: PASS')
-          NODE
-
-      - name: Toolchain and portable core tests
-        run: |
-          set -euo pipefail
-          xcodebuild -version
-          swift --version
-          swift test --package-path ios
-
-      - name: Validate branded app icons
-        shell: bash
-        run: |
-          set -euo pipefail
-          icon_dir='ios/Vizit/Assets.xcassets/AppIcon.appiconset'
-          for spec in 20:20 29:29 40:40 58:58 60:60 76:76 80:80 87:87 120:120 152:152 167:167 180:180 1024:1024; do
-            file="$icon_dir/AppIcon-${spec%%:*}.png"
-            expected="${spec##*:}"
-            test -s "$file"
-            width="$(sips -g pixelWidth "$file" | awk '/pixelWidth/ { print $2 }')"
-            height="$(sips -g pixelHeight "$file" | awk '/pixelHeight/ { print $2 }')"
-            alpha="$(sips -g hasAlpha "$file" | awk '/hasAlpha/ { print $2 }')"
-            test "$width" = "$expected" && test "$height" = "$expected"
-            test "$alpha" = 'no'
-          done
-          echo 'Complete opaque VIZIT app-icon set: PASS'
-
-      - name: Resolve exact Swift dependencies
-        run: |
-          set -euo pipefail
-          xcodebuild -resolvePackageDependencies -project ios/VIZIT.xcodeproj -scheme VIZIT -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"
-          resolved="$(find ios -name Package.resolved -print -quit)"
-          test -n "$resolved"
-          python3 - "$resolved" <<'PY'
-          import json, sys
-          data = json.load(open(sys.argv[1]))
-          pins = {p.get('identity'): p.get('state', {}).get('version') for p in data.get('pins', [])}
-          actual = pins.get('supabase-swift')
-          if actual != '2.55.2':
-              raise SystemExit(f'Expected supabase-swift 2.55.2, resolved {actual!r}')
-          print('supabase-swift exact version: PASS')
-          PY
-
-      - name: Select release-contract iPhone and iPad simulators
-        run: |
-          set -euo pipefail
-          xcrun simctl list devices available --json > "$RUNNER_TEMP/simulators.json"
-          python3 - <<'PY'
-          import json, os
-          with open(os.environ['RUNNER_TEMP'] + '/simulators.json') as f:
-              runtimes = json.load(f)['devices']
-          with open('ios/Release/release-manifest.json') as f:
-              contract = json.load(f)['simulators']
-          devices = [d for r, ds in sorted(runtimes.items(), reverse=True)
-                     if '.iOS-' in r for d in ds if d.get('isAvailable')]
-          with open(os.environ['GITHUB_ENV'], 'a') as f:
-              for names, id_key, name_key in [
-                  (contract['iphonePreferredNames'], 'IPHONE_ID', 'IPHONE_NAME'),
-                  (contract['ipadPreferredNames'], 'IPAD_ID', 'IPAD_NAME'),
-              ]:
-                  match = next((d for name in names for d in devices if d['name'] == name), None)
-                  if match is None:
-                      raise SystemExit('None of the release-contract simulators is available: ' + ', '.join(names))
-                  f.write(id_key + '=' + match['udid'] + '\n')
-                  f.write(name_key + '=' + match['name'] + '\n')
-                  print(id_key + ': ' + match['name'])
-          PY
-
-      - name: iPhone native integration and UI tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          set -o pipefail
-          args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Debug)
-          args+=(-destination "platform=iOS Simulator,id=$IPHONE_ID" -derivedDataPath "$RUNNER_TEMP/vizit")
-          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
-          args+=(-resultBundlePath "$RUNNER_TEMP/VIZIT-iPhone.xcresult" -parallel-testing-enabled NO)
-          args+=(ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
-          args+=(VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
-          args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED")
-          args+=(VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
-          args+=(VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION" VIZIT_TERMS_URL="$VIZIT_TERMS_URL")
-          args+=(VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION" VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL")
-          xcodebuild "${args[@]}" test | tee "$RUNNER_TEMP/VIZIT-tests.log"
-          grep -Fq '** TEST SUCCEEDED **' "$RUNNER_TEMP/VIZIT-tests.log"
-          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/VIZIT-iPhone.xcresult" > "$RUNNER_TEMP/VIZIT-test-summary.json"
-          xcrun xcresulttool get object --legacy --path "$RUNNER_TEMP/VIZIT-iPhone.xcresult" > "$RUNNER_TEMP/VIZIT-xcresult.json"
-
-      - name: Export tested iPhone visual evidence
-        run: |
-          set -euo pipefail
-          result="$RUNNER_TEMP/VIZIT-iPhone.xcresult"
-          attachments="$RUNNER_TEMP/VIZIT-iPhone-attachments"
-          attachment_manifest="$RUNNER_TEMP/VIZIT-attachment-export.log"
-          test -d "$result"
-          mkdir -p "$attachments"
-          xcrun xcresulttool export attachments --path "$result" --output-path "$attachments" 2>&1 | tee "$attachment_manifest"
-          node scripts/verify-ios-release.mjs evidence \
-            --summary "$RUNNER_TEMP/VIZIT-test-summary.json" \
-            --attachment-manifest "$attachment_manifest" \
-            --attachments "$attachments"
-          python3 - "$attachments" "$RUNNER_TEMP" <<'PY'
-          from pathlib import Path
-          import shutil, sys
-
-          screenshots = sorted(Path(sys.argv[1]).rglob('*.png'))
-          for index, source in enumerate(screenshots, start=1):
-              target = Path(sys.argv[2]) / f'VIZIT-tested-iPhone-{index:02d}.png'
-              shutil.copy2(source, target)
-              print(target.name)
-          PY
-          expected_size="$(python3 -c 'import json; print("x".join(map(str, json.load(open("ios/Release/release-manifest.json"))["simulators"]["iphoneScreenshotPixels"])))')"
-          while IFS= read -r screenshot; do
-            width="$(sips -g pixelWidth "$screenshot" | awk '/pixelWidth/ { print $2 }')"
-            height="$(sips -g pixelHeight "$screenshot" | awk '/pixelHeight/ { print $2 }')"
-            test "${width}x${height}" = "$expected_size" || {
-              echo "Unexpected screenshot size for $screenshot: ${width}x${height}, expected $expected_size"
-              exit 1
-            }
-          done < <(find "$attachments" -type f -name '*.png' -print)
-          echo 'Tested iPhone visual evidence: PASS'
-
-      - name: iPad launch smoke check
-        run: |
-          set -euo pipefail
-          xcrun simctl shutdown all
-          xcrun simctl boot "$IPAD_ID"
-          xcrun simctl bootstatus "$IPAD_ID" -b
-          app="$RUNNER_TEMP/vizit/Build/Products/Debug-iphonesimulator/VIZIT.app"
-          test -d "$app"
-          xcrun simctl install "$IPAD_ID" "$app"
-          xcrun simctl launch "$IPAD_ID" hu.rayworks.vizit.ios.dev --ui-testing --reset-test-profile
-          sleep 3
-          xcrun simctl spawn "$IPAD_ID" launchctl list | grep -F hu.rayworks.vizit.ios.dev
-          xcrun simctl io "$IPAD_ID" screenshot "$RUNNER_TEMP/VIZIT-iPad.png"
-          echo 'iPad launch smoke check: PASS'
-
-      - name: Compile physical-device app
-        shell: bash
-        run: |
-          set -euo pipefail
-          set -o pipefail
-          args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Release)
-          args+=(-destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/vizit-device")
-          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
-          args+=(CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
-          args+=(VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
-          args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED")
-          args+=(VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
-          args+=(VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION" VIZIT_TERMS_URL="$VIZIT_TERMS_URL")
-          args+=(VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION" VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL")
-          xcodebuild "${args[@]}" build | tee "$RUNNER_TEMP/VIZIT-device-build.log"
-          grep -Fq '** BUILD SUCCEEDED **' "$RUNNER_TEMP/VIZIT-device-build.log"
-
-      - name: Package and verify unsigned IPA
-        shell: bash
-        run: |
-          set -euo pipefail
-          app="$RUNNER_TEMP/vizit-device/Build/Products/Release-iphoneos/VIZIT.app"
-          executable="$app/VIZIT"
-          test -d "$app"
-          test -f "$executable"
-          test -f "$app/Inter.ttf"
-          test -f "$app/OFL.txt"
-          plutil -lint "$app/Info.plist"
-          test -f "$app/PrivacyInfo.xcprivacy"
-          file "$executable" | tee "$RUNNER_TEMP/VIZIT-binary.txt"
-          file "$executable" | grep -q 'arm64'
-          otool -l "$executable" > "$RUNNER_TEMP/VIZIT-load-commands.txt"
-          grep -A4 LC_BUILD_VERSION "$RUNNER_TEMP/VIZIT-load-commands.txt" | grep -Eq 'platform[[:space:]]+2'
-          ! grep -R -Fq '$(' "$app/Info.plist"
-          test "$(plutil -extract VIZITSupabaseURL raw "$app/Info.plist")" = "$VIZIT_SUPABASE_URL"
-          test "$(plutil -extract VIZITAuthScheme raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
-          test "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
-          test "$(plutil -extract VIZITGoogleSignInEnabled raw "$app/Info.plist")" = "$VIZIT_GOOGLE_SIGN_IN_ENABLED"
-          test "$(plutil -extract VIZITPublicProfileBaseURL raw "$app/Info.plist")" = "$VIZIT_PUBLIC_PROFILE_BASE_URL"
-          test "$(plutil -extract UIAppFonts.0 raw "$app/Info.plist")" = 'Inter.ttf'
-          package="$RUNNER_TEMP/ipa"
-          mkdir -p "$package/Payload"
-          ditto "$app" "$package/Payload/VIZIT.app"
-          (
-            cd "$package"
-            ditto -c -k --sequesterRsrc --keepParent Payload "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa"
-          )
-          unzip -t "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa" > "$RUNNER_TEMP/VIZIT-ipa-verify.txt"
-          unzip -l "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa" | grep -F 'Payload/VIZIT.app/VIZIT'
-          shasum -a 256 "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa" | tee "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa.sha256"
-          echo 'Unsigned physical-device IPA: PASS'
-
-      - name: Upload verified IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: VIZIT-iOS-DEV-unsigned-IPA
-          retention-days: 14
-          if-no-files-found: error
-          path: |
-            ${{ runner.temp }}/VIZIT-iOS-DEV-unsigned.ipa
-            ${{ runner.temp }}/VIZIT-iOS-DEV-unsigned.ipa.sha256
-
-      - name: Upload test evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: VIZIT-iOS-test-evidence
-          retention-days: 14
-          if-no-files-found: warn
-          path: |
-            ${{ runner.temp }}/VIZIT-*.log
-            ${{ runner.temp }}/VIZIT-*.xcresult
-            ${{ runner.temp }}/VIZIT-*.png
-            ${{ runner.temp }}/VIZIT-test-summary.json
-            ${{ runner.temp }}/VIZIT-xcresult.json
-            ${{ runner.temp }}/VIZIT-binary.txt
-            ${{ runner.temp }}/VIZIT-load-commands.txt
-            ${{ runner.temp }}/VIZIT-ipa-verify.txt
-
-testflight:
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]')
+  upload:
     runs-on: macos-15
     timeout-minutes: 60
     environment: testflight-production
@@ -396,15 +49,6 @@ testflight:
           fi
           xcodebuild -version
 
-      - name: Resolve Swift packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild -resolvePackageDependencies \
-            -project ios/VIZIT.xcodeproj \
-            -scheme VIZIT \
-            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"
-
       - name: Install signing credentials
         shell: bash
         run: |
@@ -428,7 +72,8 @@ testflight:
           security cms -D -i "$profile" > "$profile_plist"
           profile_uuid="$(plutil -extract UUID raw "$profile_plist")"
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+          profile_path="$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+          cp "$profile" "$profile_path"
 
           api_key_dir="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$api_key_dir"
@@ -437,7 +82,7 @@ testflight:
           chmod 600 "$api_key_path"
 
           echo "VIZIT_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
-          echo "VIZIT_PROFILE_PATH=$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision" >> "$GITHUB_ENV"
+          echo "VIZIT_PROFILE_PATH=$profile_path" >> "$GITHUB_ENV"
           echo "VIZIT_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
       - name: Archive VIZIT 8.7.0
@@ -450,8 +95,6 @@ testflight:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/VIZIT.xcarchive" \
-            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
-            -disableAutomaticPackageResolution \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" \
             VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY" \
