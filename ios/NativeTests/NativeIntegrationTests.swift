@@ -43,7 +43,7 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(decoded.first, payload)
     }
 
-    func testNativeContactContainsMatchingFields() {
+    func testNativeContactContainsMatchingFields() throws {
         var source = profile()
         source.linkedIn = ""
         source.facebook = "https://facebook.com/teszt"
