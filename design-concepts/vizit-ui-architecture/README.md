@@ -85,7 +85,6 @@ A termékkövetelmények és a márka áttekintett forrása a `RayWorksHub/vizit
 
 | Forrás | Mire használjuk? | Mire nem bizonyíték? |
 |---|---|---|
-| `docs/VIZIT_MASTER_SPEC_V1.md` | Termékcél, adatmezők, NFC/QR, navigáció, állapotok, privacy | Nem bizonyítja a funkciók elkészültét |
 | `docs/BRANDING.md` | Hivatalos színek, logóforrás, márkajel és céges logó elkülönítése | Nem teljes hozzáférhetőségi audit |
 | `ios/README.md` | Az iOS-kliens dokumentált iránya és eltérő platformfolyamatai | Nem fizikai iPhone-tesztjegyzőkönyv |
 | `README.md` | A fejlesztési állapot kontextusa | Nem production minősítés |
@@ -1365,7 +1364,6 @@ személyes és nyugodt, állandó glow, lebegés és túlzott dekoráció nélk�
 
 ### Projektforrások — rögzített commitok
 
-- **[R1]** [VIZIT MASTER DEVELOPMENT SPEC v1.0](https://github.com/RayWorksHub/vizitkartya-app/blob/91243c6a26f9add6a6ce9e578528f777b9b1e210/docs/VIZIT_MASTER_SPEC_V1.md). A fejezetszámok a forrás saját számozása szerint szerepelnek.
 - **[R2]** [VIZIT branding](https://github.com/RayWorksHub/vizitkartya-app/blob/91243c6a26f9add6a6ce9e578528f777b9b1e210/docs/BRANDING.md).
 - **[R3]** [VIZIT iOS DEV — README](https://github.com/RayWorksHub/vizitkartya-app/blob/91243c6a26f9add6a6ce9e578528f777b9b1e210/ios/README.md).
 - **[R4]** [A tárolási ág alapjául szolgáló Android workflow](https://github.com/RayWorksHub/vizitkartya-app/blob/b8a4e6d359268237e8195b56a4196f5055c4f45c/.github/workflows/android.yml).
