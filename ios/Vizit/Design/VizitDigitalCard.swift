@@ -185,6 +185,9 @@ struct VizitDigitalCard: View {
                     .foregroundStyle(secondaryText)
                     .lineLimit(1)
             }
+            if !presentation.companyLogoBase64.isEmpty {
+                companyLogo(size: 16)
+            }
         }
     }
 
@@ -203,11 +206,16 @@ struct VizitDigitalCard: View {
                     .foregroundStyle(accent)
                     .lineLimit(1)
             }
-            if !visible.company.isEmpty {
-                Text(visible.company)
-                    .font(VizitFont.caption)
-                    .foregroundStyle(secondaryText)
-                    .lineLimit(1)
+            if !visible.company.isEmpty || !presentation.companyLogoBase64.isEmpty {
+                HStack(spacing: 6) {
+                    companyLogo(size: 18)
+                    if !visible.company.isEmpty {
+                        Text(visible.company)
+                            .font(VizitFont.caption)
+                            .foregroundStyle(secondaryText)
+                            .lineLimit(1)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -288,6 +296,18 @@ struct VizitDigitalCard: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func companyLogo(size: CGFloat) -> some View {
+        if let data = Data(base64Encoded: presentation.companyLogoBase64),
+           let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: size * 2.2, maxHeight: size)
+                .accessibilityLabel("Céges logó")
+        }
     }
 
     private func avatar(size: CGFloat = 56) -> some View {
