@@ -125,9 +125,6 @@ struct ProfileEditor: View {
                     self.error = "A kép betöltése nem sikerült. Próbálj másik képet választani."
                 }
             }
-        }
-    }
-
             .task(id: companyLogo) {
                 guard let selected = companyLogo else { loadingCompanyLogo = false; return }
                 loadingCompanyLogo = true
@@ -153,6 +150,9 @@ struct ProfileEditor: View {
             .sheet(isPresented: $showSectionOrder) {
                 CardSectionOrderScreen(store: presentation)
             }
+        }
+    }
+
     /// Resigns first responder globally. The fields are composite views, so a
     /// FocusState binding on them would not reach the inner UITextField.
     private func dismissKeyboard() {
