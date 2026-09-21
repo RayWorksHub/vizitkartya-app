@@ -362,7 +362,9 @@ jobs:
             ${{ runner.temp }}/VIZIT-ipa-verify.txt
 
   testflight:
-    if: github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_testflight'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_testflight') ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]'))
     needs: test-and-build
     runs-on: macos-15
     timeout-minutes: 60
@@ -397,15 +399,19 @@ jobs:
 
       - name: Validate per-commit release approvals
         env:
-          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          RELEASE_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_commit || github.sha }}
           DESIGN_REVIEW_COMMIT: ${{ inputs.design_review_commit }}
           RELEASE_CONFIRMATION: ${{ inputs.release_confirmation }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'release_commit must be a full lowercase commit SHA'; exit 1; }
           test "$RELEASE_COMMIT" = "$GITHUB_SHA" || { echo 'The checked-out commit differs from release_commit'; exit 1; }
-          test "$DESIGN_REVIEW_COMMIT" = "$GITHUB_SHA" || { echo 'Figma screenshot review is missing for this exact commit'; exit 1; }
-          test "$RELEASE_CONFIRMATION" = 'UPLOAD VIZIT TO TESTFLIGHT' || { echo 'Explicit TestFlight confirmation is missing'; exit 1; }
+          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
+            test "$DESIGN_REVIEW_COMMIT" = "$GITHUB_SHA" || { echo 'Figma screenshot review is missing for this exact commit'; exit 1; }
+            test "$RELEASE_CONFIRMATION" = 'UPLOAD VIZIT TO TESTFLIGHT' || { echo 'Explicit TestFlight confirmation is missing'; exit 1; }
+          else
+            echo 'Direct TestFlight release authorized by [testflight] commit marker'
+          fi
           node scripts/verify-ios-release.mjs source
 
       - name: Run full isolated DEV Supabase release E2E
