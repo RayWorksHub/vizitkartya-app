@@ -1,24 +1,19 @@
-name: VIZIT Direct TestFlight
+name: VIZIT unsigned IPA artifact
 
 on:
-  push:
-    branches:
-      - feature/figma-ui-complete-20260921
-    paths:
-      - .github/workflows/ios.yml
-      - ios/**
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: vizit-direct-testflight
+  group: vizit-unsigned-ipa-artifact
   cancel-in-progress: true
 
 jobs:
-  upload:
+  build:
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       VIZIT_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
       VIZIT_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
@@ -29,13 +24,6 @@ jobs:
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
-      APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
-      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
-      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
-      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -48,43 +36,14 @@ jobs:
           fi
           xcodebuild -version
 
-      - name: Install signing credentials
+      - name: Verify Figma release references
         shell: bash
         run: |
           set -euo pipefail
-          certificate="$RUNNER_TEMP/VIZIT-distribution.p12"
-          profile="$RUNNER_TEMP/VIZIT-App-Store.mobileprovision"
-          keychain="$RUNNER_TEMP/VIZIT-signing.keychain-db"
-          keychain_password="$(openssl rand -hex 32)"
+          test -f ios/Release/Figma/13-iOS-Main-App.png
+          test -f ios/Release/Figma/14-iOS-Profile-Customization.png
 
-          printf '%s' "$APPLE_DISTRIBUTION_CERTIFICATE_BASE64" | base64 -D > "$certificate"
-          printf '%s' "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 -D > "$profile"
-
-          security create-keychain -p "$keychain_password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$keychain_password" "$keychain"
-          security import "$certificate" -P "$APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-
-          profile_plist="$RUNNER_TEMP/profile.plist"
-          security cms -D -i "$profile" > "$profile_plist"
-          profile_uuid="$(plutil -extract UUID raw "$profile_plist")"
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          profile_path="$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
-          cp "$profile" "$profile_path"
-
-          api_key_dir="$HOME/.appstoreconnect/private_keys"
-          mkdir -p "$api_key_dir"
-          api_key_path="$api_key_dir/AuthKey_$APP_STORE_CONNECT_API_KEY_ID.p8"
-          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 -D > "$api_key_path"
-          chmod 600 "$api_key_path"
-
-          echo "VIZIT_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
-          echo "VIZIT_PROFILE_PATH=$profile_path" >> "$GITHUB_ENV"
-          echo "VIZIT_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
-
-      - name: Archive VIZIT Figma-complete
+      - name: Build unsigned VIZIT app
         shell: bash
         run: |
           set -euo pipefail
@@ -92,8 +51,14 @@ jobs:
             -project ios/VIZIT.xcodeproj \
             -scheme VIZIT \
             -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/VIZIT.xcarchive" \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" \
             VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY" \
@@ -104,37 +69,24 @@ jobs:
             VIZIT_TERMS_URL="$VIZIT_TERMS_URL" \
             VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION" \
             VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL" \
-            archive
+            build
 
-      - name: Export IPA
+      - name: Package unsigned IPA
         shell: bash
         run: |
           set -euo pipefail
-          export_dir="$RUNNER_TEMP/VIZIT-export"
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/VIZIT.xcarchive" \
-            -exportOptionsPlist ios/ExportOptions-TestFlight.plist \
-            -exportPath "$export_dir"
-          ipa="$(find "$export_dir" -maxdepth 1 -name '*.ipa' -print -quit)"
-          test -n "$ipa"
-          cp "$ipa" "$RUNNER_TEMP/VIZIT-TestFlight.ipa"
-          echo "VIZIT_SIGNED_IPA=$RUNNER_TEMP/VIZIT-TestFlight.ipa" >> "$GITHUB_ENV"
+          app="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/VIZIT.app"
+          test -d "$app"
+          package="$RUNNER_TEMP/ipa-package"
+          mkdir -p "$package/Payload"
+          cp -R "$app" "$package/Payload/"
+          (cd "$package" && /usr/bin/zip -qry "$RUNNER_TEMP/VIZIT-Figma-iOS-unsigned.ipa" Payload)
+          /usr/bin/unzip -t "$RUNNER_TEMP/VIZIT-Figma-iOS-unsigned.ipa"
 
-      - name: Upload to TestFlight
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcrun altool --upload-app \
-            --type ios \
-            --file "$VIZIT_SIGNED_IPA" \
-            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
-
-      - name: Remove signing material
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          test -z "${VIZIT_PROFILE_PATH:-}" || rm -f "$VIZIT_PROFILE_PATH"
-          test -z "${VIZIT_ASC_KEY_PATH:-}" || rm -f "$VIZIT_ASC_KEY_PATH"
-          test -z "${VIZIT_SIGNING_KEYCHAIN:-}" || security delete-keychain "$VIZIT_SIGNING_KEYCHAIN"
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VIZIT-Figma-iOS-unsigned
+          path: ${{ runner.temp }}/VIZIT-Figma-iOS-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
