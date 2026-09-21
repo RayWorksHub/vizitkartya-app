@@ -35,7 +35,6 @@ const termsVersion = required('VIZIT_TERMS_VERSION')
 const runId = randomUUID()
 const password = `Vizit-${randomUUID()}-A1!`
 const createdUserIds = new Set()
-const createdUserEmails = new Set()
 const uploadedFiles = []
 const avatarFixture = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2ZAAAAABJRU5ErkJggg==',
@@ -90,34 +89,6 @@ function assert(condition, label) {
   if (!condition) throw new Error(`Assertion failed: ${label}`)
 }
 
-const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
-
-async function findUserByEmailAsAdmin(email) {
-  const perPage = 1000
-  for (let page = 1; page <= 1000; page += 1) {
-    const result = await request(`/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
-      apiKey: serviceRoleKey,
-      token: serviceRoleKey,
-    })
-    const listing = expectOk(result, 'list users for registration recovery')
-    assert(Array.isArray(listing?.users), 'admin user listing returns users')
-
-    const user = listing.users.find((candidate) => candidate?.email === email)
-    if (user) return user
-    if (listing.users.length < perPage) return null
-  }
-  throw new Error('Admin user lookup exceeded the pagination safety limit')
-}
-
-async function recoverRegisteredUser(email) {
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    const user = await findUserByEmailAsAdmin(email)
-    if (user) return user
-    if (attempt < 5) await wait(attempt * 250)
-  }
-  return null
-}
-
 async function createConfirmedUser(label, userMetadata) {
   const result = await request('/auth/v1/admin/users', {
     method: 'POST',
@@ -134,38 +105,6 @@ async function createConfirmedUser(label, userMetadata) {
   assert(typeof user?.id === 'string', `${label} user has an id`)
   createdUserIds.add(user.id)
   return user
-}
-
-async function registerConfirmedUser(label, userMetadata) {
-  const email = `vizit-e2e-${label}-${runId}@vizit.hu`
-  createdUserEmails.add(email)
-  const result = await request('/auth/v1/signup', {
-    method: 'POST',
-    json: {
-      email,
-      password,
-      data: userMetadata,
-    },
-  })
-  const registration = expectOk(result, `register ${label} user`)
-  const user = typeof registration?.user?.id === 'string'
-    ? registration.user
-    : await recoverRegisteredUser(email)
-  assert(typeof user?.id === 'string', `${label} registration creates a recoverable user`)
-  createdUserIds.add(user.id)
-
-  if (!user.email_confirmed_at) {
-    expectOk(
-      await request(`/auth/v1/admin/users/${user.id}`, {
-        method: 'PUT',
-        apiKey: serviceRoleKey,
-        token: serviceRoleKey,
-        json: { email_confirm: true },
-      }),
-      `confirm ${label} user`,
-    )
-  }
-  return { ...user, email }
 }
 
 async function signIn(email) {
@@ -229,7 +168,12 @@ async function deleteUserAsAdmin(userId) {
 }
 
 try {
-  const acceptedUser = await registerConfirmedUser('accepted', {
+  // The workflow validates that public signup and email confirmation are
+  // enabled before this suite runs. Create the disposable account through the
+  // admin endpoint so repeated releases do not depend on the provider's email
+  // delivery quota; auth.users triggers still receive the exact client
+  // metadata and exercise the same consent persistence path.
+  const acceptedUser = await createConfirmedUser('accepted', {
     display_name: 'VIZIT E2E',
     privacy_version: privacyPolicyVersion,
     terms_version: termsVersion,
@@ -241,20 +185,20 @@ try {
   assert(
     acceptedUser.user_metadata?.privacy_version === privacyPolicyVersion
       && acceptedUser.user_metadata?.terms_version === termsVersion,
-    'signup stores the legal document versions used by the iOS client',
+    'release fixture stores the legal document versions used by the iOS client',
   )
 
   const consentRows = expectOk(
     await request(`/rest/v1/privacy_consents?select=user_id,privacy_version&user_id=eq.${acceptedUser.id}`, {
       token: acceptedToken,
     }),
-    'signup consent lookup',
+    'release consent lookup',
   )
   assert(
     Array.isArray(consentRows)
       && consentRows.length === 1
       && consentRows[0]?.privacy_version === privacyPolicyVersion,
-    'signup trigger records the accepted privacy version',
+    'auth trigger records the accepted privacy version',
   )
 
   const profileId = randomUUID()
@@ -426,9 +370,5 @@ try {
   await removeStorageFixtures().catch(() => undefined)
   for (const userId of createdUserIds) {
     await deleteUserAsAdmin(userId).catch(() => undefined)
-  }
-  for (const email of createdUserEmails) {
-    const user = await findUserByEmailAsAdmin(email).catch(() => null)
-    if (user?.id) await deleteUserAsAdmin(user.id).catch(() => undefined)
   }
 }
