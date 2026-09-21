@@ -427,7 +427,7 @@ struct ShareScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if selectedMode != .profile, let payload = qrPayload {
                     VizitStatusPill(
-                        text: "\(payload.utf8.count) / 2 200 bájt",
+                        text: "\(payload.utf8.count) / \(VCard.maximumHighCorrectionBytes.formatted()) bájt",
                         tone: .success
                     )
                 }

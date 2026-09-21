@@ -96,6 +96,12 @@ final class VizitUITests: XCTestCase {
         return app
     }
 
+    private func assertColorScheme(_ expected: String, in app: XCUIApplication) {
+        let probe = app.staticTexts["app.colorScheme"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 5))
+        XCTAssertEqual(probe.label, expected)
+    }
+
     func testConfiguredAppShowsAuthentication() {
         let app = launchAuthentication()
         XCTAssertTrue(app.buttons["auth.submit"].waitForExistence(timeout: 10))
@@ -365,8 +371,9 @@ final class VizitUITests: XCTestCase {
     }
 
     func testDarkAppearanceCoversEveryPrimaryDestination() {
-        let app = launchReleaseAudit(["-AppleInterfaceStyle", "Dark"])
+        let app = launchReleaseAudit(["--ui-testing-theme-dark"])
         XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 10))
+        assertColorScheme("DARK", in: app)
         capture("VIZIT-home-dark", in: app)
 
         app.tabBars.buttons["Névjegy"].tap()
@@ -383,8 +390,9 @@ final class VizitUITests: XCTestCase {
     }
 
     func testAuthenticationDarkAppearance() {
-        let app = launchAuthentication(["-AppleInterfaceStyle", "Dark"])
+        let app = launchAuthentication(["--ui-testing-theme-dark"])
         XCTAssertTrue(app.buttons["auth.submit"].waitForExistence(timeout: 10))
+        assertColorScheme("DARK", in: app)
         capture("VIZIT-auth-login-dark", in: app)
     }
 
@@ -401,6 +409,7 @@ final class VizitUITests: XCTestCase {
         }
         control.buttons["Sötét"].tap()
         assertSelected(control.buttons["Sötét"])
+        assertColorScheme("DARK", in: app)
         app.buttons["Kész"].tap()
 
         app.tabBars.buttons["Megosztás"].tap()

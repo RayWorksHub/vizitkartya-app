@@ -126,6 +126,9 @@ final class VizitCoreTests: XCTestCase {
         XCTAssertNoThrow(try p.validate(), "The profile itself must stay inside every database field limit")
         XCTAssertThrowsError(try VCard.qrPayload(p)) { XCTAssertEqual($0 as? ProfileError, .oversizedQR) }
     }
+    func testHighCorrectionQRCapacityMatchesTheEncoderContract() {
+        XCTAssertEqual(VCard.maximumHighCorrectionBytes, 1_273)
+    }
     func testUTF8FoldingPreservesEveryScalar() {
         for value in [String(repeating: "Őű😀;", count: 70), String(repeating: "a", count: 76), "", "Rövid"] {
             let folded = VCard.fold(value)

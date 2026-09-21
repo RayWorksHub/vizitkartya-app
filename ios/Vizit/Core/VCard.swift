@@ -1,6 +1,9 @@
 import Foundation
 
 public enum VCard {
+    /// QR version 40, byte mode, highest (H) error correction.
+    public static let maximumHighCorrectionBytes = 1_273
+
     /// The caller chooses whether to include a photograph. VIZIT's public
     /// hand-off routes require it; plain encoding remains available for safe
     /// parsing and legacy import tests.
@@ -61,7 +64,7 @@ public enum VCard {
         let payload = lines.map(fold).joined(separator: "\r\n") + "\r\n"
         // Keep enough module headroom for reliable camera decoding on a
         // handheld screen; the .vcf share route remains available for denser data.
-        guard payload.utf8.count <= 2200 else { throw ProfileError.oversizedQR }
+        guard payload.utf8.count <= maximumHighCorrectionBytes else { throw ProfileError.oversizedQR }
         return payload
     }
 

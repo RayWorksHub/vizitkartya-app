@@ -786,7 +786,23 @@ enum RootTab: Hashable {
 
 struct AppGate: View {
     @EnvironmentObject private var store: AppStore
-    @State private var themeMode: ThemeMode = ThemeStorage.current
+    @State private var themeMode: ThemeMode
+
+    init() {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--ui-testing-theme-dark") {
+            _themeMode = State(initialValue: .dark)
+        } else if arguments.contains("--ui-testing") {
+            // UI evidence must not inherit a theme written by another test.
+            _themeMode = State(initialValue: .light)
+        } else {
+            _themeMode = State(initialValue: ThemeStorage.current)
+        }
+        #else
+        _themeMode = State(initialValue: ThemeStorage.current)
+        #endif
+    }
 
     var body: some View {
         Group {
@@ -817,12 +833,28 @@ struct AppGate: View {
             }
         }
         .preferredColorScheme(themeMode.colorScheme)
+        .overlay(alignment: .topLeading) {
+            ColorSchemeProbe()
+        }
         .alert("VIZIT", isPresented: Binding(
             get: { store.message != nil },
             set: { if !$0 { store.dismissMessage() } }
         )) {
             Button("Rendben", role: .cancel) { store.dismissMessage() }
         } message: { Text(store.message ?? "") }
+    }
+}
+
+private struct ColorSchemeProbe: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Text(colorScheme == .dark ? "DARK" : "LIGHT")
+            .font(.system(size: 1))
+            .foregroundStyle(Color.clear)
+            .frame(width: 1, height: 1)
+            .accessibilityIdentifier("app.colorScheme")
+            .accessibilityHidden(!ProcessInfo.processInfo.arguments.contains("--ui-testing"))
     }
 }
 

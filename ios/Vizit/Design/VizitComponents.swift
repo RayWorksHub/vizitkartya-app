@@ -52,7 +52,11 @@ struct VizitButton: View {
                 } else if let systemImage {
                     Image(systemName: systemImage).font(.system(size: 17, weight: .semibold))
                 }
-                Text(title).font(VizitFont.button)
+                Text(title)
+                    .font(VizitFont.button)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .allowsTightening(true)
             }
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
