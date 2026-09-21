@@ -248,6 +248,268 @@ struct VizitCheckbox: View {
     }
 }
 
+struct VizitSwitch: View {
+    let title: String
+    var supporting: String?
+    @Binding var isOn: Bool
+    var isEnabled = true
+    var isError = false
+    var isLoading = false
+
+    var body: some View {
+        HStack(spacing: VizitSpace.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(VizitFont.body)
+                    .foregroundStyle(isEnabled ? VizitColor.textPrimary : VizitColor.textDisabled)
+                if let supporting {
+                    Text(supporting)
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(isError ? VizitColor.error : VizitColor.textMuted)
+                }
+            }
+            Spacer(minLength: VizitSpace.sm)
+            if isLoading {
+                ProgressView().controlSize(.small)
+            } else {
+                Toggle("", isOn: $isOn)
+                    .labelsHidden()
+                    .disabled(!isEnabled)
+                    .tint(isError ? VizitColor.error : VizitColor.primary)
+            }
+        }
+        .frame(minHeight: VizitMetrics.minTouchTarget)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct VizitChip: View {
+    let text: String
+    var selected = false
+    var disabled = false
+    var error = false
+    var action: (() -> Void)?
+
+    var body: some View {
+        let foreground: Color = disabled
+            ? VizitColor.textDisabled
+            : (error ? VizitColor.error : (selected ? VizitColor.textOnBrand : VizitColor.textPrimary))
+        let background: Color = disabled
+            ? VizitColor.controlDisabled
+            : (error ? VizitColor.errorSubtle : (selected ? VizitColor.primary : VizitColor.surface))
+
+        Group {
+            if let action {
+                Button(action: action) { label(foreground: foreground, background: background) }
+                    .buttonStyle(.plain)
+                    .disabled(disabled)
+            } else {
+                label(foreground: foreground, background: background)
+            }
+        }
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    private func label(foreground: Color, background: Color) -> some View {
+        Text(text)
+            .font(VizitFont.label)
+            .foregroundStyle(foreground)
+            .padding(.horizontal, VizitSpace.sm)
+            .padding(.vertical, VizitSpace.xs)
+            .background(background)
+            .clipShape(Capsule())
+            .overlay {
+                Capsule().stroke(
+                    error ? VizitColor.error : (selected ? VizitColor.primary : VizitColor.border),
+                    lineWidth: 1
+                )
+            }
+    }
+}
+
+struct VizitToast: View {
+    let text: String
+    var tone: VizitTone = .success
+
+    var body: some View {
+        HStack(spacing: VizitSpace.xs) {
+            Image(systemName: tone.systemImage)
+            Text(text).font(VizitFont.bodySmall)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(tone.foreground)
+        .padding(.horizontal, VizitSpace.md)
+        .padding(.vertical, VizitSpace.sm)
+        .background(tone.background)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct VizitSnackbar: View {
+    let text: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: VizitSpace.sm) {
+            Text(text)
+                .font(VizitFont.bodySmall)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(VizitFont.label)
+                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, VizitSpace.md)
+        .padding(.vertical, VizitSpace.sm)
+        .background(VizitColor.ink)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+    }
+}
+
+struct VizitPermissionCard: View {
+    let systemImage: String
+    let title: String
+    let message: String
+    let primaryTitle: String
+    var secondaryTitle: String? = nil
+    let primaryAction: () -> Void
+    var secondaryAction: (() -> Void)? = nil
+
+    var body: some View {
+        VizitPanel {
+            VStack(alignment: .leading, spacing: VizitSpace.md) {
+                VizitIconChip(systemImage: systemImage, tint: VizitColor.primary, background: VizitColor.primarySubtle)
+                Text(title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                Text(message)
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(VizitColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: VizitSpace.sm) {
+                    if let secondaryTitle, let secondaryAction {
+                        VizitButton(title: secondaryTitle, kind: .secondary, action: secondaryAction)
+                    }
+                    VizitButton(title: primaryTitle, action: primaryAction)
+                }
+            }
+        }
+    }
+}
+
+struct VizitConfirmationCard: View {
+    let title: String
+    let message: String
+    var cancelTitle = "Mégse"
+    let confirmTitle: String
+    var destructive = false
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        VizitPanel {
+            VStack(alignment: .leading, spacing: VizitSpace.md) {
+                Text(title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
+                Text(message).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                HStack(spacing: VizitSpace.sm) {
+                    VizitButton(title: cancelTitle, kind: .secondary, action: onCancel)
+                    VizitButton(
+                        title: confirmTitle,
+                        kind: destructive ? .destructive : .primary,
+                        action: onConfirm
+                    )
+                }
+            }
+        }
+    }
+}
+
+struct VizitSearchEmptyState: View {
+    let query: String
+    let clearAction: () -> Void
+
+    var body: some View {
+        VizitEmptyState(
+            systemImage: "magnifyingglass",
+            title: "Nincs találat erre: „\(query)”",
+            message: "Ellenőrizd az írásmódot, vagy próbálj rövidebb kifejezést.",
+            actionTitle: "Keresés törlése",
+            action: clearAction
+        )
+    }
+}
+
+struct VizitPermissionDeniedState: View {
+    let openSettings: () -> Void
+
+    var body: some View {
+        VizitEmptyState(
+            systemImage: "camera.fill",
+            title: "A kamera nincs engedélyezve",
+            message: "A beolvasáshoz engedélyezd a kamerát a Beállításokban.",
+            actionTitle: "Beállítások megnyitása",
+            action: openSettings,
+            tone: .error
+        )
+    }
+}
+
+struct VizitSessionExpiredState: View {
+    let login: () -> Void
+
+    var body: some View {
+        VizitEmptyState(
+            systemImage: "lock.fill",
+            title: "A munkameneted lejárt",
+            message: "Biztonsági okból kiléptettünk. A megkezdett módosításaid megmaradtak ezen a készüléken.",
+            actionTitle: "Bejelentkezés",
+            action: login,
+            tone: .error
+        )
+    }
+}
+
+struct VizitSyncConflictState: View {
+    let localDate: String
+    let remoteDate: String
+    let chooseLocal: () -> Void
+    let chooseRemote: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VizitSpace.md) {
+            Text("Két helyen is módosítottad")
+                .font(VizitFont.h3)
+                .foregroundStyle(VizitColor.textPrimary)
+            VStack(spacing: VizitSpace.sm) {
+                Button(action: chooseLocal) {
+                    VizitPanel {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Ezen a telefonon").font(VizitFont.label)
+                                Text("Módosítva: \(localDate)").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "checkmark").foregroundStyle(VizitColor.primary)
+                        }
+                    }
+                }.buttonStyle(.plain)
+                Button(action: chooseRemote) {
+                    VizitPanel {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Egy másik eszközön").font(VizitFont.label)
+                            Text("Módosítva: \(remoteDate)").font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                        }
+                    }
+                }.buttonStyle(.plain)
+            }
+        }
+    }
+}
+
 // MARK: - Surfaces
 
 /// Restrained panel: hairline border, no shadow. The app is not built out of
