@@ -1,8 +1,7 @@
-# VIZIT Android v2
+# VIZIT
 
-A VIZIT Xiaomi/HyperOS-first natív Android digitális névjegy- és kontaktmegosztó alkalmazás.
+A VIZIT digitális névjegy- és kontaktmegosztó alkalmazás. Az alábbi műszaki összefoglaló az Android klienst ismerteti.
 
-A fejlesztés elsődleges követelményforrása a [`docs/VIZIT_MASTER_SPEC_V1.md`](docs/VIZIT_MASTER_SPEC_V1.md). A jelenlegi kód alpha állapotú; nem production kiadás.
 
 ## Termékcél
 
@@ -44,7 +43,6 @@ A Supabase, Google OAuth és publikus profil értékei Gradle propertyből érke
 
 ## Dokumentáció
 
-- [`docs/VIZIT_MASTER_SPEC_V1.md`](docs/VIZIT_MASTER_SPEC_V1.md)
 - [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/BRANDING.md`](docs/BRANDING.md)

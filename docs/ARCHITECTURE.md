@@ -2,7 +2,7 @@
 
 ## Cél
 
-A GitHub repository az egyetlen source of truth. A natív Android kliens offline-first módon működik: a felhasználói művelet először lokálisan jelenik meg, majd a repository réteg szinkronizál Supabase felé.
+A natív Android kliens offline-first módon működik: a felhasználói művelet először lokálisan jelenik meg, majd a repository réteg szinkronizál Supabase felé.
 
 ## Rétegek
 
