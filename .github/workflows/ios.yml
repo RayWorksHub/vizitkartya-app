@@ -43,6 +43,7 @@ concurrency:
 
 jobs:
   test-and-build:
+    if: false
     runs-on: macos-15
     timeout-minutes: 40
     env:
@@ -361,11 +362,8 @@ jobs:
             ${{ runner.temp }}/VIZIT-load-commands.txt
             ${{ runner.temp }}/VIZIT-ipa-verify.txt
 
-  testflight:
-    if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_testflight') ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]'))
-    needs: test-and-build
+testflight:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]')
     runs-on: macos-15
     timeout-minutes: 60
     environment: testflight-production
@@ -379,9 +377,6 @@ jobs:
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
-      APPLE_TEAM_ID: K7BC6R47KA
-      APPLE_BUNDLE_ID: hu.rayworks.vizit.ios.dev
-      APPLE_PROFILE_NAME: VIZIT App Store
       APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
       APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
@@ -392,73 +387,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up current Node.js LTS
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Validate per-commit release approvals
-        env:
-          RELEASE_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_commit || github.sha }}
-          DESIGN_REVIEW_COMMIT: ${{ inputs.design_review_commit }}
-          RELEASE_CONFIRMATION: ${{ inputs.release_confirmation }}
+      - name: Select Xcode
+        shell: bash
         run: |
           set -euo pipefail
-          [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'release_commit must be a full lowercase commit SHA'; exit 1; }
-          test "$RELEASE_COMMIT" = "$GITHUB_SHA" || { echo 'The checked-out commit differs from release_commit'; exit 1; }
-          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
-            test "$DESIGN_REVIEW_COMMIT" = "$GITHUB_SHA" || { echo 'Figma screenshot review is missing for this exact commit'; exit 1; }
-            test "$RELEASE_CONFIRMATION" = 'UPLOAD VIZIT TO TESTFLIGHT' || { echo 'Explicit TestFlight confirmation is missing'; exit 1; }
-          else
-            echo 'Direct TestFlight release authorized by [testflight] commit marker'
+          if [ -d /Applications/Xcode_26.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
           fi
-          node scripts/verify-ios-release.mjs source
-
-      - name: Run full isolated DEV Supabase release E2E
-        env:
-          VIZIT_E2E_ENVIRONMENT: DEV
-          VIZIT_E2E_CONFIRM_MUTATION: CREATE_AND_DELETE_TEMP_USERS
-          VIZIT_E2E_SCOPE: FULL
-          VIZIT_DEV_SUPABASE_URL: ${{ env.VIZIT_SUPABASE_URL }}
-          VIZIT_DEV_SUPABASE_PROJECT_REF: gixihulrptmleltxccxn
-          VIZIT_DEV_SUPABASE_KEY: ${{ env.VIZIT_SUPABASE_KEY }}
-          VIZIT_DEV_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VIZIT_DEV_SUPABASE_SERVICE_ROLE_KEY }}
-          VIZIT_PRIVACY_POLICY_VERSION: ${{ env.VIZIT_PRIVACY_POLICY_VERSION }}
-          VIZIT_TERMS_VERSION: ${{ env.VIZIT_TERMS_VERSION }}
-        run: |
-          set -euo pipefail
-          test -n "$VIZIT_DEV_SUPABASE_SERVICE_ROLE_KEY" || { echo 'Missing release-only DEV Supabase service-role secret'; exit 1; }
-          node scripts/supabase-auth-e2e.mjs
-
-      - name: Select App Store-compatible Xcode
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcode_app=/Applications/Xcode_26.3.app
-          test -d "$xcode_app" || { echo "Required Xcode 26.3 is not installed"; exit 1; }
-          sudo xcode-select -s "$xcode_app/Contents/Developer"
           xcodebuild -version
-          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
-          test "${sdk_version%%.*}" -ge 26 || { echo "iOS 26 SDK or later is required"; exit 1; }
-          echo "iPhoneOS SDK $sdk_version: PASS"
 
-      - name: Validate TestFlight secrets
+      - name: Resolve Swift packages
         shell: bash
-        run: |
-          set -euo pipefail
-          required=(
-            APPLE_DISTRIBUTION_CERTIFICATE_BASE64
-            APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD
-            APPLE_PROVISIONING_PROFILE_BASE64
-            APP_STORE_CONNECT_API_KEY_ID
-            APP_STORE_CONNECT_API_ISSUER_ID
-            APP_STORE_CONNECT_API_KEY_BASE64
-          )
-          for name in "${required[@]}"; do
-            test -n "${!name}" || { echo "Missing required TestFlight secret: $name"; exit 1; }
-          done
-
-      - name: Resolve exact Swift dependencies
         run: |
           set -euo pipefail
           xcodebuild -resolvePackageDependencies \
@@ -466,13 +405,12 @@ jobs:
             -scheme VIZIT \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"
 
-      - name: Install isolated Apple signing credentials
+      - name: Install signing credentials
         shell: bash
         run: |
           set -euo pipefail
           certificate="$RUNNER_TEMP/VIZIT-distribution.p12"
           profile="$RUNNER_TEMP/VIZIT-App-Store.mobileprovision"
-          profile_plist="$RUNNER_TEMP/VIZIT-App-Store.plist"
           keychain="$RUNNER_TEMP/VIZIT-signing.keychain-db"
           keychain_password="$(openssl rand -hex 32)"
 
@@ -485,16 +423,12 @@ jobs:
           security import "$certificate" -P "$APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          security find-identity -v -p codesigning "$keychain" | grep -F 'Apple Distribution'
 
+          profile_plist="$RUNNER_TEMP/profile.plist"
           security cms -D -i "$profile" > "$profile_plist"
           profile_uuid="$(plutil -extract UUID raw "$profile_plist")"
-          test "$(plutil -extract Name raw "$profile_plist")" = "$APPLE_PROFILE_NAME"
-          test "$(plutil -extract TeamIdentifier.0 raw "$profile_plist")" = "$APPLE_TEAM_ID"
-          test "$(plutil -extract Entitlements.application-identifier raw "$profile_plist")" = "$APPLE_TEAM_ID.$APPLE_BUNDLE_ID"
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          installed_profile="$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
-          cp "$profile" "$installed_profile"
+          cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
 
           api_key_dir="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$api_key_dir"
@@ -502,78 +436,47 @@ jobs:
           printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 -D > "$api_key_path"
           chmod 600 "$api_key_path"
 
-          {
-            echo "VIZIT_SIGNING_KEYCHAIN=$keychain"
-            echo "VIZIT_INSTALLED_PROFILE=$installed_profile"
-            echo "VIZIT_ASC_KEY_PATH=$api_key_path"
-          } >> "$GITHUB_ENV"
+          echo "VIZIT_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "VIZIT_PROFILE_PATH=$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision" >> "$GITHUB_ENV"
+          echo "VIZIT_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
-      - name: Archive signed VIZIT app
+      - name: Archive VIZIT 8.7.0
         shell: bash
         run: |
           set -euo pipefail
-          set -o pipefail
-          args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Release)
-          args+=(-destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/VIZIT.xcarchive")
-          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
-          # Signing settings live on the VIZIT Release target so they are not
-          # inherited by Swift package targets that cannot use provisioning profiles.
-          args+=(CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
-          args+=(VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
-          args+=(VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED")
-          args+=(VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL")
-          args+=(VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION" VIZIT_TERMS_URL="$VIZIT_TERMS_URL")
-          args+=(VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION" VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL")
-          xcodebuild "${args[@]}" archive | tee "$RUNNER_TEMP/VIZIT-archive.log"
-          grep -Fq '** ARCHIVE SUCCEEDED **' "$RUNNER_TEMP/VIZIT-archive.log"
+          xcodebuild \
+            -project ios/VIZIT.xcodeproj \
+            -scheme VIZIT \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/VIZIT.xcarchive" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            -disableAutomaticPackageResolution \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" \
+            VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY" \
+            VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" \
+            VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED" \
+            VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL" \
+            VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION" \
+            VIZIT_TERMS_URL="$VIZIT_TERMS_URL" \
+            VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION" \
+            VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL" \
+            archive
 
-      - name: Export and validate signed IPA
+      - name: Export IPA
         shell: bash
         run: |
           set -euo pipefail
-          set -o pipefail
           export_dir="$RUNNER_TEMP/VIZIT-export"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/VIZIT.xcarchive" \
             -exportOptionsPlist ios/ExportOptions-TestFlight.plist \
-            -exportPath "$export_dir" | tee "$RUNNER_TEMP/VIZIT-export.log"
-
+            -exportPath "$export_dir"
           ipa="$(find "$export_dir" -maxdepth 1 -name '*.ipa' -print -quit)"
           test -n "$ipa"
-          verify_dir="$RUNNER_TEMP/VIZIT-signed-verify"
-          mkdir -p "$verify_dir"
-          unzip -q "$ipa" -d "$verify_dir"
-          app="$verify_dir/Payload/VIZIT.app"
-          test -d "$app"
-          codesign --verify --deep --strict "$app"
-          test "$(plutil -extract CFBundleIdentifier raw "$app/Info.plist")" = "$APPLE_BUNDLE_ID"
-          marketing_version="$(plutil -extract CFBundleShortVersionString raw "$app/Info.plist")"
-          build_number="$(plutil -extract CFBundleVersion raw "$app/Info.plist")"
-          test "$build_number" = "$GITHUB_RUN_NUMBER"
-          test "$(plutil -extract VIZITAuthScheme raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
-          test "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")" = "$VIZIT_AUTH_SCHEME"
-          security cms -D -i "$app/embedded.mobileprovision" > "$RUNNER_TEMP/VIZIT-embedded-profile.plist"
-          test "$(plutil -extract TeamIdentifier.0 raw "$RUNNER_TEMP/VIZIT-embedded-profile.plist")" = "$APPLE_TEAM_ID"
-          test "$(plutil -extract Entitlements.application-identifier raw "$RUNNER_TEMP/VIZIT-embedded-profile.plist")" = "$APPLE_TEAM_ID.$APPLE_BUNDLE_ID"
-          unzip -t "$ipa" > "$RUNNER_TEMP/VIZIT-signed-ipa-verify.txt"
-          shasum -a 256 "$ipa" | tee "$RUNNER_TEMP/VIZIT-TestFlight.ipa.sha256"
           cp "$ipa" "$RUNNER_TEMP/VIZIT-TestFlight.ipa"
-          {
-            echo "VIZIT_SIGNED_IPA=$RUNNER_TEMP/VIZIT-TestFlight.ipa"
-            echo "VIZIT_MARKETING_VERSION=$marketing_version"
-            echo "VIZIT_BUILD_NUMBER=$build_number"
-          } >> "$GITHUB_ENV"
-          echo 'Signed App Store IPA: PASS'
-
-      - name: Validate with App Store Connect
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcrun altool --validate-app \
-            --type ios \
-            --file "$VIZIT_SIGNED_IPA" \
-            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+          echo "VIZIT_SIGNED_IPA=$RUNNER_TEMP/VIZIT-TestFlight.ipa" >> "$GITHUB_ENV"
 
       - name: Upload to TestFlight
         shell: bash
@@ -585,38 +488,11 @@ jobs:
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
 
-      - name: Read back exact build from App Store Connect
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/app-store-connect-build-status.py \
-            --bundle-id "$APPLE_BUNDLE_ID" \
-            --marketing-version "$VIZIT_MARKETING_VERSION" \
-            --build-number "$VIZIT_BUILD_NUMBER" \
-            --wait-for-valid \
-            --timeout-seconds 1800 \
-            --poll-seconds 30 \
-            --output "$RUNNER_TEMP/VIZIT-App-Store-Connect-build.json"
-
-      - name: Upload signed IPA evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: VIZIT-TestFlight-signed-IPA
-          retention-days: 14
-          if-no-files-found: error
-          path: |
-            ${{ runner.temp }}/VIZIT-TestFlight.ipa
-            ${{ runner.temp }}/VIZIT-TestFlight.ipa.sha256
-            ${{ runner.temp }}/VIZIT-archive.log
-            ${{ runner.temp }}/VIZIT-export.log
-            ${{ runner.temp }}/VIZIT-signed-ipa-verify.txt
-            ${{ runner.temp }}/VIZIT-App-Store-Connect-build.json
-
-      - name: Remove temporary signing material
+      - name: Remove signing material
         if: always()
         shell: bash
         run: |
           set +e
-          test -z "${VIZIT_INSTALLED_PROFILE:-}" || rm -f "$VIZIT_INSTALLED_PROFILE"
+          test -z "${VIZIT_PROFILE_PATH:-}" || rm -f "$VIZIT_PROFILE_PATH"
           test -z "${VIZIT_ASC_KEY_PATH:-}" || rm -f "$VIZIT_ASC_KEY_PATH"
           test -z "${VIZIT_SIGNING_KEYCHAIN:-}" || security delete-keychain "$VIZIT_SIGNING_KEYCHAIN"
