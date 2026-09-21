@@ -71,13 +71,22 @@ public struct CardPresentation: Codable, Equatable, Sendable {
         try values.encode(showsQR, forKey: .showsQR)
         try values.encode(showsSocial, forKey: .showsSocial)
         try values.encode(companyLogoBase64, forKey: .companyLogoBase64)
-        try values.encode(sectionOrder, forKey: .sectionOrder)
+        try values.encode(orderedSections, forKey: .sectionOrder)
         try values.encode(sharesCompany, forKey: .sharesCompany)
         try values.encode(sharesEmail, forKey: .sharesEmail)
         try values.encode(sharesPhone, forKey: .sharesPhone)
         try values.encode(sharesWebsite, forKey: .sharesWebsite)
         try values.encode(sharesSocial, forKey: .sharesSocial)
         try values.encode(sharesAddress, forKey: .sharesAddress)
+    }
+
+    /// A stable, complete ordering even after loading an older or duplicate list.
+    public var orderedSections: [CardSection] {
+        var result: [CardSection] = []
+        for section in sectionOrder + CardSection.allCases where !result.contains(section) {
+            result.append(section)
+        }
+        return result
     }
 
     /// The number of optional fields currently shared, for the Settings row.

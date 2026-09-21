@@ -19,6 +19,8 @@ struct ProfileEditor: View {
     @State private var companyLogo: PhotosPickerItem?
     @State private var loadingCompanyLogo = false
     @State private var showSectionOrder = false
+    @State private var draftPresentation = CardPresentation()
+    @State private var presentationLoaded = false
 
     private var defaultProfileAddress: String {
         guard !draft.publicSlug.isEmpty,
@@ -74,6 +76,7 @@ struct ProfileEditor: View {
                         contactSection
                         socialSection
                         sharingSection
+                        presentationSection
                         if let error {
                             VizitInlineMessage(text: error, tone: .error)
                                 .accessibilityIdentifier("profile.inlineError")
@@ -86,6 +89,12 @@ struct ProfileEditor: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
+            .onAppear {
+                if !presentationLoaded {
+                    draftPresentation = presentation.value
+                    presentationLoaded = true
+                }
+            }
             .navigationTitle("Névjegy szerkesztése")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -94,18 +103,23 @@ struct ProfileEditor: View {
                     Button("Mentés") {
                         do {
                             let previous = store.profile
+                            let previousPresentation = presentation.value
+                            let savedPresentation = draftPresentation
                             let owner = store.accountIdentifier
                             let savedProfile = draft.normalized
                             try store.save(draft)
+                            presentation.value = savedPresentation
                             dismiss()
                             if (try? previous.validate()) != nil {
                                 feedback.show("A névjegy mentve.", actionTitle: "Visszavonás") {
-                                    guard store.accountIdentifier == owner, store.profile == savedProfile else {
+                                    guard store.accountIdentifier == owner, store.profile == savedProfile,
+                                          presentation.value == savedPresentation else {
                                         feedback.show("A névjegy azóta megváltozott. Nyisd meg a szerkesztőt a módosításhoz.", tone: .info)
                                         return
                                     }
                                     do {
                                         try store.save(previous)
+                                        presentation.value = previousPresentation
                                         feedback.show("Az előző névjegyadatokat visszaállítottuk.")
                                     } catch { feedback.show(error.localizedDescription, tone: .error) }
                                 }
@@ -164,14 +178,14 @@ struct ProfileEditor: View {
                           let png = UIImage(cgImage: thumbnail).pngData(),
                           png.count <= 384 * 1024 else { throw ProfileError.invalidPhoto }
                     try Task.checkCancellation()
-                    presentation.value.companyLogoBase64 = png.base64EncodedString()
+                    draftPresentation.companyLogoBase64 = png.base64EncodedString()
                 } catch is CancellationError {
                 } catch {
                     self.error = "A céges logó betöltése nem sikerült. Próbálj másik képet választani."
                 }
             }
             .sheet(isPresented: $showSectionOrder) {
-                CardSectionOrderScreen(store: presentation)
+                CardSectionOrderScreen(presentation: $draftPresentation, profile: draft)
             }
         }
     }
@@ -304,7 +318,7 @@ struct ProfileEditor: View {
                     ZStack {
                         RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous)
                             .fill(VizitColor.sunken)
-                        if let data = Data(base64Encoded: presentation.value.companyLogoBase64),
+                        if let data = Data(base64Encoded: draftPresentation.companyLogoBase64),
                            let image = UIImage(data: data) {
                             Image(uiImage: image)
                                 .resizable()
@@ -327,10 +341,10 @@ struct ProfileEditor: View {
                         .disabled(loadingCompanyLogo)
                         .frame(minHeight: VizitMetrics.minTouchTarget, alignment: .leading)
 
-                        if !presentation.value.companyLogoBase64.isEmpty {
+                        if !draftPresentation.companyLogoBase64.isEmpty {
                             Button("Logó eltávolítása") {
                                 companyLogo = nil
-                                presentation.value.companyLogoBase64 = ""
+                                draftPresentation.companyLogoBase64 = ""
                             }
                             .font(VizitFont.label)
                             .foregroundStyle(VizitColor.error)
@@ -455,6 +469,21 @@ struct ProfileEditor: View {
         }
     }
 
+    private var presentationSection: some View {
+        group("Kártya előnézete") {
+            VizitDigitalCard(profile: draft, presentation: draftPresentation)
+                .accessibilityIdentifier("profile.livePreview")
+            VizitPanel(padding: 0) {
+                VizitRow(label: "Szekciók sorrendje", systemImage: "line.3.horizontal.decrease",
+                         supporting: "A sorrend az előnézeten is azonnal megváltozik.") {
+                    showSectionOrder = true
+                }
+                .accessibilityIdentifier("profile.sectionOrder")
+            }
+            VizitInlineMessage(text: "A logó és a sorrend a Mentés gombbal véglegesül. A Mégse elveti ezeket a módosításokat.")
+        }
+    }
+
     private var sharingSection: some View {
         group("Megosztási adatok") {
             VStack(spacing: VizitSpace.sm) {
@@ -523,14 +552,6 @@ struct ProfileEditor: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    VizitPanel {
-                        VizitRow(
-                            label: "Szekciók sorrendje",
-                            systemImage: "line.3.horizontal.decrease",
-                            supporting: "A névjegy blokkjainak sorrendje"
-                        ) { showSectionOrder = true }
-                    }
-
                     VizitBanner(
                         text: "A QR és az NFC ezt adja: \(activeSharingAddress)",
                         tone: .info
@@ -543,37 +564,45 @@ struct ProfileEditor: View {
 
 }
 
-private struct CardSectionOrderScreen: View {
+struct CardSectionOrderScreen: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: CardPresentationStore
+    @Binding var presentation: CardPresentation
+    let profile: ContactProfile
+    @State private var draft = CardPresentation()
+    @State private var loaded = false
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    ForEach(store.value.sectionOrder) { section in
-                        HStack(spacing: VizitSpace.sm) {
-                            Image(systemName: "line.3.horizontal")
-                                .foregroundStyle(VizitColor.textMuted)
-                            Text(section.label)
-                                .font(VizitFont.body)
-                            Spacer()
-                        }
-                        .frame(minHeight: VizitMetrics.minTouchTarget)
-                    }
-                    .onMove { indices, newOffset in
-                        store.value.sectionOrder.move(fromOffsets: indices, toOffset: newOffset)
-                    }
-                } footer: {
-                    Text("Húzd a blokkokat a kívánt sorrendbe. A sorrend csak a megjelenést módosítja.")
+                Section("Élő előnézet") {
+                    VizitDigitalCard(profile: profile, presentation: draft)
+                        .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
                 }
+                Section {
+                    ForEach(draft.orderedSections) { section in
+                        Label(section.label, systemImage: "line.3.horizontal")
+                            .font(VizitFont.body)
+                            .frame(minHeight: VizitMetrics.minTouchTarget)
+                            .accessibilityIdentifier("card.section.\(section.rawValue)")
+                    }
+                    .onMove { indices, offset in
+                        var order = draft.orderedSections
+                        order.move(fromOffsets: indices, toOffset: offset)
+                        draft.sectionOrder = order
+                    }
+                } header: { Text("Szekciók") }
+                footer: { Text("Húzd a szekciókat a kívánt sorrendbe. A kötelező név nem kapcsolható ki.") }
             }
             .environment(\.editMode, .constant(.active))
+            .onAppear { if !loaded { draft = presentation; loaded = true } }
             .navigationTitle("Szekciók sorrendje")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Mégse") { dismiss() }
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Kész") { dismiss() }
+                    Button("Kész") { presentation = draft; dismiss() }
                 }
             }
         }

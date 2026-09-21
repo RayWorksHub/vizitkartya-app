@@ -14,6 +14,8 @@ struct VizitDigitalCard: View {
     /// Material, layout and which elements the owner chose in Kártya megjelenése.
     var presentation = CardPresentation()
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private var visible: ContactProfile { profile.visible(through: presentation) }
 
     private var subtitle: String {
@@ -23,7 +25,7 @@ struct VizitDigitalCard: View {
     private var accent: Color { Color(uiColor: UIColor(hex: presentation.colorway.accent)) }
     private var primaryText: Color { presentation.colorway.isLight ? VizitColor.ink : .white }
     private var secondaryText: Color {
-        presentation.colorway.isLight ? VizitColor.textSecondary : .white.opacity(0.72)
+        presentation.colorway.isLight ? VizitColor.ink.opacity(0.72) : .white.opacity(0.72)
     }
 
     private var cardAspectRatio: CGFloat {
@@ -54,7 +56,24 @@ struct VizitDigitalCard: View {
         }
     }
 
-    private var surface: some View {
+    @ViewBuilder private var surface: some View {
+        if presentation.orderedSections != CardSection.allCases || dynamicTypeSize.isAccessibilitySize {
+            orderedContent
+                .padding(VizitSpace.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    LinearGradient(colors: [
+                        Color(uiColor: UIColor(hex: presentation.colorway.gradient.start)),
+                        Color(uiColor: UIColor(hex: presentation.colorway.gradient.end))
+                    ], startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
+                .overlay(alignment: .leading) { Rectangle().fill(accent).frame(width: 4) }
+                .clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
+                .vizitShadow(VizitElevation.card)
+        } else { standardSurface }
+    }
+
+    private var standardSurface: some View {
         ZStack(alignment: .leading) {
             LinearGradient(
                 stops: [
@@ -103,6 +122,60 @@ struct VizitDigitalCard: View {
             }
         }
         .vizitShadow(VizitElevation.card)
+    }
+
+    private var orderedContent: some View {
+        let centered = presentation.layout == .portrait
+        return VStack(alignment: centered ? .center : .leading, spacing: VizitSpace.md) {
+            avatar(size: centered ? 82 : 56)
+            ForEach(presentation.orderedSections) { section in
+                orderedSection(section, centered: centered)
+            }
+            Text("VIZIT").vizitOverline().foregroundStyle(accent)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+        .multilineTextAlignment(centered ? .center : .leading)
+    }
+
+    @ViewBuilder private func orderedSection(_ section: CardSection, centered: Bool) -> some View {
+        switch section {
+        case .identity:
+            Text(visible.displayName.isEmpty ? "Állítsd össze a névjegyed" : visible.displayName)
+                .font(VizitFont.h3).foregroundStyle(primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .vizitIdentifier(nameIdentifier)
+        case .company:
+            if presentation.sharesCompany {
+                VStack(alignment: centered ? .center : .leading, spacing: VizitSpace.xxs) {
+                    if !visible.jobTitle.isEmpty {
+                        Text(visible.jobTitle).font(VizitFont.caption).foregroundStyle(accent)
+                    }
+                    if !visible.company.isEmpty {
+                        Text(visible.company).font(VizitFont.bodySmall).foregroundStyle(secondaryText)
+                    }
+                    companyLogo(size: 24)
+                }
+            }
+        case .contact:
+            VStack(alignment: centered ? .center : .leading, spacing: VizitSpace.xxs) {
+                ForEach(Array([visible.phone, visible.email, visible.website].filter { !$0.isEmpty }.enumerated()), id: \.offset) { _, text in
+                    Text(text).font(VizitFont.bodySmall).foregroundStyle(secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        case .social:
+            let names = visible.socialProfiles.filter { !$0.url.isEmpty }.map(\.platform.label)
+            if !names.isEmpty {
+                Text(names.joined(separator: " · ")).font(VizitFont.caption).foregroundStyle(secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        case .address:
+            if !visible.address.isEmpty {
+                Text(visible.address).font(VizitFont.caption).foregroundStyle(secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     /// Portrait is the signature VIZIT composition from the approved screens:
@@ -300,7 +373,7 @@ struct VizitDigitalCard: View {
 
     @ViewBuilder
     private func companyLogo(size: CGFloat) -> some View {
-        if let data = Data(base64Encoded: presentation.companyLogoBase64),
+        if presentation.sharesCompany, let data = Data(base64Encoded: presentation.companyLogoBase64),
            let image = UIImage(data: data) {
             Image(uiImage: image)
                 .resizable()

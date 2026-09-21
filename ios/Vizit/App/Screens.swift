@@ -139,6 +139,8 @@ struct CardScreen: View {
     @Environment(\.openURL) private var openURL
     @Binding var selectedTab: RootTab
     @State private var editing = false
+    @State private var customizing = false
+    @State private var adjustingVisibility = false
 
     private var hasDetails: Bool {
         ![store.profile.phone, store.profile.email, store.profile.website, store.profile.address]
@@ -180,39 +182,18 @@ struct CardScreen: View {
                                 action: { editing = true }
                             )
                         } else {
-                            VizitSectionHeader(title: "Elérhetőségek")
-                            VizitGroup {
-                                detailRows
+                            ForEach(presentation.value.orderedSections) { section in
+                                detailSection(section)
                             }
-
-                            if !store.profile.company.isEmpty || !store.profile.jobTitle.isEmpty {
-                                VizitSectionHeader(title: "Munkahely")
-                                VizitGroup {
-                                    VizitRow(
-                                        label: store.profile.company.isEmpty
-                                            ? store.profile.jobTitle
-                                            : store.profile.company,
-                                        systemImage: "building.2",
-                                        supporting: store.profile.company.isEmpty ? nil : emptyToNil(store.profile.jobTitle),
-                                        showsChevron: false
-                                    )
-                                }
+                        }
+                        VizitGroup {
+                            VizitRow(label: "Kártya megjelenése", systemImage: "rectangle.on.rectangle") {
+                                customizing = true
                             }
-
-                            let socials = store.profile.socialProfiles.filter { !$0.url.isEmpty }
-                            if !socials.isEmpty {
-                                VizitSectionHeader(title: "Közösségi profilok")
-                                VizitGroup {
-                                    ForEach(Array(socials.enumerated()), id: \.offset) { index, item in
-                                        if index > 0 { VizitDivider() }
-                                        VizitRow(
-                                            label: item.platform.label,
-                                            systemImage: "link",
-                                            supporting: item.url,
-                                            showsChevron: false
-                                        )
-                                    }
-                                }
+                            VizitDivider()
+                            VizitRow(label: "Adatok láthatósága", systemImage: "eye",
+                                value: "\(presentation.value.sharedFieldCount) látható") {
+                                adjustingVisibility = true
                             }
                         }
                     }
@@ -224,6 +205,53 @@ struct CardScreen: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
+            .sheet(isPresented: $customizing) {
+                CardAppearanceScreen(store: presentation, profile: store.profile)
+            }
+            .sheet(isPresented: $adjustingVisibility) {
+                DataVisibilityScreen(store: presentation, profile: store.profile, isPublicProfile: store.profile.isPublic)
+            }
+        }
+    }
+
+    @ViewBuilder private func detailSection(_ section: CardSection) -> some View {
+        switch section {
+        case .identity: EmptyView()
+        case .company:
+            if !store.profile.company.isEmpty || !store.profile.jobTitle.isEmpty {
+                VizitSectionHeader(title: "Munkahely")
+                VizitGroup {
+                    VizitRow(label: store.profile.company.isEmpty ? store.profile.jobTitle : store.profile.company,
+                        systemImage: "building.2", supporting: emptyToNil(store.profile.jobTitle), showsChevron: false)
+                }
+            }
+        case .contact:
+            if ![store.profile.phone, store.profile.email, store.profile.website].allSatisfy(\.isEmpty) {
+                VizitSectionHeader(title: "Elérhetőségek")
+                VizitGroup { detailRows }
+            }
+        case .social:
+            let profiles = store.profile.socialProfiles.filter { !$0.url.isEmpty }
+            if !profiles.isEmpty {
+                VizitSectionHeader(title: "Közösségi profilok")
+                VizitGroup {
+                    ForEach(Array(profiles.enumerated()), id: \.offset) { index, item in
+                        if index > 0 { VizitDivider() }
+                        VizitContactRow(title: item.platform.label, subtitle: item.url, systemImage: "link") {
+                            if let url = SafeLink.https(item.url) { openURL(url) }
+                        }
+                    }
+                }
+            }
+        case .address:
+            if !store.profile.address.isEmpty {
+                VizitSectionHeader(title: "Cím")
+                VizitGroup {
+                    VizitContactRow(title: store.profile.address, subtitle: "Megnyitás a térképen", systemImage: "mappin.and.ellipse") {
+                        if let url = destination(for: store.profile.address, kind: "Cím") { openURL(url) }
+                    }
+                }
+            }
         }
     }
 
@@ -232,8 +260,7 @@ struct CardScreen: View {
         let entries: [(String, String, String)] = [
             (store.profile.phone, "phone", "Telefon"),
             (store.profile.email, "envelope", "E-mail"),
-            (store.profile.website, "globe", "Weboldal"),
-            (store.profile.address, "mappin.and.ellipse", "Cím")
+            (store.profile.website, "globe", "Weboldal")
         ].filter { !$0.0.isEmpty }
 
         ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
@@ -1657,6 +1684,7 @@ private struct CourseDetailScreen: View {
     @State private var tab: CourseTab = .lessons
     @State private var videoReady = false
     @State private var videoUnavailable = false
+    @State private var playbackAttempt = 0
 
     private var lessons: [CourseLesson] { course.lessons }
     private var selectedLesson: CourseLesson { lessons.first { $0.id == selectedLessonID } ?? lessons[0] }
@@ -1715,7 +1743,7 @@ private struct CourseDetailScreen: View {
                 onCompleted: { markLessonComplete(lesson.id) },
                 onError: { videoUnavailable = true }
             )
-            .id(lesson.id)
+            .id("\(lesson.id)-\(playbackAttempt)")
             .opacity(videoUnavailable ? 0 : 1)
 
             if !videoReady && !videoUnavailable {
@@ -1740,6 +1768,14 @@ private struct CourseDetailScreen: View {
                         .font(VizitFont.bodySmall)
                         .foregroundStyle(CoursePlayer.secondary)
                         .multilineTextAlignment(.center)
+                    Button("Újrapróbálás") {
+                        videoReady = false
+                        videoUnavailable = false
+                        playbackAttempt += 1
+                    }
+                    .font(VizitFont.label)
+                    .foregroundStyle(CoursePlayer.accent)
+                    .frame(minHeight: VizitMetrics.minTouchTarget)
                     Button("Megnyitás böngészőben") {
                         guard let url = SafeLink.https(videoURL(for: lesson)) else { return }
                         openURL(url)

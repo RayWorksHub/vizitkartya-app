@@ -847,8 +847,24 @@ final class AppStore: ObservableObject {
 
 /// Four primary destinations, matching Android. Scanning and the knowledge hub
 /// are tasks you start from a destination, not tabs of their own.
-enum RootTab: Hashable {
+enum RootTab: String, CaseIterable, Hashable {
     case home, card, share, settings
+    var title: String {
+        switch self {
+        case .home: return "Kezdőlap"
+        case .card: return "Névjegy"
+        case .share: return "Megosztás"
+        case .settings: return "Beállítások"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .home: return "house"
+        case .card: return "person.crop.rectangle"
+        case .share: return "square.and.arrow.up"
+        case .settings: return "gearshape"
+        }
+    }
 }
 
 struct AppGate: View {
@@ -957,38 +973,80 @@ struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @Binding var themeMode: ThemeMode
     @State private var selection: RootTab = .home
+    @State private var visited: Set<RootTab> = [.home]
 
     var body: some View {
-        TabView(selection: $selection) {
-            HomeScreen(selectedTab: $selection)
-                .tabItem { Label("Kezdőlap", systemImage: "house") }
-                .tag(RootTab.home)
-
-            CardScreen(selectedTab: $selection)
-                .tabItem { Label("Névjegy", systemImage: "person.crop.rectangle") }
-                .tag(RootTab.card)
-
-            ShareScreen()
-                .tabItem { Label("Megosztás", systemImage: "square.and.arrow.up") }
-                .tag(RootTab.share)
-
-            SettingsScreen(themeMode: $themeMode)
-                .tabItem { Label("Beállítások", systemImage: "gearshape") }
-                .tag(RootTab.settings)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) { VizitFeedbackHost() }
-        .tint(VizitColor.primary)
-        .toolbarBackground(VizitColor.surface, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
-        .overlay(alignment: .top) {
-            if store.authStatus == .offline {
-                VizitBanner(
-                    text: "Offline mód – a helyi névjegyed olvasható és szerkeszthető.",
-                    tone: .info
-                )
-                .padding(.horizontal, VizitSpace.md)
-                .padding(.top, VizitSpace.xxs)
+        ZStack {
+            ForEach(RootTab.allCases, id: \.self) { tab in
+                if visited.contains(tab) || selection == tab {
+                    destination(tab)
+                        .opacity(selection == tab ? 1 : 0)
+                        .allowsHitTesting(selection == tab)
+                        .accessibilityHidden(selection != tab)
+                        .zIndex(selection == tab ? 1 : 0)
+                }
             }
         }
+        .onChange(of: selection) { visited.insert($0) }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                VizitFeedbackHost()
+                VizitBottomNavigation(selection: $selection)
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if store.authStatus == .offline {
+                VizitBanner(text: "Offline mód – a helyi névjegyed olvasható és szerkeszthető.", tone: .info)
+                    .padding(.horizontal, VizitSpace.md)
+                    .padding(.vertical, VizitSpace.xxs)
+            }
+        }
+        .background(VizitColor.canvas)
+        .tint(VizitColor.primary)
+    }
+
+    @ViewBuilder private func destination(_ tab: RootTab) -> some View {
+        switch tab {
+        case .home: HomeScreen(selectedTab: $selection)
+        case .card: CardScreen(selectedTab: $selection)
+        case .share: ShareScreen()
+        case .settings: SettingsScreen(themeMode: $themeMode)
+        }
+    }
+}
+
+/// The flat four-destination bar in the approved PDF, independent of OS chrome.
+private struct VizitBottomNavigation: View {
+    @Binding var selection: RootTab
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VizitDivider()
+            HStack(spacing: 0) {
+                ForEach(RootTab.allCases, id: \.self) { tab in
+                    Button { selection = tab } label: {
+                        VStack(spacing: VizitSpace.xxs) {
+                            Image(systemName: tab.symbol)
+                                .font(.system(size: 21, weight: .regular))
+                            Text(tab.title).font(VizitFont.caption)
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(.center)
+                        }
+                        .foregroundStyle(selection == tab ? VizitColor.primary : VizitColor.textMuted)
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .padding(.vertical, VizitSpace.xxs)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(tab.title)
+                    .accessibilityAddTraits(selection == tab ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityIdentifier("navigation.\(tab.rawValue)")
+                }
+            }
+        }
+        .background(VizitColor.surface.ignoresSafeArea(edges: .bottom))
     }
 }

@@ -7,7 +7,9 @@ import SwiftUI
 struct CardAppearanceScreen: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var store: CardPresentationStore
+    @EnvironmentObject private var feedback: VizitFeedbackCenter
     let profile: ContactProfile
+    @State private var ordering = false
     @State private var draft: CardPresentation
 
     init(store: CardPresentationStore, profile: ContactProfile) {
@@ -59,6 +61,11 @@ struct CardAppearanceScreen: View {
                             selection: layoutIndex,
                             accessibilityIdentifier: "card.layout"
                         )
+                        VizitPanel(padding: 0) {
+                            VizitRow(label: "Szekciók sorrendje", systemImage: "line.3.horizontal.decrease") {
+                                ordering = true
+                            }
+                        }
                     }
                     .padding(.horizontal, VizitSpace.md)
                     .padding(.bottom, VizitSpace.huge * 2)
@@ -69,12 +76,16 @@ struct CardAppearanceScreen: View {
                     VizitButton(title: "Mentés", systemImage: "checkmark") {
                         store.value = draft
                         dismiss()
+                        feedback.show("A kártya megjelenése mentve.")
                     }
                     .accessibilityIdentifier("card.appearance.save")
                     .padding(.horizontal, VizitSpace.md)
                     .padding(.vertical, VizitSpace.sm)
                     .background(.regularMaterial)
                 }
+            }
+            .sheet(isPresented: $ordering) {
+                CardSectionOrderScreen(presentation: $draft, profile: profile)
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
