@@ -58,8 +58,10 @@ final class VizitCoreTests: XCTestCase {
         let restored = try JSONDecoder().decode(ContactProfile.self, from: JSONEncoder().encode(p))
         XCTAssertEqual(restored, p)
         let card = try VCard.encode(restored)
+        let qr = try VCard.qrPayload(restored)
         for platform in SocialPlatform.allCases {
             XCTAssertTrue(card.contains("X-SOCIALPROFILE;TYPE=\(platform.rawValue):"))
+            XCTAssertTrue(qr.contains(restored.socialURL(for: platform)))
         }
     }
     func testInsecureSocialProfileFailsValidation() {

@@ -43,6 +43,51 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(decoded.first, payload)
     }
 
+    func testCompleteProfileWithPhotoFitsHighCorrectionQRWithoutDroppingValues() throws {
+        var p = profile()
+        p.fullName = "Csukárdi Rajmund"
+        p.firstName = "Rajmund"
+        p.lastName = "Csukárdi"
+        p.jobTitle = "CEO"
+        p.company = "RayWorks | Solutions Kft."
+        p.phone = "+36 70 298 0003"
+        p.email = "csukardi.rajmund@gmail.com"
+        p.website = "https://rayworks.hu"
+        p.address = "Budapest"
+        p.linkedIn = "https://linkedin.com/in/csukardi-rajmund"
+        p.facebook = "https://facebook.com/csukardi.rajmund"
+        p.instagram = "https://instagram.com/csukardi.rajmund"
+        p.tiktok = "https://tiktok.com/@csukardi.rajmund"
+        p.youtube = "https://youtube.com/@rayworks"
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96), format: format).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 96, height: 96))
+            ("CR" as NSString).draw(
+                at: CGPoint(x: 20, y: 31),
+                withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 28, weight: .bold),
+                    .foregroundColor: UIColor.white,
+                ]
+            )
+        }
+        p.photoBase64 = try XCTUnwrap(source.jpegData(compressionQuality: 0.72)).base64EncodedString()
+
+        let payload = try XCTUnwrap(PhotoContactQR.payload(p))
+        XCTAssertNotNil(QRImage.make(payload))
+        for value in [p.fullName, p.company, p.phone, p.email, p.website, p.address,
+                      p.linkedIn, p.facebook, p.instagram, p.tiktok, p.youtube] {
+            XCTAssertTrue(payload.contains(value), "Photo QR dropped: \(value)")
+        }
+        let contacts = try CNContactVCardSerialization.contacts(with: Data(payload.utf8))
+        let contact = try XCTUnwrap(contacts.first)
+        XCTAssertNotNil(contact.imageData)
+        XCTAssertEqual(contact.urlAddresses.count, 6)
+    }
+
     func testNativeContactContainsMatchingFields() throws {
         var source = profile()
         source.linkedIn = ""
