@@ -386,6 +386,8 @@ struct ShareScreen: View {
             }
             .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
             .sheet(isPresented: $showAccountDetails) { accountDetailsSheet }
+            .sheet(isPresented: $showLegalInformation) { legalInformationSheet }
+            .sheet(isPresented: $showSyncConflict) { syncConflictSheet }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
@@ -2405,6 +2407,9 @@ struct SettingsScreen: View {
     @State private var confirmLogout = false
     @State private var confirmDelete = false
     @State private var deletionPhrase = ""
+    @State private var showLegalInformation = false
+    @State private var showSyncConflict = false
+    @AppStorage("figma.automaticSyncEnabled") private var automaticSyncEnabled = true
 
     private var themeIndex: Binding<Int> {
         Binding(
@@ -2469,6 +2474,32 @@ struct SettingsScreen: View {
                             .accessibilityIdentifier("settings.publicProfile")
                         }
 
+                        VizitSectionHeader(title: "Szinkronizálás")
+                        VizitGroup {
+                            VizitSwitch(
+                                title: "Automatikus szinkron",
+                                supporting: "A névjegy módosításai automatikusan feltöltődnek.",
+                                isOn: $automaticSyncEnabled
+                            )
+                            .padding(.horizontal, VizitSpace.md)
+                            .padding(.vertical, VizitSpace.xs)
+                            VizitDivider()
+                            VizitRow(
+                                label: "Profil szinkron",
+                                systemImage: "arrow.triangle.2.circlepath",
+                                value: store.syncStatus.label,
+                                supporting: store.syncStatus == .conflict
+                                    ? "Ütközés feloldása szükséges"
+                                    : "A helyi és felhőbeli névjegy állapota"
+                            ) {
+                                if store.syncStatus == .conflict {
+                                    showSyncConflict = true
+                                } else {
+                                    store.retrySync()
+                                }
+                            }
+                        }
+
                         VizitSectionHeader(title: "Fiók")
                         VizitGroup {
                             VizitRow(
@@ -2482,6 +2513,15 @@ struct SettingsScreen: View {
                                 label: "Kijelentkezés",
                                 systemImage: "rectangle.portrait.and.arrow.right"
                             ) { confirmLogout = true }
+                        }
+
+                        VizitSectionHeader(title: "Jogi")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Jogi információk",
+                                systemImage: "doc.text",
+                                supporting: "Adatkezelési tájékoztató és ÁSZF"
+                            ) { showLegalInformation = true }
                         }
 
                         VizitSectionHeader(title: "Veszélyes műveletek", tone: VizitColor.error)
@@ -2544,6 +2584,86 @@ struct SettingsScreen: View {
             )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+        }
+    }
+
+    private var legalInformationSheet: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        VizitSectionHeader(title: "Jogi információk")
+                        VizitGroup {
+                            if let url = store.configuration?.privacyPolicyURL {
+                                Link(destination: url) {
+                                    VizitRow(
+                                        label: "Adatkezelési tájékoztató",
+                                        systemImage: "hand.raised",
+                                        supporting: "Adatkezelés és adatvédelmi információk"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            if store.configuration?.privacyPolicyURL != nil,
+                               store.configuration?.termsURL != nil {
+                                VizitDivider()
+                            }
+                            if let url = store.configuration?.termsURL {
+                                Link(destination: url) {
+                                    VizitRow(
+                                        label: "Általános Szerződési Feltételek",
+                                        systemImage: "doc.text",
+                                        supporting: "A szolgáltatás használati feltételei"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(VizitSpace.md)
+                }
+            }
+            .navigationTitle("Jogi információk")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Kész") { showLegalInformation = false }
+                }
+            }
+        }
+    }
+
+    private var syncConflictSheet: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.lg) {
+                        VizitSyncConflictState(
+                            localDate: "helyi példány",
+                            remoteDate: "felhőbeli példány",
+                            chooseLocal: {
+                                showSyncConflict = false
+                                Task { await store.resolveSyncConflict(keepLocal: true) }
+                            },
+                            chooseRemote: {
+                                showSyncConflict = false
+                                Task { await store.resolveSyncConflict(keepLocal: false) }
+                            }
+                        )
+                        Text("Válaszd ki, melyik példány legyen az alap. A másik változatot a rendszer nem használja fel automatikusan.")
+                            .font(VizitFont.bodySmall)
+                            .foregroundStyle(VizitColor.textSecondary)
+                    }
+                    .padding(VizitSpace.md)
+                }
+            }
+            .navigationTitle("Szinkronütközés")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Mégse") { showSyncConflict = false }
+                }
+            }
         }
     }
 
