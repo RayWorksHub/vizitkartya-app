@@ -9,11 +9,15 @@ import ImageIO
 /// identifier are carried over unchanged.
 struct ProfileEditor: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
     @Environment(\.dismiss) private var dismiss
     @State var draft: ContactProfile
     @State private var photo: PhotosPickerItem?
     @State private var error: String?
     @State private var loadingPhoto = false
+    @State private var companyLogo: PhotosPickerItem?
+    @State private var loadingCompanyLogo = false
+    @State private var showSectionOrder = false
 
     private var defaultProfileAddress: String {
         guard !draft.publicSlug.isEmpty,
@@ -65,6 +69,7 @@ struct ProfileEditor: View {
                         photoSection
                         personalSection
                         workSection
+                        companyLogoSection
                         contactSection
                         socialSection
                         sharingSection
@@ -123,6 +128,31 @@ struct ProfileEditor: View {
         }
     }
 
+            .task(id: companyLogo) {
+                guard let selected = companyLogo else { loadingCompanyLogo = false; return }
+                loadingCompanyLogo = true
+                defer { if companyLogo == selected { loadingCompanyLogo = false } }
+                do {
+                    guard let bytes = try await selected.loadTransferable(type: Data.self),
+                          bytes.count <= 15 * 1024 * 1024,
+                          let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+                          let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                            kCGImageSourceCreateThumbnailWithTransform: true,
+                            kCGImageSourceThumbnailMaxPixelSize: 384
+                          ] as CFDictionary),
+                          let png = UIImage(cgImage: thumbnail).pngData(),
+                          png.count <= 384 * 1024 else { throw ProfileError.invalidPhoto }
+                    try Task.checkCancellation()
+                    presentation.value.companyLogoBase64 = png.base64EncodedString()
+                } catch is CancellationError {
+                } catch {
+                    self.error = "A céges logó betöltése nem sikerült. Próbálj másik képet választani."
+                }
+            }
+            .sheet(isPresented: $showSectionOrder) {
+                CardSectionOrderScreen(store: presentation)
+            }
     /// Resigns first responder globally. The fields are composite views, so a
     /// FocusState binding on them would not reach the inner UITextField.
     private func dismissKeyboard() {
@@ -240,6 +270,61 @@ struct ProfileEditor: View {
                     autocapitalization: .sentences,
                     submitLabel: .next
                 )
+            }
+        }
+    }
+
+    private var companyLogoSection: some View {
+        group("Céges logó") {
+            VizitPanel {
+                HStack(spacing: VizitSpace.md) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous)
+                            .fill(VizitColor.sunken)
+                        if let data = Data(base64Encoded: presentation.value.companyLogoBase64),
+                           let image = UIImage(data: data) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .padding(VizitSpace.xs)
+                        } else {
+                            Image(systemName: "building.2")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(VizitColor.textMuted)
+                        }
+                    }
+                    .frame(width: 72, height: 72)
+
+                    VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                        PhotosPicker(selection: $companyLogo, matching: .images) {
+                            Label("Logó kiválasztása", systemImage: "photo")
+                                .font(VizitFont.label)
+                                .foregroundStyle(VizitColor.primary)
+                        }
+                        .disabled(loadingCompanyLogo)
+                        .frame(minHeight: VizitMetrics.minTouchTarget, alignment: .leading)
+
+                        if !presentation.value.companyLogoBase64.isEmpty {
+                            Button("Logó eltávolítása") {
+                                companyLogo = nil
+                                presentation.value.companyLogoBase64 = ""
+                            }
+                            .font(VizitFont.label)
+                            .foregroundStyle(VizitColor.error)
+                            .frame(minHeight: VizitMetrics.minTouchTarget, alignment: .leading)
+                        }
+
+                        if loadingCompanyLogo {
+                            HStack(spacing: VizitSpace.xs) {
+                                ProgressView().controlSize(.small)
+                                Text("Logó feldolgozása…")
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
             }
         }
     }
@@ -415,6 +500,14 @@ struct ProfileEditor: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
+                    VizitPanel {
+                        VizitRow(
+                            label: "Szekciók sorrendje",
+                            systemImage: "line.3.horizontal.decrease",
+                            supporting: "A névjegy blokkjainak sorrendje"
+                        ) { showSectionOrder = true }
+                    }
+
                     VizitBanner(
                         text: "A QR és az NFC ezt adja: \(activeSharingAddress)",
                         tone: .info
@@ -425,6 +518,43 @@ struct ProfileEditor: View {
         }
     }
 
+}
+
+private struct CardSectionOrderScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var store: CardPresentationStore
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(store.value.sectionOrder) { section in
+                        HStack(spacing: VizitSpace.sm) {
+                            Image(systemName: "line.3.horizontal")
+                                .foregroundStyle(VizitColor.textMuted)
+                            Text(section.label)
+                                .font(VizitFont.body)
+                            Spacer()
+                        }
+                        .frame(minHeight: VizitMetrics.minTouchTarget)
+                    }
+                    .onMove { indices, newOffset in
+                        store.value.sectionOrder.move(fromOffsets: indices, toOffset: newOffset)
+                    }
+                } footer: {
+                    Text("Húzd a blokkokat a kívánt sorrendbe. A sorrend csak a megjelenést módosítja.")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Szekciók sorrendje")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Kész") { dismiss() }
+                }
+            }
+        }
+    }
 }
 
 private enum DomainState {
