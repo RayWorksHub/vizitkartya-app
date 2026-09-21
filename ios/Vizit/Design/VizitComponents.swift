@@ -510,6 +510,141 @@ struct VizitSyncConflictState: View {
     }
 }
 
+struct VizitSearchField: View {
+    @Binding var text: String
+    var placeholder = "Keresés"
+    var resultCount: Int? = nil
+
+    var body: some View {
+        HStack(spacing: VizitSpace.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(VizitColor.textMuted)
+            TextField(placeholder, text: $text)
+                .font(VizitFont.body)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if let resultCount {
+                VizitStatusPill(text: "\(resultCount) találat", tone: .info)
+            } else if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(VizitColor.textMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Keresés törlése")
+            }
+        }
+        .padding(.horizontal, VizitSpace.md)
+        .frame(minHeight: VizitMetrics.fieldHeight)
+        .background(VizitColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous)
+                .stroke(VizitColor.border, lineWidth: 1)
+        }
+    }
+}
+
+struct VizitProgressCard: View {
+    let title: String
+    let current: Int
+    let total: Int
+    var supporting: String? = nil
+
+    private var progress: Double {
+        guard total > 0 else { return 0 }
+        return min(max(Double(current) / Double(total), 0), 1)
+    }
+
+    var body: some View {
+        VizitPanel {
+            VStack(alignment: .leading, spacing: VizitSpace.sm) {
+                HStack {
+                    Text(title).font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
+                    Spacer()
+                    Text("\(current) / \(total)")
+                        .font(VizitFont.label)
+                        .foregroundStyle(VizitColor.primary)
+                }
+                ProgressView(value: progress)
+                    .tint(VizitColor.primary)
+                if let supporting {
+                    Text(supporting)
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.textMuted)
+                }
+            }
+        }
+    }
+}
+
+struct VizitContactRow: View {
+    let title: String
+    let subtitle: String?
+    var systemImage: String? = nil
+    var value: String? = nil
+    var state: VizitTone? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        VizitRow(
+            label: title,
+            systemImage: systemImage,
+            value: value,
+            supporting: subtitle,
+            action: action
+        ) {
+            if let state {
+                Circle()
+                    .fill(state.foreground)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+struct VizitTabHeader: View {
+    let title: String
+    var trailingTitle: String?
+    var trailingAction: (() -> Void)?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(VizitFont.h1)
+                .foregroundStyle(VizitColor.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            if let trailingTitle, let trailingAction {
+                Button(trailingTitle, action: trailingAction)
+                    .font(VizitFont.label)
+                    .foregroundStyle(VizitColor.primary)
+                    .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct VizitInlineMessage: View {
+    let text: String
+    var tone: VizitTone = .info
+
+    var body: some View {
+        HStack(alignment: .top, spacing: VizitSpace.xs) {
+            Image(systemName: tone.systemImage)
+                .font(.system(size: 13, weight: .semibold))
+            Text(text)
+                .font(VizitFont.bodySmall)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(tone.foreground)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - Surfaces
 
 /// Restrained panel: hairline border, no shadow. The app is not built out of
