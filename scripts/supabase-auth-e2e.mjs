@@ -35,6 +35,7 @@ const termsVersion = required('VIZIT_TERMS_VERSION')
 const runId = randomUUID()
 const password = `Vizit-${randomUUID()}-A1!`
 const createdUserIds = new Set()
+const createdUserEmails = new Set()
 const uploadedFiles = []
 
 const safeCode = (value) => String(value ?? 'unknown')
@@ -85,6 +86,34 @@ function assert(condition, label) {
   if (!condition) throw new Error(`Assertion failed: ${label}`)
 }
 
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+async function findUserByEmailAsAdmin(email) {
+  const perPage = 1000
+  for (let page = 1; page <= 1000; page += 1) {
+    const result = await request(`/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
+      apiKey: serviceRoleKey,
+      token: serviceRoleKey,
+    })
+    const listing = expectOk(result, 'list users for registration recovery')
+    assert(Array.isArray(listing?.users), 'admin user listing returns users')
+
+    const user = listing.users.find((candidate) => candidate?.email === email)
+    if (user) return user
+    if (listing.users.length < perPage) return null
+  }
+  throw new Error('Admin user lookup exceeded the pagination safety limit')
+}
+
+async function recoverRegisteredUser(email) {
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const user = await findUserByEmailAsAdmin(email)
+    if (user) return user
+    if (attempt < 5) await wait(attempt * 250)
+  }
+  return null
+}
+
 async function createConfirmedUser(label, userMetadata) {
   const result = await request('/auth/v1/admin/users', {
     method: 'POST',
@@ -105,6 +134,7 @@ async function createConfirmedUser(label, userMetadata) {
 
 async function registerConfirmedUser(label, userMetadata) {
   const email = `vizit-e2e-${label}-${runId}@vizit.hu`
+  createdUserEmails.add(email)
   const result = await request('/auth/v1/signup', {
     method: 'POST',
     json: {
@@ -114,8 +144,10 @@ async function registerConfirmedUser(label, userMetadata) {
     },
   })
   const registration = expectOk(result, `register ${label} user`)
-  const user = registration?.user
-  assert(typeof user?.id === 'string', `${label} registration returns a user id`)
+  const user = typeof registration?.user?.id === 'string'
+    ? registration.user
+    : await recoverRegisteredUser(email)
+  assert(typeof user?.id === 'string', `${label} registration creates a recoverable user`)
   createdUserIds.add(user.id)
 
   if (!user.email_confirmed_at) {
@@ -332,5 +364,9 @@ try {
   await removeStorageFixtures().catch(() => undefined)
   for (const userId of createdUserIds) {
     await deleteUserAsAdmin(userId).catch(() => undefined)
+  }
+  for (const email of createdUserEmails) {
+    const user = await findUserByEmailAsAdmin(email).catch(() => null)
+    if (user?.id) await deleteUserAsAdmin(user.id).catch(() => undefined)
   }
 }
