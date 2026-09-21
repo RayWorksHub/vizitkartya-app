@@ -4,6 +4,7 @@ import Photos
 import PhotosUI
 import CoreImage.CIFilterBuiltins
 import WebKit
+import AVFoundation
 
 // MARK: - Home
 
@@ -27,12 +28,15 @@ struct HomeScreen: View {
                             VizitIdentityChip(profile: store.profile) { selectedTab = .card }
                         }
 
-                        VizitDigitalCard(
-                            profile: store.profile,
-                            nameIdentifier: store.hasProfile ? "card.name" : nil,
-                            presentation: presentation.value
-                        )
-                            .onTapGesture { selectedTab = .card }
+                        if store.syncStatus == .syncing && !store.hasProfile {
+                            VizitProfileSkeleton()
+                        } else {
+                            VizitDigitalCard(
+                                profile: store.profile,
+                                nameIdentifier: store.hasProfile ? "card.name" : nil,
+                                presentation: presentation.value
+                            ).onTapGesture { selectedTab = .card }
+                        }
 
                         VizitButton(
                             title: "Névjegy megosztása",
@@ -234,7 +238,7 @@ struct CardScreen: View {
 
         ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
             if index > 0 { VizitDivider() }
-            VizitRow(label: entry.0, systemImage: entry.1, supporting: entry.2) {
+            VizitContactRow(title: entry.0, subtitle: entry.2, systemImage: entry.1) {
                 guard let url = destination(for: entry.0, kind: entry.2) else { return }
                 openURL(url)
             }
@@ -368,10 +372,10 @@ struct ShareScreen: View {
                         }
 
                         if copiedProfileLink {
-                            VizitBanner(text: "A profil hivatkozását a vágólapra másoltuk.", tone: .success)
+                            VizitToast(text: "A profil hivatkozását a vágólapra másoltuk.")
                         }
                         if savedQRCode {
-                            VizitBanner(text: "A QR-kódot elmentettük a Fotók közé.", tone: .success)
+                            VizitToast(text: "A QR-kódot elmentettük a Fotók közé.")
                         }
                     }
                     .padding(.horizontal, VizitSpace.md)
@@ -922,147 +926,178 @@ enum PhotoContactQR {
 struct ScanFlow: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var scanning = true
     @State private var torchOn = false
     @State private var torchAvailable = false
+    @State private var permission = AVCaptureDevice.authorizationStatus(for: .video)
+    @State private var requestingPermission = false
     @State private var pickedCode: PhotosPickerItem?
+    @State private var decodeTask: Task<Void, Never>?
+    @State private var decodingImage = false
     @State private var pendingText: String?
     @State private var incoming: IncomingContact?
     @State private var link: URL?
     @State private var message: String?
 
     private var isUITesting: Bool {
-        ProcessInfo.processInfo.arguments.contains("--ui-testing")
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("--ui-testing")
+        #else
+        return false
+        #endif
     }
-
+    private var canUseCamera: Bool { permission == .authorized || isUITesting }
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if isUITesting {
-                    Color(uiColor: UIColor(hex: 0x1B2437)).ignoresSafeArea()
-                } else if scanning {
-                    QRScanner(
-                        onResult: finishScan,
-                        onError: { text in
-                            message = text
-                            torchOn = false
-                            scanning = false
-                        },
-                        torchOn: torchOn,
-                        onTorchAvailability: { torchAvailable = $0 }
-                    )
-                    .ignoresSafeArea()
-                }
-
-                ScannerOverlay {
-                    PhotosPicker(selection: $pickedCode, matching: .images, photoLibrary: .shared()) {
-                        HStack(spacing: VizitSpace.xs) {
-                            Image(systemName: "photo").font(.system(size: 15, weight: .semibold))
-                            Text("Kód kiválasztása a képtárból").font(VizitFont.label)
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, VizitSpace.md)
-                        .frame(minHeight: VizitMetrics.minTouchTarget)
-                        .background(Color.white.opacity(0.14))
-                        .clipShape(Capsule())
-                        .overlay { Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1) }
-                    }
-                    .accessibilityIdentifier("scanner.photo")
-                }
+            Group {
+                if canUseCamera { cameraSurface }
+                else { permissionSurface }
             }
             .navigationTitle("Beolvasás")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(canUseCamera ? Color.black : VizitColor.canvas, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(canUseCamera ? .dark : nil, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Bezárás") {
-                        torchOn = false
-                        dismiss()
-                    }
+                    Button("Bezárás") { torchOn = false; dismiss() }.frame(minHeight: VizitMetrics.minTouchTarget)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button(torchOn ? "Vaku ki" : "Vaku") { torchOn.toggle() }
-                        .disabled(!torchAvailable && !isUITesting)
-                        .accessibilityLabel(torchOn ? "Vaku kikapcsolása" : "Vaku bekapcsolása")
+                    if canUseCamera {
+                        Button(torchOn ? "Vaku ki" : "Vaku") { torchOn.toggle() }
+                            .frame(minHeight: VizitMetrics.minTouchTarget)
+                            .disabled((!torchAvailable && !isUITesting) || decodingImage)
+                            .accessibilityLabel(torchOn ? "Vaku kikapcsolása" : "Vaku bekapcsolása")
+                    }
                 }
             }
+            .onAppear { refreshPermission() }
+            .onChange(of: scenePhase) { phase in
+                if phase == .active { refreshPermission() }
+                else { torchOn = false }
+            }
             .onChange(of: pickedCode) { _ in decodePickedCode() }
+            .onDisappear { torchOn = false; decodeTask?.cancel() }
             .sheet(item: $incoming) { item in
                 ContactEditor(contact: item.contact) { saved in
                     incoming = nil
-                    if saved {
-                        message = "A névjegyet elmentetted a Kontaktokba."
-                    } else {
-                        scanning = true
-                    }
+                    if saved { message = "A névjegyet elmentetted a Kontaktokba." }
+                    else { scanning = true }
                 }
             }
             .alert("Webcím a QR-kódban", isPresented: Binding(
-                get: { link != nil },
-                set: {
-                    if !$0 {
-                        link = nil
-                        scanning = true
-                    }
-                }
+                get: { link != nil }, set: { if !$0 { link = nil; scanning = true } }
             )) {
-                Button("Mégse", role: .cancel) {
-                    link = nil
-                    scanning = true
-                }
+                Button("Mégse", role: .cancel) { link = nil; scanning = true }
                 Button("Megnyitás") {
                     if let url = link { openURL(url) }
-                    link = nil
-                    scanning = true
+                    link = nil; scanning = true
                 }
             } message: { Text(link?.absoluteString ?? "") }
             .alert("Beolvasás", isPresented: Binding(
-                get: { message != nil && incoming == nil },
-                set: {
-                    if !$0 {
-                        message = nil
-                        scanning = true
-                    }
-                }
+                get: { message != nil && incoming == nil }, set: { if !$0 { message = nil; scanning = true } }
             )) {
-                Button("Rendben", role: .cancel) {
-                    message = nil
-                    scanning = true
-                }
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    Button("Rendszerbeállítások") {
-                        openURL(url)
-                        message = nil
-                        scanning = true
-                    }
-                }
+                Button("Rendben", role: .cancel) { message = nil; scanning = true }
             } message: { Text(message ?? "") }
         }
     }
-
+    private var cameraSurface: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if isUITesting {
+                VizitColor.elevated.environment(\.colorScheme, .dark).ignoresSafeArea()
+            } else if scanning && !decodingImage {
+                QRScanner(onResult: finishScan, onError: { text in
+                    refreshPermission()
+                    if permission == .authorized { message = text }
+                    torchOn = false; scanning = false
+                }, torchOn: torchOn, onTorchAvailability: { torchAvailable = $0 }).ignoresSafeArea()
+            }
+            ScannerOverlay(isSweeping: scanning && !decodingImage) { galleryPicker }
+            if decodingImage {
+                VizitLoadingState(message: "QR-kód olvasása a képből…")
+                    .environment(\.colorScheme, .dark).background(Color.black.opacity(0.72))
+            }
+        }
+    }
+    private var permissionSurface: some View {
+        VizitScreen {
+            ScrollView {
+                VStack(spacing: VizitSpace.lg) {
+                    switch permission {
+                    case .notDetermined:
+                        VizitPermissionCard(systemImage: "camera", title: "Kameraengedély szükséges",
+                            message: "A kamera a QR-kód beolvasásához kell. Felvételt nem készítünk, és a kameraképet nem tároljuk.",
+                            primaryTitle: "Kamera engedélyezése", secondaryTitle: "Most nem",
+                            primaryAction: requestPermission, secondaryAction: { dismiss() })
+                            .disabled(requestingPermission)
+                    case .denied, .restricted:
+                        VizitPermissionDeniedState {
+                            guard let settings = URL(string: UIApplication.openSettingsURLString) else { return }
+                            openURL(settings)
+                        }.accessibilityIdentifier("scanner.permissionDenied")
+                    default:
+                        VizitErrorState(title: "A kamera nem érhető el",
+                            message: "Válassz QR-kódot tartalmazó képet, vagy ellenőrizd a kamera hozzáférését.",
+                            onRetry: refreshPermission)
+                    }
+                    if requestingPermission || decodingImage {
+                        VizitLoadingState(message: requestingPermission ? "Várakozás az engedélyre…" : "QR-kód olvasása…")
+                    }
+                    VizitInlineMessage(text: "Kameraengedély nélkül is beolvashatsz egy saját képernyőképet.")
+                    galleryPicker
+                }.padding(VizitSpace.md).frame(maxWidth: 560).frame(maxWidth: .infinity)
+            }
+        }
+    }
+    private var galleryPicker: some View {
+        PhotosPicker(selection: $pickedCode, matching: .images, photoLibrary: .shared()) {
+            Label("Kód kiválasztása a képtárból", systemImage: "photo")
+                .font(VizitFont.label)
+                .foregroundStyle(canUseCamera ? Color.white : VizitColor.primary)
+                .padding(.horizontal, VizitSpace.md)
+                .frame(minHeight: VizitMetrics.minTouchTarget)
+                .background(canUseCamera ? Color.white.opacity(0.14) : VizitColor.primarySubtle)
+                .clipShape(Capsule())
+        }.disabled(decodingImage).accessibilityIdentifier("scanner.photo")
+    }
+    private func refreshPermission() {
+        permission = AVCaptureDevice.authorizationStatus(for: .video)
+        if canUseCamera && incoming == nil && link == nil && message == nil && !decodingImage { scanning = true }
+    }
+    private func requestPermission() {
+        guard !requestingPermission, permission == .notDetermined else { return }
+        requestingPermission = true
+        Task { @MainActor in
+            _ = await AVCaptureDevice.requestAccess(for: .video)
+            requestingPermission = false
+            refreshPermission()
+        }
+    }
     private func finishScan(_ text: String) {
-        pendingText = text
-        torchOn = false
-        scanning = false
+        pendingText = text; torchOn = false; scanning = false
         processScan()
     }
-
-    /// A picked still is decoded in the background, then handed to the same
-    /// path a live scan takes — so one set of safety checks covers both.
     private func decodePickedCode() {
-        guard let item = pickedCode else { return }
-        pickedCode = nil
-        Task { @MainActor in
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let value = QRImageDecoder.decode(data) else {
-                message = "Ezen a képen nem találtunk egyetlen egyértelmű QR-kódot sem."
-                scanning = false
-                return
-            }
-            finishScan(value)
+        guard let selected = pickedCode else { return }
+        decodeTask?.cancel()
+        decodingImage = true; torchOn = false; scanning = false
+        decodeTask = Task { @MainActor in
+            defer { if !Task.isCancelled { decodingImage = false } }
+            do {
+                guard let data = try await selected.loadTransferable(type: Data.self) else { throw ProfileError.invalidPhoto }
+                try Task.checkCancellation()
+                let result = await Task.detached(priority: .userInitiated) { QRImageDecoder.decode(data) }.value
+                try Task.checkCancellation()
+                pickedCode = nil
+                guard let value = result else {
+                    message = "Ezen a képen nem találtunk egyetlen egyértelmű QR-kódot sem."
+                    return
+                }
+                finishScan(value)
+            } catch is CancellationError {
+            } catch { message = "A kép nem olvasható. Válassz másik képet." }
         }
     }
 
@@ -1513,6 +1548,7 @@ private struct VoszCenterScreen: View {
 
 private struct EducationCatalogScreen: View {
     @State private var selectedCategory = "Mind"
+    @State private var searchText = ""
     @AppStorage("education.completedLessonIDs") private var completedLessonIDs = ""
     private let categories = ["Mind", "AI", "Digitális munka", "Cégépítés", "Biztonság", "Marketing", "Pénzügy"]
     private var completed: Set<String> { Set(completedLessonIDs.split(separator: "|").map(String.init)) }
@@ -1521,59 +1557,44 @@ private struct EducationCatalogScreen: View {
         completed.intersection(Set(businessTopics.flatMap { $0.lessons.map(\.id) })).count
     }
     private var filtered: [BusinessTopic] {
-        businessTopics.filter { selectedCategory == "Mind" || (selectedCategory == "AI" && $0.id == "ai") || $0.category == selectedCategory }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return businessTopics.filter { topic in
+            let categoryMatches = selectedCategory == "Mind" || (selectedCategory == "AI" && topic.id == "ai") || topic.category == selectedCategory
+            let searchable = ([topic.title, topic.description, topic.category] + topic.lessons.map(\.title)).joined(separator: " ")
+            return categoryMatches && (query.isEmpty || searchable.localizedStandardContains(query))
+        }
     }
     var body: some View {
         PortalScroll(title: "Vállalkozói Edukáció", subtitle: "Rövid, gyakorlatias tananyagok, saját tempóban.") {
-            VizitPanel {
-                VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                    HStack {
-                        Text("A haladásod").font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
-                        Spacer()
-                        Text("\(completedLessonCount) / \(totalLessonCount) lecke")
-                            .font(VizitFont.caption.monospacedDigit())
-                            .foregroundStyle(VizitColor.primary)
-                    }
-                    ProgressView(value: Double(completedLessonCount), total: Double(max(totalLessonCount, 1)))
-                        .tint(VizitColor.primary)
-                        .accessibilityLabel("Kurzusteljesítés")
-                        .accessibilityValue("\(completedLessonCount) a \(totalLessonCount) leckéből")
-                }
-            }
+            VizitProgressCard(title: "A haladásod", current: completedLessonCount, total: totalLessonCount,
+                supporting: "A haladás a készüléken tárolódik, a ténylegesen teljesített videóleckék alapján.")
+            VizitSearchField(text: $searchText, placeholder: "Kurzusok és leckék keresése", resultCount: filtered.count)
+                .accessibilityIdentifier("portal.courseSearch")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: VizitSpace.xs) {
                     ForEach(categories, id: \.self) { category in
-                        Button { selectedCategory = category } label: {
-                            HStack(spacing: VizitSpace.xxs) {
-                                if category == selectedCategory { Image(systemName: "checkmark.circle.fill") }
-                                Text(category).font(VizitFont.label)
+                        VizitChip(text: category, selected: category == selectedCategory) { selectedCategory = category }
+                            .accessibilityIdentifier("portal.category.\(category)")
+                    }
+                }
+            }
+            if filtered.isEmpty {
+                VizitSearchEmptyState(query: searchText.isEmpty ? selectedCategory : searchText) {
+                    searchText = ""; selectedCategory = "Mind"
+                }.accessibilityIdentifier("portal.searchEmpty")
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: VizitSpace.sm) {
+                        ForEach(filtered) { course in
+                            NavigationLink { CourseDetailScreen(course: course) } label: {
+                                CourseCard(course: course, completedCount: completed.intersection(Set(course.lessons.map(\.id))).count)
                             }
-                            .foregroundStyle(category == selectedCategory ? VizitColor.primary : VizitColor.textSecondary)
-                            .padding(.horizontal, VizitSpace.sm).frame(minHeight: 40)
-                            .background(category == selectedCategory ? VizitColor.primarySubtle : VizitColor.surface)
-                            .clipShape(Capsule()).overlay { Capsule().stroke(VizitColor.border, lineWidth: 1) }
-                        }.buttonStyle(.plain)
-                    }
-                }
-            }
-            // Topics run side by side, so the whole catalogue is reachable by
-            // swiping instead of scrolling past six full-width rows.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: VizitSpace.sm) {
-                    ForEach(filtered) { course in
-                        NavigationLink { CourseDetailScreen(course: course) } label: {
-                            CourseCard(
-                                course: course,
-                                completedCount: completed.intersection(Set(course.lessons.map(\.id))).count
-                            )
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("portal.course.\(course.id)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("portal.course.\(course.id)")
-                    }
-                }
-                .padding(.horizontal, VizitSpace.md)
+                    }.padding(.horizontal, VizitSpace.md)
+                }.padding(.horizontal, -VizitSpace.md)
             }
-            .padding(.horizontal, -VizitSpace.md)
         }
     }
 }
@@ -2373,6 +2394,7 @@ private struct PortalScroll<Content: View>: View {
         VizitScreen {
             ScrollView {
                 VStack(alignment: .leading, spacing: VizitSpace.md) {
+                    VizitTabHeader(title: title)
                     Text(subtitle).font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
                     content
                 }
@@ -2380,7 +2402,7 @@ private struct PortalScroll<Content: View>: View {
                 .frame(maxWidth: 620).frame(maxWidth: .infinity)
             }
         }
-        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("").navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -2407,7 +2429,9 @@ struct SettingsScreen: View {
     @State private var deletionPhrase = ""
     @State private var showLegalInformation = false
     @State private var showSyncConflict = false
-    @AppStorage("figma.automaticSyncEnabled") private var automaticSyncEnabled = true
+    private var automaticSync: Binding<Bool> {
+        Binding(get: { store.automaticSyncEnabled }, set: { store.setAutomaticSync($0) })
+    }
 
     private var themeIndex: Binding<Int> {
         Binding(
@@ -2477,7 +2501,10 @@ struct SettingsScreen: View {
                             VizitSwitch(
                                 title: "Automatikus szinkron",
                                 supporting: "A névjegy módosításai automatikusan feltöltődnek.",
-                                isOn: $automaticSyncEnabled
+                                isOn: automaticSync,
+                                isEnabled: store.authStatus != .sessionExpired,
+                                isError: store.syncStatus == .failed,
+                                isLoading: store.syncStatus == .syncing
                             )
                             .padding(.horizontal, VizitSpace.md)
                             .padding(.vertical, VizitSpace.xs)
@@ -2814,10 +2841,15 @@ struct SettingsScreen: View {
                             helper: "Írd be nagybetűkkel: TÖRLÉS",
                             autocapitalization: .characters
                         )
-                        VizitButton(title: "Fiók végleges törlése", kind: .destructive) {
-                            confirmDelete = false
-                            Task { await store.deleteAccount(confirmation: deletionPhrase) }
-                        }
+                        VizitConfirmationCard(
+                            title: "Fiók végleges törlése",
+                            message: "A művelet nem vonható vissza. A másokhoz már átadott névjegymásolatokat nem törli.",
+                            confirmTitle: "Végleges törlés", destructive: true,
+                            isLoading: store.busy,
+                            isEnabled: AuthValidation.deletionPhrase(deletionPhrase) == nil,
+                            onCancel: { confirmDelete = false },
+                            onConfirm: { Task { await store.deleteAccount(confirmation: deletionPhrase) } }
+                        )
                     }
                     .padding(VizitSpace.md)
                 }

@@ -18,6 +18,7 @@ struct VizitButton: View {
     var contentOverride: Color?
     let action: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var pressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -54,9 +55,9 @@ struct VizitButton: View {
                 }
                 Text(title)
                     .font(VizitFont.button)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .allowsTightening(true)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.center)
             }
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
@@ -163,6 +164,7 @@ struct VizitTextField: View {
                 .textContentType(contentType)
                 .textInputAutocapitalization(autocapitalization)
                 .autocorrectionDisabled(keyboard == .emailAddress || keyboard == .URL)
+                .accessibilityLabel(label)
                 .focused($focused)
                 .disabled(!isEnabled)
                 .submitLabel(submitLabel)
@@ -274,6 +276,8 @@ struct VizitSwitch: View {
             } else {
                 Toggle("", isOn: $isOn)
                     .labelsHidden()
+                    .accessibilityLabel(title)
+                    .accessibilityValue(isOn ? "Be" : "Ki")
                     .disabled(!isEnabled)
                     .tint(isError ? VizitColor.error : VizitColor.primary)
             }
@@ -317,6 +321,7 @@ struct VizitChip: View {
             .foregroundStyle(foreground)
             .padding(.horizontal, VizitSpace.sm)
             .padding(.vertical, VizitSpace.xs)
+            .frame(minHeight: action == nil ? 0 : VizitMetrics.minTouchTarget)
             .background(background)
             .clipShape(Capsule())
             .overlay {
@@ -360,6 +365,7 @@ struct VizitSnackbar: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
+                    .frame(minHeight: VizitMetrics.minTouchTarget)
                     .font(VizitFont.label)
                     .foregroundStyle(.white)
                     .buttonStyle(.plain)
@@ -407,6 +413,8 @@ struct VizitConfirmationCard: View {
     var cancelTitle = "Mégse"
     let confirmTitle: String
     var destructive = false
+    var isLoading = false
+    var isEnabled = true
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -416,10 +424,12 @@ struct VizitConfirmationCard: View {
                 Text(title).font(VizitFont.h3).foregroundStyle(VizitColor.textPrimary)
                 Text(message).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
                 HStack(spacing: VizitSpace.sm) {
-                    VizitButton(title: cancelTitle, kind: .secondary, action: onCancel)
+                    VizitButton(title: cancelTitle, kind: .secondary, isEnabled: !isLoading, action: onCancel)
                     VizitButton(
                         title: confirmTitle,
                         kind: destructive ? .destructive : .primary,
+                        isLoading: isLoading,
+                        isEnabled: isEnabled && !isLoading,
                         action: onConfirm
                     )
                 }
@@ -514,6 +524,7 @@ struct VizitSearchField: View {
     @Binding var text: String
     var placeholder = "Keresés"
     var resultCount: Int? = nil
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: VizitSpace.sm) {
@@ -521,11 +532,14 @@ struct VizitSearchField: View {
                 .foregroundStyle(VizitColor.textMuted)
             TextField(placeholder, text: $text)
                 .font(VizitFont.body)
+                .focused($isFocused)
+                .accessibilityLabel(placeholder)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             if let resultCount {
                 VizitStatusPill(text: "\(resultCount) találat", tone: .info)
-            } else if !text.isEmpty {
+            }
+            if !text.isEmpty {
                 Button {
                     text = ""
                 } label: {
@@ -533,6 +547,7 @@ struct VizitSearchField: View {
                         .foregroundStyle(VizitColor.textMuted)
                 }
                 .buttonStyle(.plain)
+                .frame(width: VizitMetrics.minTouchTarget, height: VizitMetrics.minTouchTarget)
                 .accessibilityLabel("Keresés törlése")
             }
         }
@@ -542,7 +557,7 @@ struct VizitSearchField: View {
         .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous)
-                .stroke(VizitColor.border, lineWidth: 1)
+                .stroke(isFocused ? VizitColor.borderFocus : VizitColor.border, lineWidth: isFocused ? 2 : 1)
         }
     }
 }
@@ -564,12 +579,14 @@ struct VizitProgressCard: View {
                 HStack {
                     Text(title).font(VizitFont.label).foregroundStyle(VizitColor.textPrimary)
                     Spacer()
-                    Text("\(current) / \(total)")
+                    Text("\(min(max(current, 0), max(total, 0))) / \(max(total, 0))")
                         .font(VizitFont.label)
                         .foregroundStyle(VizitColor.primary)
                 }
                 ProgressView(value: progress)
                     .tint(VizitColor.primary)
+                    .accessibilityLabel(title)
+                    .accessibilityValue("\(Int(progress * 100)) százalék")
                 if let supporting {
                     Text(supporting)
                         .font(VizitFont.bodySmall)
@@ -623,6 +640,7 @@ struct VizitTabHeader: View {
                     .font(VizitFont.label)
                     .foregroundStyle(VizitColor.primary)
                     .buttonStyle(.plain)
+                    .frame(minHeight: VizitMetrics.minTouchTarget)
             }
         }
     }
@@ -740,6 +758,8 @@ struct VizitRow<Trailing: View>: View {
     var action: (() -> Void)?
     @ViewBuilder var trailing: () -> Trailing
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private var foreground: Color {
         if !isEnabled { return VizitColor.textDisabled }
         return destructive ? VizitColor.error : VizitColor.textPrimary
@@ -753,18 +773,26 @@ struct VizitRow<Trailing: View>: View {
                     tint: destructive ? VizitColor.error : VizitColor.textSecondary
                 )
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(VizitFont.body).foregroundStyle(foreground)
+            VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                Text(label).font(VizitFont.body).foregroundStyle(foreground).fixedSize(horizontal: false, vertical: true)
                 if let supporting {
                     Text(supporting)
                         .font(VizitFont.bodySmall)
                         .foregroundStyle(VizitColor.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if dynamicTypeSize.isAccessibilitySize, let value {
+                    Text(value).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .layoutPriority(1)
             Spacer(minLength: VizitSpace.xs)
-            if let value {
+            if !dynamicTypeSize.isAccessibilitySize, let value {
                 Text(value).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(2)
+                    .frame(maxWidth: 140, alignment: .trailing)
             }
             trailing()
             if action != nil && showsChevron {
@@ -777,6 +805,7 @@ struct VizitRow<Trailing: View>: View {
         .padding(.vertical, VizitSpace.sm)
         .frame(minHeight: 60)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
     var body: some View {
@@ -883,6 +912,7 @@ struct VizitBanner: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
+                    .frame(minHeight: VizitMetrics.minTouchTarget)
                     .font(VizitFont.label)
                     .buttonStyle(.plain)
             }
@@ -1052,7 +1082,8 @@ struct VizitLargeTitle<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: VizitSpace.sm) {
             Text(title)
-                .font(.system(size: 32, weight: .bold))
+                .font(VizitFont.h1)
+                .fixedSize(horizontal: false, vertical: true)
                 .tracking(tracking)
                 .foregroundStyle(VizitColor.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -1091,5 +1122,77 @@ struct VizitIdentityChip: View {
                 ? "Névjegy beállítása"
                 : "Megnyitás: \(profile.displayName) névjegye"
         )
+    }
+}
+
+
+// MARK: - Feedback attached to real application operations
+
+@MainActor
+final class VizitFeedbackCenter: ObservableObject {
+    struct Notice: Identifiable {
+        let id = UUID()
+        let text: String
+        let tone: VizitTone
+        let actionTitle: String?
+        let action: (() -> Void)?
+    }
+    @Published private(set) var notice: Notice?
+    private var dismissal: Task<Void, Never>?
+
+    func show(_ text: String, tone: VizitTone = .success,
+              actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        dismissal?.cancel()
+        let value = Notice(text: text, tone: tone, actionTitle: actionTitle, action: action)
+        notice = value
+        UIAccessibility.post(notification: .announcement, argument: text)
+        // Undo stays available until explicitly dismissed, including for VoiceOver.
+        guard action == nil else { return }
+        dismissal = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 5_000_000_000) }
+            catch { return }
+            guard !Task.isCancelled, self?.notice?.id == value.id else { return }
+            self?.notice = nil
+        }
+    }
+    func dismiss() { dismissal?.cancel(); dismissal = nil; notice = nil }
+}
+
+struct VizitFeedbackHost: View {
+    @EnvironmentObject private var feedback: VizitFeedbackCenter
+    var body: some View {
+        if let notice = feedback.notice {
+            HStack(alignment: .center, spacing: VizitSpace.xxs) {
+                if let title = notice.actionTitle, let action = notice.action {
+                    VizitSnackbar(text: notice.text, actionTitle: title) {
+                        feedback.dismiss()
+                        action()
+                    }
+                } else {
+                    VizitToast(text: notice.text, tone: notice.tone)
+                }
+                VizitIconButton(systemImage: "xmark", accessibilityTitle: "Üzenet bezárása") {
+                    feedback.dismiss()
+                }
+            }
+            .padding(.horizontal, VizitSpace.md)
+            .padding(.vertical, VizitSpace.xs)
+            .background(VizitColor.canvas)
+            .accessibilityIdentifier("feedback.notice")
+        }
+    }
+}
+
+/// Appears only while the missing remote profile is actually being fetched.
+struct VizitProfileSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: VizitSpace.md) {
+            VizitSkeleton(height: 216, cornerRadius: VizitRadius.xl)
+            VizitSkeleton(height: 20)
+            VizitSkeleton(height: 16).frame(maxWidth: 220)
+            VizitLoadingState(message: "Névjegy betöltése…")
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Névjegy betöltése folyamatban")
     }
 }

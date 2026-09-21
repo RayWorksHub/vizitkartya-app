@@ -10,6 +10,7 @@ import ImageIO
 struct ProfileEditor: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
+    @EnvironmentObject private var feedback: VizitFeedbackCenter
     @Environment(\.dismiss) private var dismiss
     @State var draft: ContactProfile
     @State private var photo: PhotosPickerItem?
@@ -73,6 +74,10 @@ struct ProfileEditor: View {
                         contactSection
                         socialSection
                         sharingSection
+                        if let error {
+                            VizitInlineMessage(text: error, tone: .error)
+                                .accessibilityIdentifier("profile.inlineError")
+                        }
                     }
                     .padding(.horizontal, VizitSpace.md)
                     .padding(.vertical, VizitSpace.lg)
@@ -87,10 +92,28 @@ struct ProfileEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Mégse") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Mentés") {
-                        do { try store.save(draft); dismiss() }
+                        do {
+                            let previous = store.profile
+                            let owner = store.accountIdentifier
+                            let savedProfile = draft.normalized
+                            try store.save(draft)
+                            dismiss()
+                            if (try? previous.validate()) != nil {
+                                feedback.show("A névjegy mentve.", actionTitle: "Visszavonás") {
+                                    guard store.accountIdentifier == owner, store.profile == savedProfile else {
+                                        feedback.show("A névjegy azóta megváltozott. Nyisd meg a szerkesztőt a módosításhoz.", tone: .info)
+                                        return
+                                    }
+                                    do {
+                                        try store.save(previous)
+                                        feedback.show("Az előző névjegyadatokat visszaállítottuk.")
+                                    } catch { feedback.show(error.localizedDescription, tone: .error) }
+                                }
+                            } else { feedback.show("A névjegyed elkészült.") }
+                        }
                         catch { self.error = error.localizedDescription }
                     }
-                    .disabled(loadingPhoto || store.storageError != nil)
+                    .disabled(loadingPhoto || loadingCompanyLogo || store.storageError != nil)
                     .accessibilityIdentifier("profile.save")
                 }
                 ToolbarItemGroup(placement: .keyboard) {

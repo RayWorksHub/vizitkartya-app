@@ -6,14 +6,22 @@ import UIKit
 struct VizitApp: App {
     @StateObject private var store = AppStore()
     @StateObject private var presentation = CardPresentationStore()
+    @StateObject private var feedback = VizitFeedbackCenter()
 
     var body: some Scene {
         WindowGroup {
             AppGate()
                 .environmentObject(store)
                 .environmentObject(presentation)
+                .environmentObject(feedback)
                 .tint(VizitColor.primary)
                 .onOpenURL { url in Task { await store.handleCallback(url) } }
+                .onChange(of: store.authStatus) { status in
+                    switch status {
+                    case .authenticated, .offline: break
+                    default: feedback.dismiss()
+                    }
+                }
         }
     }
 }
@@ -25,6 +33,7 @@ enum AuthStatus: Equatable {
     case authenticated
     case offline
     case passwordRecovery
+    case sessionExpired
     case configurationError(String)
 }
 
@@ -51,6 +60,10 @@ final class AppStore: ObservableObject {
     @Published private(set) var storageError: String?
     @Published private(set) var message: String?
     @Published private(set) var busy = false
+    @Published private(set) var automaticSyncEnabled =
+        UserDefaults.standard.object(forKey: "figma.automaticSyncEnabled") as? Bool ?? true
+    private var authWatch: Task<Void, Never>?
+    private var intentionalSignOut = false
 
     private(set) var configuration: AppConfiguration?
     private var cloud: CloudService?
@@ -118,7 +131,9 @@ final class AppStore: ObservableObject {
         do {
             let config = try AppConfiguration.load()
             configuration = config
-            cloud = CloudService(configuration: config)
+            let service = CloudService(configuration: config)
+            cloud = service
+            observeSession(service)
             Task { await bootstrap() }
         } catch {
             authStatus = .configurationError(error.localizedDescription)
@@ -127,7 +142,50 @@ final class AppStore: ObservableObject {
 
     var hasProfile: Bool { !profile.displayName.isEmpty }
     var accountEmail: String { userEmail }
+    var accountIdentifier: UUID? { userID }
     var isOnline: Bool { authStatus == .authenticated }
+    var syncErrorDescription: String? { syncFailureMessage }
+
+    func setAutomaticSync(_ enabled: Bool) {
+        automaticSyncEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "figma.automaticSyncEnabled")
+        if enabled { retrySync() }
+        else { resetSyncRetry() }
+    }
+    private func observeSession(_ service: CloudService) {
+        authWatch = Task { [weak self] in
+            for await (event, session) in await service.client.auth.authStateChanges {
+                guard !Task.isCancelled, let self else { return }
+                if event == .signedOut, !self.intentionalSignOut, self.userID != nil {
+                    switch self.authStatus {
+                    case .authenticated, .offline, .passwordRecovery: self.sessionExpired()
+                    default: break
+                    }
+                } else if event == .userUpdated, session?.user.id == self.userID {
+                    self.objectWillChange.send()
+                    self.userEmail = session?.user.email ?? self.userEmail
+                }
+            }
+        }
+    }
+    private func isExpiredSession(_ error: Error) -> Bool {
+        if let cloudError = error as? CloudError {
+            if case .authenticationRequired = cloudError { return true }
+            if case .server(let status, _) = cloudError, status == 401 { return true }
+        }
+        guard let auth = error as? AuthError else { return false }
+        if case .sessionMissing = auth { return true }
+        return ["session_not_found", "refresh_token_not_found", "refresh_token_already_used", "bad_jwt", "session_expired"]
+            .contains(auth.errorCode.rawValue)
+    }
+    private func sessionExpired() {
+        resetSyncRetry()
+        syncAgain = false
+        message = nil
+        authStatus = .sessionExpired
+        syncStatus = .pending
+        // Retain the account-isolated unsent draft, hidden behind AppGate.
+    }
 
     #if DEBUG
     /// A complete, deterministic profile used only by UI release-audit tests.
@@ -225,8 +283,10 @@ final class AppStore: ObservableObject {
             let current = try await cloud.validSession()
             userEmail = current.user.email ?? ""
             authStatus = .authenticated
-            await synchronize()
+            if automaticSyncEnabled { await synchronize(automatically: true) }
+            else { syncStatus = (try? syncStore?.load().pendingUpload) == true ? .pending : .localOnly }
         } catch {
+            if isExpiredSession(error) { sessionExpired(); return }
             authStatus = .offline
             syncStatus = .pending
             message = "Nincs hálózati kapcsolat. A helyi névjegyed olvasható és szerkeszthető; a feltöltés később újrapróbálható."
@@ -332,7 +392,8 @@ final class AppStore: ObservableObject {
 
     func logout() async {
         busy = true
-        defer { busy = false }
+        intentionalSignOut = true
+        defer { busy = false; intentionalSignOut = false }
         do {
             try await cloud?.logout()
         } catch {
@@ -354,6 +415,8 @@ final class AppStore: ObservableObject {
             try await cloud.deleteAccount()
             try self.fileStore?.reset()
             try self.syncStore?.reset()
+            self.intentionalSignOut = true
+            defer { self.intentionalSignOut = false }
             try? await cloud.logout()
             self.clearUser()
             self.authStatus = .signedOut
@@ -375,7 +438,7 @@ final class AppStore: ObservableObject {
         profileRevision &+= 1
         storageError = nil
         syncStatus = uiTesting ? .localOnly : .pending
-        if !uiTesting { Task { await synchronize() } }
+        if !uiTesting && automaticSyncEnabled { Task { await synchronize(automatically: true) } }
     }
 
     func retrySync() {
@@ -386,6 +449,7 @@ final class AppStore: ObservableObject {
                     userEmail = session.user.email ?? ""
                     authStatus = .authenticated
                 } catch {
+                    if isExpiredSession(error) { sessionExpired(); return }
                     message = "Még nincs hálózati kapcsolat. A helyi névjegy változatlanul megmaradt."
                     return
                 }
@@ -408,7 +472,8 @@ final class AppStore: ObservableObject {
         syncStatus = .localOnly
     }
 
-    func synchronize() async {
+    func synchronize(automatically: Bool = false) async {
+        guard !automatically || automaticSyncEnabled else { return }
         guard !uiTesting, authStatus == .authenticated, let cloud, let id = userID,
               let storage = fileStore, let metadataStore = syncStore, storageError == nil else { return }
         if syncInFlight {
@@ -420,7 +485,7 @@ final class AppStore: ObservableObject {
             syncInFlight = false
             if syncAgain {
                 syncAgain = false
-                Task { await self.synchronize() }
+                Task { await self.synchronize(automatically: automatically) }
             }
         }
         if message == syncFailureMessage { message = nil }
@@ -636,6 +701,7 @@ final class AppStore: ObservableObject {
             }
         } catch let error as CloudError {
             guard userID == id else { return }
+            if isExpiredSession(error) { sessionExpired(); return }
             if case .profileConflict = error {
                 if var latest = try? metadataStore.load() {
                     latest.conflict = true
@@ -653,6 +719,7 @@ final class AppStore: ObservableObject {
             message = text
         } catch {
             guard userID == id else { return }
+            if isExpiredSession(error) { sessionExpired(); return }
             syncStatus = .failed
             let text = "A névjegy mentve. A szinkron később folytatódik."
             syncFailureMessage = text
@@ -721,7 +788,7 @@ final class AppStore: ObservableObject {
     }
 
     private func scheduleSyncRetry() {
-        guard syncRetryTask == nil, authStatus == .authenticated else { return }
+        guard automaticSyncEnabled, syncRetryTask == nil, authStatus == .authenticated else { return }
         let delays: [UInt64] = [3, 10, 30, 120]
         let delay = delays[min(syncRetryAttempt, delays.count - 1)]
         syncRetryAttempt = min(syncRetryAttempt + 1, delays.count - 1)
@@ -729,7 +796,7 @@ final class AppStore: ObservableObject {
             try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
             guard !Task.isCancelled, let self else { return }
             self.syncRetryTask = nil
-            await self.synchronize()
+            await self.synchronize(automatically: true)
         }
     }
 
@@ -813,6 +880,9 @@ struct AppGate: View {
             case .signedOut:
                 AuthScreen()
 
+            case .sessionExpired:
+                VizitScreen { VizitSessionExpiredState(login: store.showSignIn) }
+
             case .verificationSent(let email):
                 EmailVerificationScreen(email: email)
 
@@ -874,9 +944,9 @@ private struct LaunchScreen: View {
             VStack(spacing: VizitSpace.lg) {
                 VizitBrandLockup(maxHeight: 96)
                     .frame(maxWidth: 300)
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(Color(uiColor: UIColor(hex: 0x0FBEE6)))
+                VizitLoadingState(message: "A VIZIT indítása…")
+                    .environment(\.colorScheme, .dark)
+                    .frame(maxHeight: 150)
             }
             .padding(VizitSpace.xl)
         }
@@ -906,6 +976,7 @@ struct RootView: View {
                 .tabItem { Label("Beállítások", systemImage: "gearshape") }
                 .tag(RootTab.settings)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { VizitFeedbackHost() }
         .tint(VizitColor.primary)
         .toolbarBackground(VizitColor.surface, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
