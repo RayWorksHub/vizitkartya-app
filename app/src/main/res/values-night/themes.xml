@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        Dark launch window. The app itself defaults to the light theme, so this
+        only affects the first frame for users whose system is in dark mode;
+        VizitTheme applies the user's own choice immediately afterwards.
+    -->
     <style name="Theme.Vizit" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/vizit_canvas_dark</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

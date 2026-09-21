@@ -19,8 +19,15 @@ enum ContactBridge {
             contact.phoneNumbers = [CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: p.phone))]
         }
         if !p.email.isEmpty { contact.emailAddresses = [CNLabeledValue(label: CNLabelWork, value: p.email as NSString)] }
-        contact.urlAddresses = [p.website, p.linkedIn].filter { !$0.isEmpty }
-            .map { CNLabeledValue(label: CNLabelWork, value: $0 as NSString) }
+        var urls: [CNLabeledValue<NSString>] = []
+        if !p.website.isEmpty {
+            urls.append(CNLabeledValue(label: CNLabelWork, value: p.website as NSString))
+        }
+        urls += p.socialProfiles.compactMap { item in
+            guard !item.url.isEmpty else { return nil }
+            return CNLabeledValue(label: item.platform.label, value: item.url as NSString)
+        }
+        contact.urlAddresses = urls
         if !p.address.isEmpty {
             let address = CNMutablePostalAddress()
             address.street = p.address

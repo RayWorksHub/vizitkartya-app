@@ -2,7 +2,7 @@ import Foundation
 
 /// The editable contact fields mirror the currently supported Android profile
 /// fields and the live Supabase profile schema.
-public struct ContactProfile: Codable, Equatable, Sendable {
+public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public var fullName = ""
     public var firstName = ""
     public var lastName = ""
@@ -13,16 +13,24 @@ public struct ContactProfile: Codable, Equatable, Sendable {
     public var website = ""
     public var address = ""
     public var linkedIn = ""
+    public var facebook = ""
+    public var instagram = ""
+    public var tiktok = ""
+    public var youtube = ""
     public var photoBase64 = ""
     public var photoSyncInitialized = false
     public var publicSlug = ""
     public var isPublic = false
+    public var customDomain = ""
+    public var customDomainVerified = false
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case fullName, firstName, lastName, jobTitle, company, phone, email
-        case website, address, linkedIn, photoBase64, photoSyncInitialized, publicSlug, isPublic
+        case website, address, linkedIn, facebook, instagram, tiktok, youtube
+        case photoBase64, photoSyncInitialized, publicSlug, isPublic
+        case customDomain, customDomainVerified
     }
 
     /// Explicit decoding keeps profiles created by the earlier local-only iOS
@@ -39,10 +47,16 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         website = try values.decodeIfPresent(String.self, forKey: .website) ?? ""
         address = try values.decodeIfPresent(String.self, forKey: .address) ?? ""
         linkedIn = try values.decodeIfPresent(String.self, forKey: .linkedIn) ?? ""
+        facebook = try values.decodeIfPresent(String.self, forKey: .facebook) ?? ""
+        instagram = try values.decodeIfPresent(String.self, forKey: .instagram) ?? ""
+        tiktok = try values.decodeIfPresent(String.self, forKey: .tiktok) ?? ""
+        youtube = try values.decodeIfPresent(String.self, forKey: .youtube) ?? ""
         photoBase64 = try values.decodeIfPresent(String.self, forKey: .photoBase64) ?? ""
         photoSyncInitialized = try values.decodeIfPresent(Bool.self, forKey: .photoSyncInitialized) ?? false
         publicSlug = try values.decodeIfPresent(String.self, forKey: .publicSlug) ?? ""
         isPublic = try values.decodeIfPresent(Bool.self, forKey: .isPublic) ?? false
+        customDomain = try values.decodeIfPresent(String.self, forKey: .customDomain) ?? ""
+        customDomainVerified = try values.decodeIfPresent(Bool.self, forKey: .customDomainVerified) ?? false
     }
 
     public var displayName: String {
@@ -62,11 +76,13 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         var value = self
         let paths: [WritableKeyPath<ContactProfile, String>] = [
             \.fullName, \.firstName, \.lastName, \.jobTitle, \.company,
-            \.phone, \.email, \.website, \.address, \.linkedIn, \.publicSlug
+            \.phone, \.email, \.website, \.address, \.linkedIn, \.facebook,
+            \.instagram, \.tiktok, \.youtube, \.publicSlug, \.customDomain
         ]
         for path in paths {
             value[keyPath: path] = value[keyPath: path].trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        value.customDomain = CustomProfileDomain.normalize(value.customDomain)
         return value
     }
 
@@ -75,14 +91,16 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         guard !p.displayName.isEmpty else { throw ProfileError.missingName }
         guard !p.phone.isEmpty || !p.email.isEmpty else { throw ProfileError.missingContact }
         let fields = [p.fullName, p.firstName, p.lastName, p.jobTitle, p.company,
-                      p.phone, p.email, p.website, p.address, p.linkedIn]
+                      p.phone, p.email, p.website, p.address, p.linkedIn,
+                      p.facebook, p.instagram, p.tiktok, p.youtube]
         guard fields.allSatisfy({ $0.utf8.count <= 512 && !$0.unicodeScalars.contains(where: {
             CharacterSet.controlCharacters.contains($0)
         }) }) else { throw ProfileError.invalidField }
         guard p.displayName.count <= 80, p.firstName.count <= 100, p.lastName.count <= 100,
               p.jobTitle.count <= 100, p.company.count <= 100, p.phone.count <= 40,
               p.email.count <= 254, p.website.count <= 300, p.address.count <= 180,
-              p.linkedIn.count <= 300 else { throw ProfileError.invalidField }
+              p.linkedIn.count <= 300, p.facebook.count <= 300, p.instagram.count <= 300,
+              p.tiktok.count <= 300, p.youtube.count <= 300 else { throw ProfileError.invalidField }
         if !p.email.isEmpty {
             guard p.email.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
             else { throw ProfileError.invalidEmail }
@@ -92,7 +110,7 @@ public struct ContactProfile: Codable, Equatable, Sendable {
                   p.phone.unicodeScalars.allSatisfy({ CharacterSet(charactersIn: "+0123456789 ()-./").contains($0) })
             else { throw ProfileError.invalidPhone }
         }
-        for link in [p.website, p.linkedIn] where !link.isEmpty {
+        for link in [p.website] + p.socialProfiles.map({ $0.url }) where !link.isEmpty {
             guard SafeLink.https(link) != nil else { throw ProfileError.invalidURL }
         }
         if !p.photoBase64.isEmpty {
@@ -102,12 +120,65 @@ public struct ContactProfile: Codable, Equatable, Sendable {
         if !p.publicSlug.isEmpty && !PublicProfileLink.isValidSlug(p.publicSlug) {
             throw ProfileError.invalidSlug
         }
+        if !p.customDomain.isEmpty && !CustomProfileDomain.isValid(p.customDomain) {
+            throw ProfileError.invalidDomain
+        }
+    }
+}
+
+public enum SocialPlatform: String, CaseIterable, Sendable {
+    case linkedin, facebook, instagram, tiktok, youtube
+
+    public var label: String {
+        switch self {
+        case .linkedin: return "LinkedIn"
+        case .facebook: return "Facebook"
+        case .instagram: return "Instagram"
+        case .tiktok: return "TikTok"
+        case .youtube: return "YouTube"
+        }
+    }
+
+    public var sortOrder: Int {
+        switch self {
+        case .linkedin: return 1
+        case .facebook: return 2
+        case .instagram: return 3
+        case .tiktok: return 4
+        case .youtube: return 5
+        }
+    }
+}
+
+public extension ContactProfile {
+    func socialURL(for platform: SocialPlatform) -> String {
+        switch platform {
+        case .linkedin: return linkedIn
+        case .facebook: return facebook
+        case .instagram: return instagram
+        case .tiktok: return tiktok
+        case .youtube: return youtube
+        }
+    }
+
+    mutating func setSocialURL(_ value: String, for platform: SocialPlatform) {
+        switch platform {
+        case .linkedin: linkedIn = value
+        case .facebook: facebook = value
+        case .instagram: instagram = value
+        case .tiktok: tiktok = value
+        case .youtube: youtube = value
+        }
+    }
+
+    var socialProfiles: [(platform: SocialPlatform, url: String)] {
+        SocialPlatform.allCases.map { ($0, socialURL(for: $0)) }
     }
 }
 
 public enum ProfileError: Error, LocalizedError, Equatable {
     case missingName, missingContact, invalidEmail, invalidPhone, invalidURL
-    case invalidField, invalidPhoto, invalidSlug, oversizedQR, unsupportedFile, damagedFile
+    case invalidField, invalidPhoto, invalidSlug, invalidDomain, oversizedQR, unsupportedFile, damagedFile
 
     public var errorDescription: String? {
         switch self {
@@ -119,6 +190,7 @@ public enum ProfileError: Error, LocalizedError, Equatable {
         case .invalidField: return "Egy mező túl hosszú, sortörést vagy vezérlőkaraktert tartalmaz."
         case .invalidPhoto: return "A profilkép nem olvasható vagy túl nagy. Válassz új képet."
         case .invalidSlug: return "A nyilvános profilazonosító 3–50 kisbetűből, számból és kötőjelből állhat."
+        case .invalidDomain: return "Az egyedi domain csak egy teljes domainnév lehet, például nevjegy.cegem.hu."
         case .oversizedQR: return "Túl sok adat a jól olvasható QR-kódhoz. Rövidítsd a mezőket, vagy használd a névjegyküldést."
         case .unsupportedFile: return "Ezt a mentést újabb alkalmazásverzió készítette. Az adatokat nem írtuk felül."
         case .damagedFile: return "A helyi névjegy nem olvasható. Az eredeti mentést megőriztük; a Beállításokban törölheted."
@@ -138,19 +210,58 @@ public enum PublicProfileLink {
               isValidSlug(slug) else { return nil }
         return baseURL.appendingPathComponent(slug, isDirectory: false)
     }
+
+    public static func preferred(baseURL: URL, slug: String, customDomain: String,
+                                 customDomainVerified: Bool) -> URL? {
+        if customDomainVerified, let custom = CustomProfileDomain.url(customDomain) { return custom }
+        return make(baseURL: baseURL, slug: slug)
+    }
+}
+
+public enum CustomProfileDomain {
+    public static func normalize(_ value: String) -> String {
+        var result = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if result.hasPrefix("https://") { result.removeFirst("https://".count) }
+        while result.hasSuffix("/") || result.hasSuffix(".") { result.removeLast() }
+        return result
+    }
+
+    public static func isValid(_ value: String) -> Bool {
+        let host = normalize(value)
+        guard (4...253).contains(host.count),
+              host.range(
+                of: #"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"#,
+                options: .regularExpression
+              ) != nil,
+              let parts = URLComponents(string: "https://\(host)"),
+              parts.host == host, parts.user == nil, parts.password == nil,
+              parts.path.isEmpty, parts.query == nil, parts.fragment == nil else { return false }
+        return true
+    }
+
+    public static func url(_ value: String) -> URL? {
+        let host = normalize(value)
+        guard isValid(host) else { return nil }
+        return URL(string: "https://\(host)")
+    }
 }
 
 public enum ProfileSlug {
     /// Ordered candidates for first profile creation. The first value preserves
     /// the requested public URL. Later values are stable per account and stay
     /// inside the 50-character public-slug contract.
-    public static func creationCandidates(requested: String, ownerID: UUID) -> [String] {
+    public static func creationCandidates(requested: String, displayName: String = "", ownerID: UUID) -> [String] {
         let ownerToken = ownerID.uuidString.lowercased().replacingOccurrences(of: "-", with: "")
         let requested = requested.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let primary = requested.isEmpty ? "vizit-\(ownerToken.prefix(12))" : requested
-        let readableFallback = requested.isEmpty
-            ? "vizit-\(ownerToken)"
-            : "\(requested.prefix(40))-\(ownerToken.prefix(8))"
+        let folded = displayName.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+            .replacingOccurrences(of: #"[^a-z0-9]+"#, with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let readable = String(folded.prefix(50)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let generated = PublicProfileLink.isValidSlug(readable) ? readable : "vizit-\(ownerToken.prefix(12))"
+        let primary = requested.isEmpty ? generated : requested
+        let fallbackPrefix = String(primary.prefix(40)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let readableFallback = "\(fallbackPrefix)-\(ownerToken.prefix(8))"
         let ownerFallback = "vizit-\(ownerToken)"
 
         var seen = Set<String>()
@@ -202,17 +313,6 @@ public enum ProfilePhoto {
         return url
     }
 }
-
-public enum ContactQRLink {
-    public static func make(publicURL: URL) -> URL? {
-        guard SafeLink.https(publicURL.absoluteString) != nil else { return nil }
-        var parts = URLComponents(url: publicURL, resolvingAgainstBaseURL: false)
-        parts?.queryItems = [URLQueryItem(name: "contact", value: "1")]
-        parts?.fragment = nil
-        return parts?.url
-    }
-}
-
 
 public enum ProfileRevisionPolicy {
     public static func mayUpload(localID: UUID?, localRevision: String?, localFingerprint: String?,
