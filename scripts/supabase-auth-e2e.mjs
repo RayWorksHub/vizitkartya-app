@@ -37,6 +37,10 @@ const password = `Vizit-${randomUUID()}-A1!`
 const createdUserIds = new Set()
 const createdUserEmails = new Set()
 const uploadedFiles = []
+const avatarFixture = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2ZAAAAABJRU5ErkJggg==',
+  'base64',
+)
 
 const safeCode = (value) => String(value ?? 'unknown')
   .replace(/[^a-zA-Z0-9_.-]/g, '')
@@ -178,9 +182,9 @@ async function upload(bucket, path, token) {
   const result = await request(`/storage/v1/object/${bucket}/${path}`, {
     method: 'POST',
     token,
-    rawBody: `VIZIT DEV E2E ${runId}`,
+    rawBody: avatarFixture,
     headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Type': 'image/png',
       'cache-control': 'max-age=60',
       'x-upsert': 'false',
     },
@@ -371,7 +375,7 @@ try {
     'a new login restores the profile and the public view counter is updated',
   )
 
-  await upload('avatars', `${acceptedUser.id}/e2e/nested/avatar.txt`, acceptedToken)
+  await upload('avatars', `${acceptedUser.id}/e2e/nested/avatar.png`, acceptedToken)
 
   if (scope === 'FULL') {
     const deletion = await request('/functions/v1/delete-account', {
