@@ -801,7 +801,57 @@ enum PhotoContactQR {
                 }
             }
         }
+
+        // A baseline colour JPEG carries two quantisation tables and four
+        // Huffman tables even at 4x4 pixels. For a contact with every optional
+        // field populated that fixed overhead can be the last few hundred
+        // bytes above QR version 40-H. A grayscale JPEG remains a real embedded
+        // contact photo while using one component and roughly half the tables.
+        for side in [16, 12, 10, 8, 6, 4] {
+            guard let image = grayscaleThumbnail(source, side: side) else { continue }
+            for quality in [0.55, 0.35, 0.18, 0.08] {
+                guard let encoded = image.jpegData(compressionQuality: quality),
+                      let jpeg = jpegWithoutMetadata(encoded) else { continue }
+                var candidate = profile
+                candidate.photoBase64 = jpeg.base64EncodedString()
+                if let value = try? VCard.qrPayload(candidate, includePhoto: true),
+                   value.contains("PHOTO;ENCODING=b;TYPE=JPEG:"),
+                   QRImage.canEncode(value) {
+                    return value
+                }
+            }
+        }
         return nil
+    }
+
+    private static func grayscaleThumbnail(_ source: UIImage, side: Int) -> UIImage? {
+        guard let sourceImage = source.cgImage else { return nil }
+        let bytesPerRow = ((side + 15) / 16) * 16
+        guard let context = CGContext(
+            data: nil,
+            width: side,
+            height: side,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+
+        context.interpolationQuality = .medium
+        context.translateBy(x: 0, y: CGFloat(side))
+        context.scaleBy(x: 1, y: -1)
+        let width = CGFloat(sourceImage.width)
+        let height = CGFloat(sourceImage.height)
+        let scale = max(CGFloat(side) / width, CGFloat(side) / height)
+        let drawSize = CGSize(width: width * scale, height: height * scale)
+        context.draw(sourceImage, in: CGRect(
+            x: (CGFloat(side) - drawSize.width) / 2,
+            y: (CGFloat(side) - drawSize.height) / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        ))
+        guard let image = context.makeImage() else { return nil }
+        return UIImage(cgImage: image)
     }
 
     /// `UIImage.jpegData` may attach a multi-kilobyte ICC/EXIF payload even to
