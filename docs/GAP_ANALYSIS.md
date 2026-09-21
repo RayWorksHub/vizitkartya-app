@@ -4,7 +4,6 @@ Audit dátuma: 2026-08-22
 
 Auditált távoli commit: `6964b1f` (`origin/develop`)
 
-Master követelmény: `docs/VIZIT_MASTER_SPEC_V1.md`
 
 ## Állapotjelölések
 
@@ -24,7 +23,6 @@ Az `Android CI` 8. futása sikeresen teljesítette a unit test, lint, DEV/BETA d
 | Gradle, Kotlin, Compose, SDK | `TESTED` | API 29–36, Java 17, Kotlin 2.3.21, Compose és Material 3 buildel. |
 | DEV/BETA/PROD flavor | `TESTED` | Külön application ID/név/config mezők létrejöttek; a végleges PROD package ID még nincs jóváhagyva. |
 | CI | `TESTED` | Unit test, lint és mindhárom környezet buildje sikeres. |
-| Projektstruktúra | `REQUIRES REFACTOR` | Még gyökérszintű `app/`; a master szerinti `apps/android`, `shared` és teljes docs struktúra nincs kész. |
 | Hivatalos branding | `REQUIRES REFACTOR` | Az auditált commit ideiglenes, nem hivatalos launcher ikont használt; a jóváhagyott asset ebben a feature blokkban került be. |
 | Auth | `PARTIALLY SUPPORTED` | Email/jelszó, session, reset, Google adapter és Edge Function shell kész; jogi checkbox, jogi dokumentumok, megerősített törlési UI és élő Supabase E2E teszt hiányzik. |
 | Supabase kliens | `IMPLEMENTED` | Auth/PostgREST/Storage/Functions kliens és flavor config kész, de távoli projekten nincs ellenőrizve. |
@@ -60,15 +58,6 @@ Az alábbiak implementálva és statikusan ellenőrizve vannak. A PR 9. Android 
 | Kontakt QR | `TESTED` unit/build szinten: elsődleges alapmód, 1800 bájtos budget, M hibajavítás, 4 modul quiet zone, slug/HTTPS validáció és round-trip teszt készült. Fizikai kamera-teszt még szükséges. |
 | Auth jogi gate | `TESTED` unit/build szinten: kötelező checkbox, HTTPS dokumentumkonfiguráció, verziózott signup metadata és DEV-only Google adapter gate készült. Távoli Auth E2E még szükséges. |
 
-A következő kötelező bizonyíték: távoli Supabase/Auth E2E, majd valós NFC/QR készülékteszt.
-
-## P0 javítási sorrend
-
-1. Room + Supabase local-first repository és outbox sync;
-2. teljes Auth UX és Supabase DEV E2E;
-3. többértékű profil, mezősorrend/láthatóság, kép- és cégeslogó pipeline;
-4. publikus profil és App Link end-to-end;
-5. fizikai Xiaomi/cross-OEM teszt és kompatibilitási mátrix.
 
 ## Külső blokkolók
 
