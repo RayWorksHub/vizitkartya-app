@@ -37,14 +37,14 @@ enum ContactBridge {
         return contact
     }
 
-    static func shareFile(_ profile: ContactProfile) throws -> ShareFile {
-        guard !profile.normalized.photoBase64.isEmpty else { throw ProfileError.missingPhoto }
+    static func shareFile(_ profile: ContactProfile, includePhoto: Bool = false) throws -> ShareFile {
+        if includePhoto, profile.normalized.photoBase64.isEmpty { throw ProfileError.missingPhoto }
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("VIZIT-share-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("nevjegy.vcf")
         do {
-            let data = Data(try VCard.encode(profile, includePhoto: true).utf8)
+            let data = Data(try VCard.encode(profile, includePhoto: includePhoto).utf8)
             try data.write(to: url, options: [.atomic, .completeFileProtection])
             return ShareFile(url: url)
         } catch {

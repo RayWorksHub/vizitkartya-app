@@ -166,12 +166,13 @@ struct VizitTextField: View {
                 .vizitIdentifier(identifier)
 
                 if isSecure {
-                    VizitIconButton(
-                        systemImage: revealed ? "eye.slash" : "eye",
-                        accessibilityTitle: revealed ? "Jelszó elrejtése" : "Jelszó megjelenítése",
-                        isEnabled: isEnabled
-                    ) { revealed.toggle() }
-                    .frame(width: 32)
+                    Button(revealed ? "Elrejt" : "Mutat") { revealed.toggle() }
+                        .font(VizitFont.label)
+                        .foregroundStyle(isEnabled ? VizitColor.primary : VizitColor.textDisabled)
+                        .frame(minWidth: VizitMetrics.minTouchTarget, minHeight: VizitMetrics.minTouchTarget)
+                        .buttonStyle(.plain)
+                        .disabled(!isEnabled)
+                        .accessibilityLabel(revealed ? "Jelszó elrejtése" : "Jelszó megjelenítése")
                 }
             }
             .padding(.horizontal, VizitSpace.md)

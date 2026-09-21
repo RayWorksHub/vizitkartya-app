@@ -1,4 +1,4 @@
-# VIZIT iOS 8.1
+# VIZIT iOS 8.7
 
 Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az aktív VIZIT Supabase-projekthez csatlakozik, az Androidon elérhető névjegyfolyamatokat az iOS platformbiztonsági korlátai között valósítja meg.
 
@@ -68,12 +68,15 @@ A feltöltés után a workflow az App Store Connect API-ból visszaolvassa ugyan
 a verziót és buildszámot, és csak `VALID` feldolgozási állapotnál sikeres. A
 feltöltött buildhez nem rendel automatikusan tesztelőcsoportot. Meglévő build
 állapota a read-only **TestFlight build status** workflow-val kérdezhető le.
-A jelenlegi kiadás: **VIZIT 8.1.0**.
+A jelenlegi kiadás: **VIZIT 8.7.0**.
 
-A 8.1-es iOS-kiadásban nincs kép nélküli névjegyátadás: az egyetlen elsődleges
-QR optimalizált JPEG profilképet tartalmaz. A nyilvános profil nem második QR,
-hanem külön hivatkozás. Ha a fényképes névjegy nem kódolható biztonságosan, az
-app nem készít félrevezető QR-kódot.
+A Megosztás képernyő három külön, feliratozott módot ad. A **Kontakt** QR a
+teljes névjegyet kép nélkül, offline importálható vCardként viszi át; a
+**Fényképes** QR ugyanezt optimalizált profilképpel adja át; a **Profil** QR a
+sikeresen szinkronizált HTTPS-profilcímet nyitja meg. A fényképes és profil mód
+hibaállapota nem készít félrevezető kódot, a Kontakt mód azonban profilkép
+nélkül is működik. Mindhárom kód H hibajavítással, négy modulnyi csendes zónával
+és legfeljebb 14%-os, fix színű VIZIT-jellel készül.
 
 ## Kötelező fizikai készülékteszt
 
@@ -81,9 +84,9 @@ Kiadásra jelölés előtt valódi iPhone-on külön ellenőrizendő:
 
 - telepítés és első indítás;
 - e-mailes regisztráció/megerősítés/belépés;
-- Google OAuth és jelszó-visszaállítás;
+- e-mailes belépés és jelszó-visszaállítás;
 - offline mentés, újracsatlakozás és két eszköz közti szinkronütközés;
-- kameraengedély, fényképes kontakt QR visszaolvasás, Kontaktokba mentés;
+- kameraengedély, Kontakt/Fényképes/Profil QR visszaolvasás, Kontaktokba mentés;
 - fotóválasztás, .vcf és AirDrop;
 - nyilvános profil megnyitása;
 - csak erre létrehozott tesztfiókkal a végleges fióktörlés.

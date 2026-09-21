@@ -220,6 +220,41 @@ final class CloudService: @unchecked Sendable {
         }
     }
 
+    func resendSignupVerification(email: String) async throws {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard AuthValidation.email(normalizedEmail) == nil else { throw CloudError.invalidRequest }
+        let url = configuration.supabaseURL
+            .appendingPathComponent("auth", isDirectory: true)
+            .appendingPathComponent("v1", isDirectory: true)
+            .appendingPathComponent("resend", isDirectory: false)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(configuration.publishableKey, forHTTPHeaderField: "apikey")
+        request.httpBody = try JSONEncoder().encode([
+            "type": "signup",
+            "email": normalizedEmail,
+        ])
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await http.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw CloudError.networkUnavailable
+        }
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            let payload = try? JSONDecoder().decode(PostgRESTErrorPayload.self, from: data)
+            throw CloudError.server(
+                status: (response as? HTTPURLResponse)?.statusCode ?? 0,
+                code: payload?.code
+            )
+        }
+    }
+
     @MainActor
     func googleLogin() async throws -> Session {
         guard configuration.googleSignInEnabled else { throw CloudError.providerUnavailable }

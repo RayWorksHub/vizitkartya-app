@@ -55,7 +55,11 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(contact.urlAddresses.map { $0.value as String }, [
             "https://facebook.com/teszt", "https://youtube.com/@teszt"
         ])
-        XCTAssertThrowsError(try ContactBridge.shareFile(source)) {
+        let contactFile = try ContactBridge.shareFile(source)
+        defer { ContactBridge.removeShareFile(contactFile.url) }
+        let contactPayload = try String(contentsOf: contactFile.url, encoding: .utf8)
+        XCTAssertFalse(contactPayload.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
+        XCTAssertThrowsError(try ContactBridge.shareFile(source, includePhoto: true)) {
             XCTAssertEqual($0 as? ProfileError, .missingPhoto)
         }
     }
@@ -100,7 +104,7 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertNotNil(UIImage(data: imported))
         XCTAssertEqual(contacts.first?.givenName, "Elek")
 
-        let file = try ContactBridge.shareFile(p)
+        let file = try ContactBridge.shareFile(p, includePhoto: true)
         defer { ContactBridge.removeShareFile(file.url) }
         let shared = try String(contentsOf: file.url, encoding: .utf8)
         XCTAssertTrue(shared.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
@@ -216,7 +220,12 @@ final class NativeIntegrationTests: XCTestCase {
             CardPresentation.self,
             from: try JSONEncoder().encode(changed)
         )
-        XCTAssertEqual(decoded, changed)
+        XCTAssertEqual(decoded.colorway, changed.colorway)
+        XCTAssertEqual(decoded.layout, changed.layout)
+        XCTAssertFalse(decoded.showsQR)
+        XCTAssertTrue(decoded.showsPhoto)
+        XCTAssertFalse(decoded.showsSocial)
+        XCTAssertEqual(decoded.sharesPhone, changed.sharesPhone)
         XCTAssertEqual(decoded.sharedFieldCount, CardPresentation.optionalFieldCount - 1)
 
         // A preference file written before these keys existed must not start

@@ -2,25 +2,26 @@ import SwiftUI
 
 // MARK: - Kártya megjelenése
 
-/// The card's material, layout and visible elements, decided against a live
-/// preview of the owner's own card rather than abstract swatches.
+/// The card material and layout picker from the approved iOS board.
+/// Changes stay as a draft until the explicit Mentés action is used.
 struct CardAppearanceScreen: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var store: CardPresentationStore
     let profile: ContactProfile
+    @State private var draft: CardPresentation
+
+    init(store: CardPresentationStore, profile: ContactProfile) {
+        self.store = store
+        self.profile = profile
+        _draft = State(initialValue: store.value)
+    }
 
     private var layoutIndex: Binding<Int> {
         Binding(
-            get: { CardLayout.allCases.firstIndex(of: store.value.layout) ?? 0 },
+            get: { CardLayout.allCases.firstIndex(of: draft.layout) ?? 0 },
             set: {
                 guard CardLayout.allCases.indices.contains($0) else { return }
-                // Replace the published value as one transaction. Mutating a
-                // member through a computed Binding can leave SwiftUI's
-                // accessibility tree one render behind the visual control.
-                var updated = store.value
-                updated.layout = CardLayout.allCases[$0]
-                store.value = updated
+                draft.layout = CardLayout.allCases[$0]
             }
         )
     }
@@ -30,7 +31,14 @@ struct CardAppearanceScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.lg) {
-                        Text("Az adataid minden változatban ugyanazok maradnak — itt csak a kártya anyagát, elrendezését és látható elemeit állítod.")
+                        VizitBrandLockup(maxHeight: 52)
+
+                        Text("Kártya megjelenése")
+                            .font(VizitFont.h1)
+                            .foregroundStyle(VizitColor.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
+
+                        Text("Az adataid és az elrendezés minden változatban ugyanazok — csak az anyag más.")
                             .font(VizitFont.body)
                             .foregroundStyle(VizitColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -44,62 +52,28 @@ struct CardAppearanceScreen: View {
                             selection: layoutIndex,
                             accessibilityIdentifier: "card.layout"
                         )
-
-                        VizitSectionHeader(title: "Élő előnézet")
-                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                            VizitDigitalCard(profile: profile, presentation: store.value)
-                            Text("Pontosan ezt látja, akivel megosztod.")
-                                .font(VizitFont.caption)
-                                .foregroundStyle(VizitColor.textMuted)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                        }
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.value)
-
-                        VizitSectionHeader(title: "Megjelenő elemek")
-                        VizitGroup {
-                            toggleRow(
-                                "Profilkép",
-                                identifier: "card.showPhoto",
-                                supporting: profile.photoBase64.isEmpty
-                                    ? "Még nincs feltöltött profilképed."
-                                    : nil,
-                                isOn: $store.value.showsPhoto
-                            )
-                            VizitDivider()
-                            toggleRow(
-                                "QR-kód a kártyán",
-                                identifier: "card.showQR",
-                                supporting: "A kártya sarkába kerül, így egy fotóról is beolvasható.",
-                                isOn: $store.value.showsQR
-                            )
-                            VizitDivider()
-                            toggleRow(
-                                "Közösségi profilok",
-                                identifier: "card.showSocial",
-                                supporting: store.value.sharesSocial
-                                    ? nil
-                                    : "Az Adatláthatóságban most ki van kapcsolva.",
-                                isOn: $store.value.showsSocial,
-                                isEnabled: store.value.sharesSocial
-                            )
-                        }
-
-                        Text("A megjelenés csak ezen a készüléken változik; a névjegyed adatai érintetlenek maradnak.")
-                            .font(VizitFont.caption)
-                            .foregroundStyle(VizitColor.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal, VizitSpace.md)
-                    .padding(.bottom, VizitSpace.xxl)
+                    .padding(.bottom, VizitSpace.huge * 2)
                     .frame(maxWidth: 560)
                     .frame(maxWidth: .infinity)
                 }
+                .safeAreaInset(edge: .bottom) {
+                    VizitButton(title: "Mentés", systemImage: "checkmark") {
+                        store.value = draft
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("card.appearance.save")
+                    .padding(.horizontal, VizitSpace.md)
+                    .padding(.vertical, VizitSpace.sm)
+                    .background(.regularMaterial)
+                }
             }
-            .navigationTitle("Kártya megjelenése")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Kész") { dismiss() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Mégse") { dismiss() }
                 }
             }
         }
@@ -109,7 +83,7 @@ struct CardAppearanceScreen: View {
         HStack(spacing: VizitSpace.sm) {
             ForEach(CardColorway.allCases, id: \.self) { colorway in
                 Button {
-                    store.value.colorway = colorway
+                    draft.colorway = colorway
                 } label: {
                     VStack(spacing: VizitSpace.xs) {
                         MaterialPreview(colorway: colorway)
@@ -124,12 +98,12 @@ struct CardAppearanceScreen: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous)
                             .stroke(
-                                store.value.colorway == colorway ? VizitColor.primary : VizitColor.border,
-                                lineWidth: store.value.colorway == colorway ? 2 : 1
+                                draft.colorway == colorway ? VizitColor.primary : VizitColor.border,
+                                lineWidth: draft.colorway == colorway ? 2 : 1
                             )
                     }
                     .overlay(alignment: .topTrailing) {
-                        if store.value.colorway == colorway {
+                        if draft.colorway == colorway {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(VizitColor.primary)
                                 .background(Color(.systemBackground), in: Circle())
@@ -142,24 +116,9 @@ struct CardAppearanceScreen: View {
                 .accessibilityLabel(colorway.label)
                 .accessibilityIdentifier("card.material.\(colorway.rawValue)")
                 .accessibilityAddTraits(
-                    store.value.colorway == colorway ? [.isButton, .isSelected] : .isButton
+                    draft.colorway == colorway ? [.isButton, .isSelected] : .isButton
                 )
             }
-        }
-    }
-
-    private func toggleRow(
-        _ label: String,
-        identifier: String,
-        supporting: String? = nil,
-        isOn: Binding<Bool>,
-        isEnabled: Bool = true
-    ) -> some View {
-        VizitRow(label: label, supporting: supporting, isEnabled: isEnabled, showsChevron: false) {
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .disabled(!isEnabled)
-                .accessibilityIdentifier(identifier)
         }
     }
 }

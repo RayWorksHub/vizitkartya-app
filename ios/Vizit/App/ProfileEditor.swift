@@ -21,13 +21,34 @@ struct ProfileEditor: View {
               let url = PublicProfileLink.make(baseURL: base, slug: draft.publicSlug) else {
             return "Az egyedi azonosítót az első sikeres mentéskor automatikusan létrehozzuk."
         }
-        return url.absoluteString
+        return displayAddress(url.absoluteString)
+    }
+
+    private var activeSharingAddress: String {
+        if draft.customDomainVerified,
+           CustomProfileDomain.isValid(draft.customDomain) {
+            return displayAddress(draft.customDomain)
+        }
+        return defaultProfileAddress
     }
 
     private var domainValidationError: String? {
         guard !draft.customDomain.isEmpty,
               !CustomProfileDomain.isValid(draft.customDomain) else { return nil }
         return "Csak a hostnevet add meg, útvonal és https:// nélkül. Például: nevjegy.cegem.hu"
+    }
+
+    private var domainState: DomainState {
+        if draft.customDomain.isEmpty { return .defaultAddress }
+        if domainValidationError != nil { return .invalid }
+        return draft.customDomainVerified ? .verified : .pending
+    }
+
+    private func displayAddress(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "https://", with: "")
+            .replacingOccurrences(of: "http://", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
     private func socialValidationError(_ platform: SocialPlatform, value: String) -> String? {
@@ -356,56 +377,109 @@ struct ProfileEditor: View {
                         }
                     }
 
-                    VizitTextField(
-                        label: "Egyedi domain (opcionális)",
-                        text: Binding(
-                            get: { draft.customDomain },
-                            set: {
-                                draft.customDomain = $0
-                                draft.customDomainVerified = false
-                            }
-                        ),
-                        placeholder: "nevjegy.cegem.hu",
-                        helper: domainValidationError == nil && !draft.customDomain.isEmpty
-                            ? (draft.customDomainVerified
-                               ? "Ellenőrzött domain · ezt használja a nyilvános profil linkje."
-                               : "Ellenőrzésre vár · addig a biztos VIZIT-cím marad aktív.")
-                            : nil,
-                        error: domainValidationError,
-                        keyboard: .URL,
-                        autocapitalization: .never,
-                        identifier: "profile.customDomain",
-                        submitLabel: .done
-                    )
-
                     VizitPanel {
-                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                            if draft.customDomain.isEmpty {
-                                VizitStatusPill(text: "Alapértelmezett VIZIT-cím", tone: .info)
-                                Text("Nem kötelező saját domaint megadni. A profil linkje az automatikus VIZIT-címen működik.")
-                                    .font(VizitFont.bodySmall)
-                                    .foregroundStyle(VizitColor.textSecondary)
-                            } else if domainValidationError != nil {
-                                VizitStatusPill(text: "Formailag hibás domain", tone: .error)
-                                Text("A hibás érték nem kerül használatba; a már működő VIZIT-link változatlan marad.")
-                                    .font(VizitFont.bodySmall)
-                                    .foregroundStyle(VizitColor.textSecondary)
-                            } else if draft.customDomainVerified {
-                                VizitStatusPill(text: "Ellenőrzött saját domain", tone: .success)
-                                Text("A következő sikeres szinkron után a profil linkje a saját címet használja.")
-                                    .font(VizitFont.bodySmall)
-                                    .foregroundStyle(VizitColor.textSecondary)
-                            } else {
-                                VizitStatusPill(text: "Tulajdonjog-ellenőrzés függőben", tone: .warning)
-                                Text("Az üzemeltető DNS-ellenőrzése után válik aktívvá. Addig egyetlen megosztott hivatkozás sem törik el.")
-                                    .font(VizitFont.bodySmall)
-                                    .foregroundStyle(VizitColor.textSecondary)
+                        VStack(alignment: .leading, spacing: VizitSpace.sm) {
+                            VizitStatusPill(text: domainState.badge, tone: domainState.tone)
+                                .accessibilityIdentifier("profile.domain.status")
+
+                            VizitTextField(
+                                label: "Egyedi domain (nem kötelező)",
+                                text: Binding(
+                                    get: { draft.customDomain },
+                                    set: {
+                                        draft.customDomain = $0
+                                        draft.customDomainVerified = false
+                                    }
+                                ),
+                                placeholder: "pl. nevjegy.cegem.hu",
+                                error: domainValidationError,
+                                keyboard: .URL,
+                                autocapitalization: .never,
+                                identifier: "profile.customDomain",
+                                submitLabel: .done
+                            )
+
+                            if let banner = domainState.banner {
+                                VizitBanner(text: banner, tone: domainState.tone)
                             }
                         }
                     }
+
+                    VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                        Text(domainState.heading)
+                            .font(VizitFont.h3)
+                            .foregroundStyle(VizitColor.textPrimary)
+                        Text(domainState.detail)
+                            .font(VizitFont.bodySmall)
+                            .foregroundStyle(VizitColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VizitBanner(
+                        text: "A QR és az NFC ezt adja: \(activeSharingAddress)",
+                        tone: .info
+                    )
+                    .accessibilityIdentifier("profile.domain.activeLink")
                 }
             }
         }
     }
 
+}
+
+private enum DomainState {
+    case defaultAddress, pending, verified, invalid
+
+    var badge: String {
+        switch self {
+        case .defaultAddress: return "ALAPÉRTELMEZETT"
+        case .pending: return "FÜGGŐBEN"
+        case .verified: return "ÉLES"
+        case .invalid: return "HIBA"
+        }
+    }
+
+    var tone: VizitTone {
+        switch self {
+        case .defaultAddress: return .info
+        case .pending: return .warning
+        case .verified: return .success
+        case .invalid: return .error
+        }
+    }
+
+    var banner: String? {
+        switch self {
+        case .defaultAddress:
+            return nil
+        case .pending:
+            return "Ellenőrzésre vár. Add hozzá a domaint a szolgáltatónál, majd a DNS-ellenőrzés után kapcsoljuk élesbe."
+        case .verified:
+            return "Ellenőrzött domain · ezt használja a QR és az NFC."
+        case .invalid:
+            return "Csak a hostnevet add meg, útvonal és https:// nélkül. Például: nevjegy.cegem.hu"
+        }
+    }
+
+    var heading: String {
+        switch self {
+        case .defaultAddress: return "Nincs megadva"
+        case .pending: return "Megadva, ellenőrzésre vár"
+        case .verified: return "Ellenőrzött"
+        case .invalid: return "Formailag hibás"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .defaultAddress:
+            return "A profil a VIZIT saját címén él. A mező üres, a felirat megmondja, hogy nem kötelező kitölteni."
+        case .pending:
+            return "A mentés megtörtént, de a tulajdonjog még nincs igazolva. A QR ilyenkor nem vált át — így nem keletkezik halott hivatkozás."
+        case .verified:
+            return "A következő sikeres szinkron után a mobil QR és NFC is a saját címet adja át. A VIZIT.hu-cím továbbra is működik."
+        case .invalid:
+            return "A hibaüzenet megmutatja a helyes formátumot is, nem csak azt, hogy érvénytelen."
+        }
+    }
 }

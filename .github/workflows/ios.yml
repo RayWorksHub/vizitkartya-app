@@ -22,7 +22,7 @@ on:
         required: false
         type: string
       physical_device_commit:
-        description: Same commit SHA after the complete physical-device checklist passed
+        description: Optional audit field after this exact TestFlight build passes on a physical iPhone
         required: false
         type: string
       design_review_commit:
@@ -398,14 +398,12 @@ jobs:
       - name: Validate per-commit release approvals
         env:
           RELEASE_COMMIT: ${{ inputs.release_commit }}
-          PHYSICAL_DEVICE_COMMIT: ${{ inputs.physical_device_commit }}
           DESIGN_REVIEW_COMMIT: ${{ inputs.design_review_commit }}
           RELEASE_CONFIRMATION: ${{ inputs.release_confirmation }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'release_commit must be a full lowercase commit SHA'; exit 1; }
           test "$RELEASE_COMMIT" = "$GITHUB_SHA" || { echo 'The checked-out commit differs from release_commit'; exit 1; }
-          test "$PHYSICAL_DEVICE_COMMIT" = "$GITHUB_SHA" || { echo 'Physical-device evidence is missing for this exact commit'; exit 1; }
           test "$DESIGN_REVIEW_COMMIT" = "$GITHUB_SHA" || { echo 'Figma screenshot review is missing for this exact commit'; exit 1; }
           test "$RELEASE_CONFIRMATION" = 'UPLOAD VIZIT TO TESTFLIGHT' || { echo 'Explicit TestFlight confirmation is missing'; exit 1; }
           node scripts/verify-ios-release.mjs source

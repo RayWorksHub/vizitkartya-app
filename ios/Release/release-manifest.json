@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "releaseContract": "VIZIT iOS 8.1",
+  "releaseContract": "VIZIT iOS 8.7",
   "figmaFileKey": "PWzvA7sVoYIBqgfw6MCpRf",
   "referenceSnapshot": "tervek-figma export pinned on 2026-09-20",
   "simulators": {
@@ -88,10 +88,22 @@
       "attachment": "VIZIT-card-complete-profile"
     },
     {
-      "id": "share-photo-contact-qr",
+      "id": "share-contact-qr",
       "boardIds": ["13-ios-main-app", "15-ios-sharing", "18-ios-qr-modes"],
       "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
-      "attachment": "VIZIT-share-photo-contact-qr"
+      "attachment": "VIZIT-share-contact-qr"
+    },
+    {
+      "id": "share-photo-qr",
+      "boardIds": ["18-ios-qr-modes"],
+      "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
+      "attachment": "VIZIT-share-photo-qr"
+    },
+    {
+      "id": "share-profile-qr",
+      "boardIds": ["15-ios-sharing", "18-ios-qr-modes"],
+      "testMethod": "testReleaseAuditCoversPrimaryScreensAndPhotoQR",
+      "attachment": "VIZIT-share-profile-qr"
     },
     {
       "id": "share-fullscreen-qr",
@@ -154,10 +166,28 @@
       "attachment": "VIZIT-data-visibility"
     },
     {
-      "id": "share-photo-required",
-      "boardIds": ["15-ios-sharing", "18-ios-qr-modes"],
-      "testMethod": "testCreatePersistAndRequirePhotoBeforeSharing",
-      "attachment": "VIZIT-photo-required"
+      "id": "share-contact-without-photo",
+      "boardIds": ["18-ios-qr-modes"],
+      "testMethod": "testContactQRWorksWithoutPhotoAndPhotoModeExplainsWhatIsMissing",
+      "attachment": "VIZIT-share-contact-without-photo"
+    },
+    {
+      "id": "share-photo-missing",
+      "boardIds": ["18-ios-qr-modes"],
+      "testMethod": "testContactQRWorksWithoutPhotoAndPhotoModeExplainsWhatIsMissing",
+      "attachment": "VIZIT-share-photo-missing"
+    },
+    {
+      "id": "share-photo-unavailable",
+      "boardIds": ["18-ios-qr-modes"],
+      "testMethod": "testQRModesExposeTheirRequiredFailureStates",
+      "attachment": "VIZIT-share-photo-unavailable"
+    },
+    {
+      "id": "share-profile-unavailable",
+      "boardIds": ["18-ios-qr-modes"],
+      "testMethod": "testQRModesExposeTheirRequiredFailureStates",
+      "attachment": "VIZIT-share-profile-unavailable"
     },
     {
       "id": "scanner-entry",
@@ -170,6 +200,42 @@
       "boardIds": ["17-ios-business-portal"],
       "testMethod": "testBusinessPortalExposesAllFourFunctionalAreas",
       "attachment": "VIZIT-business-portal"
+    },
+    {
+      "id": "business-vosz",
+      "boardIds": ["17-ios-business-portal"],
+      "testMethod": "testBusinessPortalExposesAllFourFunctionalAreas",
+      "attachment": "VIZIT-portal-vosz"
+    },
+    {
+      "id": "business-education",
+      "boardIds": ["17-ios-business-portal"],
+      "testMethod": "testBusinessPortalExposesAllFourFunctionalAreas",
+      "attachment": "VIZIT-portal-education"
+    },
+    {
+      "id": "business-help",
+      "boardIds": ["17-ios-business-portal"],
+      "testMethod": "testBusinessPortalExposesAllFourFunctionalAreas",
+      "attachment": "VIZIT-portal-help"
+    },
+    {
+      "id": "business-toolkit",
+      "boardIds": ["17-ios-business-portal"],
+      "testMethod": "testBusinessPortalExposesAllFourFunctionalAreas",
+      "attachment": "VIZIT-portal-toolkit"
+    },
+    {
+      "id": "business-course-player",
+      "boardIds": ["17-ios-business-portal"],
+      "testMethod": "testBusinessEducationCoursePlayerIsImplemented",
+      "attachment": "VIZIT-portal-course-player"
+    },
+    {
+      "id": "domain-default",
+      "boardIds": ["19-ios-custom-domain"],
+      "testMethod": "testReleaseAuditCoversAllCustomDomainStates",
+      "attachment": "VIZIT-domain-default"
     },
     {
       "id": "domain-pending",
@@ -188,6 +254,36 @@
       "boardIds": ["19-ios-custom-domain"],
       "testMethod": "testReleaseAuditCoversAllCustomDomainStates",
       "attachment": "VIZIT-domain-invalid"
+    },
+    {
+      "id": "auth-login-dark",
+      "boardIds": ["12-ios-authentication"],
+      "testMethod": "testAuthenticationDarkAppearance",
+      "attachment": "VIZIT-auth-login-dark"
+    },
+    {
+      "id": "home-dark",
+      "boardIds": ["13-ios-main-app"],
+      "testMethod": "testDarkAppearanceCoversEveryPrimaryDestination",
+      "attachment": "VIZIT-home-dark"
+    },
+    {
+      "id": "card-dark",
+      "boardIds": ["13-ios-main-app"],
+      "testMethod": "testDarkAppearanceCoversEveryPrimaryDestination",
+      "attachment": "VIZIT-card-dark"
+    },
+    {
+      "id": "share-dark",
+      "boardIds": ["13-ios-main-app", "15-ios-sharing", "16-ios-settings"],
+      "testMethod": "testDarkAppearanceCoversEveryPrimaryDestination",
+      "attachment": "VIZIT-share-dark"
+    },
+    {
+      "id": "settings-dark",
+      "boardIds": ["13-ios-main-app", "16-ios-settings"],
+      "testMethod": "testDarkAppearanceCoversEveryPrimaryDestination",
+      "attachment": "VIZIT-settings-dark"
     }
   ],
   "approvedPlatformConstraints": [
@@ -198,9 +294,9 @@
       "source": "ios/README.md"
     },
     {
-      "id": "photo-contact-qr-release-contract",
+      "id": "qr-high-correction-brand-contract",
       "figmaBoards": ["18-ios-qr-modes"],
-      "reason": "The current 8.1 release contract supersedes the older three-mode board: the primary QR is an offline-importable photo vCard and must fail closed when a photo cannot be included.",
+      "reason": "All three approved QR modes use the highest error-correction level, an invariant four-module quiet zone and a centered fixed-colour VIZIT mark no wider than 14 percent of the code.",
       "source": "ios/README.md"
     }
   ],

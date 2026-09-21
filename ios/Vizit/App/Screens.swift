@@ -1,5 +1,6 @@
 import SwiftUI
 import Contacts
+import Photos
 import PhotosUI
 import CoreImage.CIFilterBuiltins
 import WebKit
@@ -56,8 +57,6 @@ struct HomeScreen: View {
 
                         if let issue = store.storageError {
                             VizitBanner(text: issue, tone: .error)
-                        } else if ![SyncStatus.synced, .localOnly].contains(store.syncStatus) {
-                            VizitStatusPill(text: store.syncStatus.label, tone: store.syncStatus.tone)
                         }
 
                         VizitGroup {
@@ -133,10 +132,9 @@ private struct QuickTile: View {
 struct CardScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
+    @Environment(\.openURL) private var openURL
     @Binding var selectedTab: RootTab
     @State private var editing = false
-    @State private var customizing = false
-    @State private var adjustingVisibility = false
 
     private var hasDetails: Bool {
         ![store.profile.phone, store.profile.email, store.profile.website, store.profile.address]
@@ -157,25 +155,6 @@ struct CardScreen: View {
                         }
 
                         VizitDigitalCard(profile: store.profile, presentation: presentation.value)
-
-                        VizitSectionHeader(title: "A kártyád")
-                        VizitGroup {
-                            VizitRow(
-                                label: "Kártya megjelenése",
-                                systemImage: "paintpalette",
-                                value: presentation.value.colorway.label,
-                                supporting: "Anyag, elrendezés és megjelenő elemek"
-                            ) { customizing = true }
-                            .accessibilityIdentifier("card.appearance")
-                            VizitDivider()
-                            VizitRow(
-                                label: "Adatok láthatósága",
-                                systemImage: "eye",
-                                value: "\(presentation.value.sharedFieldCount)/\(CardPresentation.optionalFieldCount)",
-                                supporting: "Mezőnként eldöntöd, mi kerül át megosztáskor"
-                            ) { adjustingVisibility = true }
-                            .accessibilityIdentifier("card.visibility")
-                        }
 
                         VizitButton(
                             title: store.hasProfile ? "Névjegy szerkesztése" : "Névjegy létrehozása",
@@ -216,7 +195,7 @@ struct CardScreen: View {
                                 }
                             }
 
-                            let socials = store.profile.socialProfiles
+                            let socials = store.profile.socialProfiles.filter { !$0.url.isEmpty }
                             if !socials.isEmpty {
                                 VizitSectionHeader(title: "Közösségi profilok")
                                 VizitGroup {
@@ -241,16 +220,6 @@ struct CardScreen: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
-            .sheet(isPresented: $customizing) {
-                CardAppearanceScreen(store: presentation, profile: store.profile)
-            }
-            .sheet(isPresented: $adjustingVisibility) {
-                DataVisibilityScreen(
-                    store: presentation,
-                    profile: store.profile,
-                    isPublicProfile: store.profile.isPublic
-                )
-            }
         }
     }
 
@@ -265,7 +234,28 @@ struct CardScreen: View {
 
         ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
             if index > 0 { VizitDivider() }
-            VizitRow(label: entry.0, systemImage: entry.1, supporting: entry.2, showsChevron: false)
+            VizitRow(label: entry.0, systemImage: entry.1, supporting: entry.2) {
+                guard let url = destination(for: entry.0, kind: entry.2) else { return }
+                openURL(url)
+            }
+        }
+    }
+
+    private func destination(for value: String, kind: String) -> URL? {
+        switch kind {
+        case "Telefon":
+            let allowed = value.filter { $0.isNumber || $0 == "+" }
+            return URL(string: "tel:\(allowed)")
+        case "E-mail":
+            return URL(string: "mailto:\(value)")
+        case "Weboldal":
+            return SafeLink.https(value)
+        case "Cím":
+            var components = URLComponents(string: "https://maps.apple.com/")
+            components?.queryItems = [URLQueryItem(name: "q", value: value)]
+            return components?.url
+        default:
+            return nil
         }
     }
 
@@ -277,90 +267,102 @@ struct CardScreen: View {
 /// Every hand-off route in one place. The QR surface is an "always-light
 /// island": pure white with a quiet zone and fixed dark ink in both themes,
 /// because a tinted or low-contrast code is a code that does not scan.
+private enum ShareQRMode: String, CaseIterable, Identifiable {
+    case contact, photo, profile
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .contact: return "Kontakt"
+        case .photo: return "Fényképes"
+        case .profile: return "Profil"
+        }
+    }
+}
+
 struct ShareScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @State private var shareFile: ShareFile?
     @State private var temporaryURL: URL?
-    @State private var showContact = false
     @State private var showFullScreenQR = false
-    @State private var showScanner = false
     @State private var editingProfile = false
     @State private var error: String?
     @State private var copiedProfileLink = false
+    @State private var savedQRCode = false
+    @State private var showNFCInformation = false
+    @State private var selectedMode: ShareQRMode = .contact
     @State private var photoQRPayload: String?
 
     /// What actually leaves the device: the stored profile minus whatever the
     /// owner switched off in Adatláthatóság.
     private var sharedProfile: ContactProfile { store.profile.visible(through: presentation.value) }
 
+    private var modeIndex: Binding<Int> {
+        Binding(
+            get: { ShareQRMode.allCases.firstIndex(of: selectedMode) ?? 0 },
+            set: { index in
+                guard ShareQRMode.allCases.indices.contains(index) else { return }
+                copiedProfileLink = false
+                savedQRCode = false
+                selectedMode = ShareQRMode.allCases[index]
+            }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
-                        VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                            VizitLargeTitle("Megosztás")
-                            Text("A QR-kód mindig a teljes, fényképes névjegyet adja át. Beolvasás után a telefon saját kontaktmentője nyílik meg.")
-                                .font(VizitFont.body)
-                                .foregroundStyle(VizitColor.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        VizitLargeTitle("Megosztás")
 
-                        if currentQRImage != nil {
+                        VizitSegmentedControl(
+                            options: ShareQRMode.allCases.map(\.label),
+                            selection: modeIndex,
+                            accessibilityIdentifier: "share.qrMode"
+                        )
+
+                        if let image = currentQRImage {
                             qrIsland
-                            actionGrid
+                            VizitButton(
+                                title: "Teljes képernyőn",
+                                systemImage: "arrow.up.left.and.arrow.down.right",
+                                kind: .secondary
+                            ) { showFullScreenQR = true }
+                            .accessibilityIdentifier("share.fullscreen")
+
+                            compactActions(image: image)
                         } else {
-                            VizitEmptyState(
-                                systemImage: sharedProfile.photoBase64.isEmpty
-                                    ? "person.crop.circle.badge.exclamationmark"
-                                    : "qrcode",
-                                title: emptyTitle,
-                                message: emptyMessage,
-                                actionTitle: emptyActionTitle,
-                                action: emptyAction
-                            )
+                            unavailableMode
                         }
 
                         VizitSectionHeader(title: "További módok")
                         VizitGroup {
                             VizitRow(
-                                label: "Profil linkje",
+                                label: "NFC érintés",
+                                systemImage: "wave.3.right",
+                                supporting: "Az iPhone korlátozásainak megtekintése"
+                            ) { showNFCInformation = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Link másolása",
                                 systemImage: "link",
                                 supporting: profileLinkSupportingText
                             ) { handleProfileLink() }
                             VizitDivider()
                             VizitRow(
-                                label: "Névjegyfájl megosztása",
+                                label: "Megosztás…",
                                 systemImage: "square.and.arrow.up",
-                                supporting: "Fényképes .vcf · AirDrop, üzenet vagy e-mail"
-                            ) { shareVCard() }
-                            VizitDivider()
-                            VizitRow(
-                                label: "Mentés a Kontaktokba",
-                                systemImage: "person.crop.circle.badge.plus",
-                                supporting: "A fényképes névjegy előnézetével"
-                            ) { openContactEditor() }
+                                supporting: "Üzenet, e-mail, AirDrop"
+                            ) { shareCurrentSelection() }
                         }
 
                         if copiedProfileLink {
                             VizitBanner(text: "A profil hivatkozását a vágólapra másoltuk.", tone: .success)
                         }
-
-                        VizitSectionHeader(title: "iPhone-on")
-                        VizitPanel {
-                            VStack(alignment: .leading, spacing: VizitSpace.sm) {
-                                VizitStatusPill(text: "NFC-kártyaemuláció nem elérhető", tone: .info)
-                                Text("Az iOS nem enged Androidhoz hasonló NFC-kártyaemulációt. A támogatott átadás a fényképes QR, az AirDrop, a .vcf és a külön profilhivatkozás.")
-                                    .font(VizitFont.bodySmall)
-                                    .foregroundStyle(VizitColor.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                VizitButton(
-                                    title: "Névjegy beolvasása",
-                                    systemImage: "qrcode.viewfinder",
-                                    kind: .secondary
-                                ) { showScanner = true }
-                            }
+                        if savedQRCode {
+                            VizitBanner(text: "A QR-kódot elmentettük a Fotók közé.", tone: .success)
                         }
                     }
                     .padding(.horizontal, VizitSpace.md)
@@ -377,20 +379,26 @@ struct ShareScreen: View {
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
-            .sheet(isPresented: $showContact) {
-                ContactEditor(contact: ContactBridge.contact(sharedProfile)) { _ in showContact = false }
-            }
             .fullScreenCover(isPresented: $showFullScreenQR) {
-                FullScreenQRView(image: currentQRImage, title: store.profile.displayName) {
+                FullScreenQRView(
+                    image: currentQRImage,
+                    title: store.profile.displayName,
+                    subtitle: [store.profile.jobTitle, store.profile.company]
+                        .filter { !$0.isEmpty }.joined(separator: " · ")
+                ) {
                     showFullScreenQR = false
                 }
             }
-            .fullScreenCover(isPresented: $showScanner) { ScanFlow() }
             .alert("A művelet nem sikerült", isPresented: Binding(
                 get: { error != nil }, set: { if !$0 { error = nil } }
             )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+            .alert("NFC iPhone-on", isPresented: $showNFCInformation) {
+                Button("Rendben", role: .cancel) {}
+            } message: {
+                Text("Az iPhone nem enged tetszőleges telefon–telefon NFC-kártyaemulációt. A biztos átadási mód a QR-kód, az AirDrop, a névjegyfájl vagy egy programozott fizikai NFC-kártya.")
+            }
         }
     }
 
@@ -407,11 +415,23 @@ struct ShareScreen: View {
                     .accessibilityLabel("A névjegy QR-kódja")
                     .accessibilityIdentifier("share.qr")
             }
-            Text(captionText)
-                .font(VizitFont.bodySmall)
-                .foregroundStyle(Color(uiColor: UIColor(hex: 0x4A5568)))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: VizitSpace.xs) {
+                Text(qrTitle)
+                    .font(VizitFont.title)
+                    .foregroundStyle(VizitColor.ink)
+                    .multilineTextAlignment(.center)
+                Text(captionText)
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(Color(uiColor: UIColor(hex: 0x4A5568)))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if selectedMode != .profile, let payload = qrPayload {
+                    VizitStatusPill(
+                        text: "\(payload.utf8.count) / 2 200 bájt",
+                        tone: .success
+                    )
+                }
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(VizitSpace.xl)
@@ -424,47 +444,78 @@ struct ShareScreen: View {
     }
 
     private var captionText: String {
-        "Beolvasás után közvetlenül megnyílik a fényképes névjegy mentése. Internet és VIZIT alkalmazás nem szükséges."
+        switch selectedMode {
+        case .contact:
+            return "Ez a kód a teljes névjegyedet tartalmazza, és internet nélkül is bekerül a másik telefon névjegyei közé."
+        case .photo:
+            return "A teljes névjegyet és a méretre igazított profilképet is tartalmazza. Internet nem szükséges."
+        case .profile:
+            return "A naprakész nyilvános profilodat nyitja meg. Ehhez internetkapcsolat szükséges."
+        }
     }
 
-    private var actionGrid: some View {
-        VStack(spacing: VizitSpace.sm) {
-            HStack(spacing: VizitSpace.sm) {
-                VizitButton(title: "Teljes képernyő", systemImage: "arrow.up.left.and.arrow.down.right", kind: .secondary) {
-                    showFullScreenQR = true
-                }
-                .accessibilityIdentifier("share.fullscreen")
-                VizitButton(title: "Névjegyfájl", systemImage: "square.and.arrow.up", kind: .secondary) {
-                    shareVCard()
-                }
+    private var qrTitle: String {
+        selectedMode == .profile ? "Nyisd meg a profilomat" : "Olvastasd be a másik telefonnal"
+    }
+
+    private func compactActions(image: UIImage) -> some View {
+        HStack(spacing: VizitSpace.sm) {
+            VizitButton(title: "NFC", systemImage: "wave.3.right", kind: .secondary) {
+                showNFCInformation = true
+            }
+            VizitButton(title: "Link", systemImage: "link", kind: .secondary) {
+                handleProfileLink()
+            }
+            VizitButton(title: "Mentés", systemImage: "arrow.down.to.line", kind: .secondary) {
+                saveQRCode(image)
             }
         }
     }
 
-    private var emptyTitle: String {
-        if sharedProfile.photoBase64.isEmpty { return "Profilkép szükséges" }
-        return "A fényképes QR nem állítható elő"
-    }
-
-    private var emptyMessage: String {
-        if sharedProfile.photoBase64.isEmpty {
-            return "A VIZIT 8 minden névjegyet fényképpel ad át. Tölts fel profilképet a névjegyed szerkesztésénél."
+    @ViewBuilder
+    private var unavailableMode: some View {
+        switch selectedMode {
+        case .photo:
+            if sharedProfile.photoBase64.isEmpty {
+                VizitEmptyState(
+                    systemImage: "person.crop.circle.badge.plus",
+                    title: "Nincs még profilképed",
+                    message: "A Fényképes QR-hez válassz profilképet. A Kontakt QR kép nélkül is átadja a teljes névjegyet.",
+                    actionTitle: "Profilkép hozzáadása",
+                    action: { editingProfile = true }
+                )
+            } else {
+                VizitEmptyState(
+                    systemImage: "exclamationmark.triangle",
+                    title: "A profilkép nem fér bele a kódba",
+                    message: "A névjegyed adatai már kitöltik a QR-kapacitást. Választhatsz kisebb profilképet, vagy használhatod a Kontakt módot – abból semmilyen adat nem marad ki, csak a kép.",
+                    actionTitle: "Vissza a Kontakt QR-hoz",
+                    action: { selectedMode = .contact }
+                )
+            }
+        case .profile:
+            VStack(spacing: VizitSpace.md) {
+                VizitEmptyState(
+                    systemImage: "globe",
+                    title: "Nincs még publikus profil",
+                    message: "A Profil QR-hez kapcsold be a nyilvános profilt, és várd meg a sikeres szinkront. Addig a Kontakt QR minden adatot átad.",
+                    actionTitle: "Kontakt QR megnyitása",
+                    action: { selectedMode = .contact }
+                )
+                VizitBanner(
+                    text: "A szinkron újrapróbálásra vár. A kód a sikeres mentés után jelenik meg.",
+                    tone: .warning
+                )
+            }
+        case .contact:
+            VizitEmptyState(
+                systemImage: "person.crop.circle.badge.exclamationmark",
+                title: "Állítsd össze a névjegyed",
+                message: "A Kontakt QR-hoz név és legalább egy telefonszám vagy e-mail-cím szükséges.",
+                actionTitle: "Névjegy szerkesztése",
+                action: { editingProfile = true }
+            )
         }
-        if (!store.profile.phone.isEmpty || !store.profile.email.isEmpty),
-           sharedProfile.phone.isEmpty, sharedProfile.email.isEmpty {
-            return "Az Adatláthatóságban a telefonszám és az e-mail-cím is ki van kapcsolva, így nem marad mit a kódba tenni."
-        }
-        return "A kép és a névjegy együtt meghaladja a biztonságosan beolvasható QR méretét. Rövidítsd a hosszú mezőket; az alkalmazás nem hagyja el a profilképet."
-    }
-
-    private var emptyActionTitle: String? {
-        if sharedProfile.photoBase64.isEmpty { return "Profilkép beállítása" }
-        return nil
-    }
-
-    private var emptyAction: (() -> Void)? {
-        if sharedProfile.photoBase64.isEmpty { return { editingProfile = true } }
-        return nil
     }
 
     private var currentQRImage: UIImage? {
@@ -473,12 +524,18 @@ struct ShareScreen: View {
     }
 
     private var qrPayload: String? {
-        photoQRPayload
+        switch selectedMode {
+        case .contact:
+            return try? VCard.qrPayload(sharedProfile, includePhoto: false)
+        case .photo:
+            return photoQRPayload
+        case .profile:
+            return publicURL?.absoluteString
+        }
     }
 
     private var publicURL: URL? {
-        guard !sharedProfile.photoBase64.isEmpty,
-              store.profile.isPublic, store.syncStatus == .synced,
+        guard store.profile.isPublic, store.syncStatus == .synced,
               let base = store.configuration?.publicProfileBaseURL else { return nil }
         return PublicProfileLink.preferred(
             baseURL: base,
@@ -490,7 +547,6 @@ struct ShareScreen: View {
 
     private var profileLinkSupportingText: String {
         if let publicURL { return publicURL.absoluteString }
-        if sharedProfile.photoBase64.isEmpty { return "Előbb állíts be profilképet" }
         if !store.profile.isPublic { return "Kapcsold be a nyilvános profilt" }
         if store.syncStatus != .synced { return "Sikeres szinkronizálás után másolható" }
         return "A profilhivatkozás még nem érhető el"
@@ -505,21 +561,21 @@ struct ShareScreen: View {
         copiedProfileLink = true
     }
 
-    private func openContactEditor() {
-        guard !sharedProfile.photoBase64.isEmpty else {
-            error = "A névjegy csak profilképpel menthető."
-            return
-        }
-        showContact = true
-    }
-
-    private func shareVCard() {
-        guard !sharedProfile.photoBase64.isEmpty else {
-            error = "A névjegy csak profilképpel osztható meg."
+    private func shareCurrentSelection() {
+        if selectedMode == .profile {
+            guard let publicURL else {
+                error = "A publikus profil csak sikeres szinkron után osztható meg."
+                return
+            }
+            temporaryURL = nil
+            shareFile = ShareFile(url: publicURL)
             return
         }
         do {
-            let file = try ContactBridge.shareFile(sharedProfile)
+            let file = try ContactBridge.shareFile(
+                sharedProfile,
+                includePhoto: selectedMode == .photo
+            )
             temporaryURL = file.url
             shareFile = file
         } catch {
@@ -531,44 +587,107 @@ struct ShareScreen: View {
         if let url = temporaryURL { ContactBridge.removeShareFile(url) }
         temporaryURL = nil
     }
+
+    private func saveQRCode(_ image: UIImage) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else {
+                Task { @MainActor in
+                    error = "A QR-kód mentéséhez engedélyezd a Fotókhoz való hozzáférést a Beállításokban."
+                }
+                return
+            }
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            } completionHandler: { success, saveError in
+                Task { @MainActor in
+                    if success {
+                        savedQRCode = true
+                    } else {
+                        error = saveError?.localizedDescription ?? "A QR-kód mentése nem sikerült."
+                    }
+                }
+            }
+        }
+    }
 }
 
 private struct FullScreenQRView: View {
+    @Environment(\.scenePhase) private var scenePhase
     let image: UIImage?
     let title: String
+    let subtitle: String
     let dismiss: () -> Void
+    @State private var originalBrightness: CGFloat?
 
     var body: some View {
-        ZStack {
-            Color.white.ignoresSafeArea()
-            VStack(spacing: VizitSpace.xl) {
-                Spacer()
-                if !title.isEmpty {
-                    Text(title)
-                        .font(VizitFont.h2)
-                        .foregroundStyle(VizitColor.ink)
+        NavigationStack {
+            VizitScreen {
+                VStack(spacing: VizitSpace.xl) {
+                    Spacer(minLength: VizitSpace.lg)
+                    VStack(spacing: VizitSpace.lg) {
+                        if let image {
+                            Image(uiImage: image)
+                                .interpolation(.none)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 360)
+                                .padding(VizitSpace.md)
+                        }
+                        if !title.isEmpty {
+                            VStack(spacing: VizitSpace.xs) {
+                                Text(title)
+                                    .font(VizitFont.h2)
+                                    .foregroundStyle(VizitColor.ink)
+                                if !subtitle.isEmpty {
+                                    Text(subtitle)
+                                        .font(VizitFont.bodySmall)
+                                        .foregroundStyle(Color(uiColor: UIColor(hex: 0x6B7688)))
+                                }
+                            }
+                        }
+                    }
+                    .padding(VizitSpace.xl)
+                    .frame(maxWidth: 440)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous)
+                            .stroke(VizitColor.border, lineWidth: 1)
+                    }
+
+                    Text("A fényerő automatikusan maximumra vált a beolvasás idejére.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.textMuted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, VizitSpace.xl)
+
+                    Spacer(minLength: VizitSpace.lg)
                 }
-                if let image {
-                    Image(uiImage: image)
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .padding(VizitSpace.lg)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Bezárás", action: dismiss)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
                 }
-                Text("Olvasd be a telefon kamerájával")
-                    .font(VizitFont.bodySmall)
-                    .foregroundStyle(VizitColor.ink.opacity(0.66))
-                Spacer()
-                VizitButton(
-                    title: "Bezárás",
-                    containerOverride: Color(uiColor: UIColor(hex: 0x0B5CE8)),
-                    contentOverride: .white,
-                    action: dismiss
-                )
-                .padding(.horizontal, VizitSpace.xl)
-                .padding(.bottom, VizitSpace.xl)
+            }
+            .onAppear { maximizeBrightness() }
+            .onDisappear { restoreBrightness() }
+            .onChange(of: scenePhase) { phase in
+                if phase == .active { maximizeBrightness() }
+                else { restoreBrightness() }
             }
         }
+    }
+
+    private func maximizeBrightness() {
+        if originalBrightness == nil { originalBrightness = UIScreen.main.brightness }
+        UIScreen.main.brightness = 1
+    }
+
+    private func restoreBrightness() {
+        guard let originalBrightness else { return }
+        UIScreen.main.brightness = originalBrightness
     }
 }
 
@@ -589,23 +708,18 @@ enum QRImage {
         return addingLogo(to: UIImage(cgImage: cg))
     }
 
-    /// The centered mark covers less than two percent of the modules. Q is used
-    /// whenever the payload fits; dense photo vCards fall back to M, whose 15%
-    /// recovery budget still leaves wide headroom for the 12%-wide mark.
-    /// Testing the final level before presenting the code prevents an apparently
-    /// valid but unreadable QR.
+    /// The approved board requires highest error correction, a four-module
+    /// quiet zone and a fixed 14%-wide brand plate. Payloads that do not fit at
+    /// level H fail closed instead of silently producing a weaker code.
     static func canEncode(_ payload: String) -> Bool {
         code(for: payload) != nil
     }
 
     private static func code(for payload: String) -> CIImage? {
-        for level in ["Q", "M"] {
-            let filter = CIFilter.qrCodeGenerator()
-            filter.message = Data(payload.utf8)
-            filter.correctionLevel = level
-            if let output = filter.outputImage { return output }
-        }
-        return nil
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        filter.correctionLevel = "H"
+        return filter.outputImage
     }
 
     private static func addingLogo(to qr: UIImage) -> UIImage {
@@ -615,7 +729,7 @@ enum QRImage {
         return UIGraphicsImageRenderer(size: qr.size, format: format).image { _ in
             qr.draw(in: CGRect(origin: .zero, size: qr.size))
 
-            let plateSize = min(qr.size.width, qr.size.height) * 0.12
+            let plateSize = min(qr.size.width, qr.size.height) * 0.14
             let plate = CGRect(
                 x: (qr.size.width - plateSize) / 2,
                 y: (qr.size.height - plateSize) / 2,
@@ -697,7 +811,7 @@ enum PhotoContactQR {
 struct ScanFlow: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @State private var scanning = false
+    @State private var scanning = true
     @State private var torchOn = false
     @State private var torchAvailable = false
     @State private var pickedCode: PhotosPickerItem?
@@ -706,108 +820,29 @@ struct ScanFlow: View {
     @State private var link: URL?
     @State private var message: String?
 
-    var body: some View {
-        NavigationStack {
-            VizitScreen {
-                ScrollView {
-                    VStack(spacing: VizitSpace.lg) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: VizitRadius.xxl, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(uiColor: UIColor(hex: 0x0C2C63)),
-                                            Color(uiColor: UIColor(hex: 0x05163A))
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(height: 220)
-                            Image(systemName: "qrcode.viewfinder")
-                                .font(.system(size: 68, weight: .medium))
-                                .foregroundStyle(.white)
-                        }
-
-                        VStack(spacing: VizitSpace.xs) {
-                            Text("Új kapcsolat, egy beolvasással.")
-                                .font(VizitFont.h2)
-                                .foregroundStyle(VizitColor.textPrimary)
-                                .multilineTextAlignment(.center)
-                            Text("Olvass be egy névjegy-QR-kódot. Mentés előtt minden adatot ellenőrizhetsz.")
-                                .font(VizitFont.body)
-                                .foregroundStyle(VizitColor.textSecondary)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        VizitButton(title: "QR-kód beolvasása", systemImage: "camera.viewfinder") {
-                            scanning = true
-                        }
-
-                        VizitPanel {
-                            HStack(alignment: .top, spacing: VizitSpace.sm) {
-                                Image(systemName: "hand.raised.fill")
-                                    .foregroundStyle(VizitColor.primary)
-                                Text("A kamera csak a beolvasó megnyitásakor aktív. Webcímet az alkalmazás soha nem nyit meg automatikusan.")
-                                    .font(VizitFont.bodySmall)
-                                    .foregroundStyle(VizitColor.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, VizitSpace.md)
-                    .padding(.bottom, VizitSpace.xxl)
-                    .frame(maxWidth: 560)
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .navigationTitle("Beolvasás")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Kész") { dismiss() }
-                }
-            }
-            .fullScreenCover(isPresented: $scanning, onDismiss: processScan) { viewfinder }
-            .sheet(item: $incoming) { item in
-                ContactEditor(contact: item.contact) { saved in
-                    incoming = nil
-                    if saved { message = "A névjegyet elmentetted a Kontaktokba." }
-                }
-            }
-            .alert("Webcím a QR-kódban", isPresented: Binding(
-                get: { link != nil }, set: { if !$0 { link = nil } }
-            )) {
-                Button("Mégse", role: .cancel) { link = nil }
-                Button("Megnyitás") {
-                    if let url = link { openURL(url) }
-                    link = nil
-                }
-            } message: { Text(link?.absoluteString ?? "") }
-            .alert("Beolvasás", isPresented: Binding(
-                get: { message != nil && !scanning && incoming == nil },
-                set: { if !$0 { message = nil } }
-            )) {
-                Button("Rendben", role: .cancel) { message = nil }
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    Button("Rendszerbeállítások") { openURL(url); message = nil }
-                }
-            } message: { Text(message ?? "") }
-        }
+    private var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains("--ui-testing")
     }
 
-    private var viewfinder: some View {
+    var body: some View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
-                QRScanner(
-                    onResult: { text in pendingText = text; scanning = false },
-                    onError: { text in message = text; scanning = false },
-                    torchOn: torchOn,
-                    onTorchAvailability: { torchAvailable = $0 }
-                )
-                .ignoresSafeArea()
+                if isUITesting {
+                    Color(uiColor: UIColor(hex: 0x1B2437)).ignoresSafeArea()
+                } else if scanning {
+                    QRScanner(
+                        onResult: finishScan,
+                        onError: { text in
+                            message = text
+                            torchOn = false
+                            scanning = false
+                        },
+                        torchOn: torchOn,
+                        onTorchAvailability: { torchAvailable = $0 }
+                    )
+                    .ignoresSafeArea()
+                }
 
                 ScannerOverlay {
                     PhotosPicker(selection: $pickedCode, matching: .images, photoLibrary: .shared()) {
@@ -822,6 +857,7 @@ struct ScanFlow: View {
                         .clipShape(Capsule())
                         .overlay { Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1) }
                     }
+                    .accessibilityIdentifier("scanner.photo")
                 }
             }
             .navigationTitle("Beolvasás")
@@ -831,17 +867,76 @@ struct ScanFlow: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Bezárás") { torchOn = false; scanning = false }
-                }
-                if torchAvailable {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(torchOn ? "Vaku ki" : "Vaku") { torchOn.toggle() }
-                            .accessibilityLabel(torchOn ? "Vaku kikapcsolása" : "Vaku bekapcsolása")
+                    Button("Bezárás") {
+                        torchOn = false
+                        dismiss()
                     }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button(torchOn ? "Vaku ki" : "Vaku") { torchOn.toggle() }
+                        .disabled(!torchAvailable && !isUITesting)
+                        .accessibilityLabel(torchOn ? "Vaku kikapcsolása" : "Vaku bekapcsolása")
                 }
             }
             .onChange(of: pickedCode) { _ in decodePickedCode() }
+            .sheet(item: $incoming) { item in
+                ContactEditor(contact: item.contact) { saved in
+                    incoming = nil
+                    if saved {
+                        message = "A névjegyet elmentetted a Kontaktokba."
+                    } else {
+                        scanning = true
+                    }
+                }
+            }
+            .alert("Webcím a QR-kódban", isPresented: Binding(
+                get: { link != nil },
+                set: {
+                    if !$0 {
+                        link = nil
+                        scanning = true
+                    }
+                }
+            )) {
+                Button("Mégse", role: .cancel) {
+                    link = nil
+                    scanning = true
+                }
+                Button("Megnyitás") {
+                    if let url = link { openURL(url) }
+                    link = nil
+                    scanning = true
+                }
+            } message: { Text(link?.absoluteString ?? "") }
+            .alert("Beolvasás", isPresented: Binding(
+                get: { message != nil && incoming == nil },
+                set: {
+                    if !$0 {
+                        message = nil
+                        scanning = true
+                    }
+                }
+            )) {
+                Button("Rendben", role: .cancel) {
+                    message = nil
+                    scanning = true
+                }
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    Button("Rendszerbeállítások") {
+                        openURL(url)
+                        message = nil
+                        scanning = true
+                    }
+                }
+            } message: { Text(message ?? "") }
         }
+    }
+
+    private func finishScan(_ text: String) {
+        pendingText = text
+        torchOn = false
+        scanning = false
+        processScan()
     }
 
     /// A picked still is decoded in the background, then handed to the same
@@ -853,11 +948,10 @@ struct ScanFlow: View {
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let value = QRImageDecoder.decode(data) else {
                 message = "Ezen a képen nem találtunk egyetlen egyértelmű QR-kódot sem."
+                scanning = false
                 return
             }
-            pendingText = value
-            torchOn = false
-            scanning = false
+            finishScan(value)
         }
     }
 
@@ -1363,6 +1457,7 @@ private struct EducationCatalogScreen: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("portal.course.\(course.id)")
                     }
                 }
                 .padding(.horizontal, VizitSpace.md)
@@ -1902,7 +1997,7 @@ private struct DigitalHelpScreen: View {
             .padding(VizitSpace.lg).frame(maxWidth: .infinity, minHeight: 500)
             .background(VizitColor.ink).clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
             if !inCall { VizitButton(title: "Próbahívás indítása", systemImage: "video.fill") { inCall = true } }
-            Text("A VIZIT 8.1 interaktív próbája nem továbbít hangot vagy videót. Éles foglaláskor külön, egyértelmű hozzájárulás előzi meg a kamera- és mikrofonengedélyt.")
+            Text("A VIZIT interaktív próbája nem továbbít hangot vagy videót. Éles foglaláskor külön, egyértelmű hozzájárulás előzi meg a kamera- és mikrofonengedélyt.")
                 .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
         }
     }
@@ -2190,9 +2285,10 @@ struct SettingsScreen: View {
     @State private var changingEmail = false
     @State private var emailDraft = ""
     @State private var confirmPasswordReset = false
+    @State private var changingTheme = false
     @State private var customizing = false
     @State private var adjustingVisibility = false
-    @State private var confirmReset = false
+    @State private var showNFCInformation = false
     @State private var error: String?
     @State private var confirmLogout = false
     @State private var confirmDelete = false
@@ -2243,108 +2339,51 @@ struct SettingsScreen: View {
                             ) { confirmPasswordReset = true }
                         }
 
-                        VizitSectionHeader(title: "Névjegy")
+                        VizitSectionHeader(title: "Megjelenés")
                         VizitGroup {
+                            VizitRow(
+                                label: "Téma",
+                                systemImage: "eye",
+                                value: themeMode.label
+                            ) { changingTheme = true }
+                            .accessibilityIdentifier("settings.theme.open")
+                            VizitDivider()
                             VizitRow(
                                 label: "Kártya megjelenése",
                                 systemImage: "paintpalette",
                                 value: presentation.value.colorway.label
                             ) { customizing = true }
+                            .accessibilityIdentifier("card.appearance")
+                        }
+
+                        VizitSectionHeader(title: "Megosztás")
+                        VizitGroup {
+                            VizitRow(
+                                label: "NFC",
+                                systemImage: "wave.3.right",
+                                supporting: "iPhone-kompatibilitás és fizikai NFC-kártya"
+                            ) { showNFCInformation = true }
                             VizitDivider()
                             VizitRow(
                                 label: "Adatok láthatósága",
                                 systemImage: "eye",
                                 supporting: "\(presentation.value.sharedFieldCount) mező látható a \(CardPresentation.optionalFieldCount)-ből"
                             ) { adjustingVisibility = true }
+                            .accessibilityIdentifier("card.visibility")
                             VizitDivider()
                             VizitRow(
-                                label: "Nyilvános profil és saját domain",
+                                label: "Publikus profil",
                                 systemImage: "globe",
                                 value: store.profile.isPublic ? "Be" : "Ki",
                                 supporting: store.profile.customDomainVerified
                                     ? store.profile.customDomain
                                     : "Automatikus VIZIT-cím"
                             ) { editingProfile = true }
-                        }
-
-                        VizitSectionHeader(title: "Megjelenés")
-                        VizitGroup {
-                            VizitRow(
-                                label: "Téma",
-                                systemImage: "circle.lefthalf.filled",
-                                supporting: "Alapértelmezés: világos",
-                                showsChevron: false
-                            )
-                            VizitDivider()
-                            VizitSegmentedControl(
-                                options: ThemeMode.allCases.map(\.label),
-                                selection: themeIndex
-                            )
-                            .padding(VizitSpace.md)
-                        }
-
-                        VizitSectionHeader(title: "Szinkronizálás")
-                        VizitGroup {
-                            VizitRow(
-                                label: "Profil szinkron",
-                                systemImage: "arrow.triangle.2.circlepath",
-                                supporting: store.syncStatus.label,
-                                showsChevron: false
-                            )
-                            if [.pending, .failed].contains(store.syncStatus), store.isOnline {
-                                VizitDivider()
-                                VizitRow(label: "Szinkron újrapróbálása", systemImage: "arrow.clockwise") {
-                                    store.retrySync()
-                                }
-                            }
-                            if store.syncStatus == .conflict, store.isOnline {
-                                VizitDivider()
-                                VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                                    VizitBanner(
-                                        text: "Válassz példányt. A felhőből letöltés előtt a helyi változatról biztonsági másolat készül.",
-                                        tone: .warning
-                                    )
-                                    VizitButton(title: "Helyi változat feltöltése", kind: .secondary) {
-                                        Task { await store.resolveSyncConflict(keepLocal: true) }
-                                    }
-                                    VizitButton(title: "Felhőben lévő változat használata", kind: .tertiary) {
-                                        Task { await store.resolveSyncConflict(keepLocal: false) }
-                                    }
-                                }
-                                .padding(VizitSpace.md)
-                            }
-                        }
-
-                        VizitSectionHeader(title: "Adatvédelem")
-                        VizitPanel {
-                            VStack(alignment: .leading, spacing: VizitSpace.xs) {
-                                Text("A megosztott vagy Kontaktokba mentett példányokat a helyi törlés nem vonja vissza.")
-                                    .font(VizitFont.bodySmall)
-                                    .foregroundStyle(VizitColor.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                if let issue = store.storageError {
-                                    VizitBanner(text: issue, tone: .error)
-                                }
-                                if let configuration = store.configuration {
-                                    HStack(spacing: VizitSpace.lg) {
-                                        Link("Adatkezelési tájékoztató", destination: configuration.privacyPolicyURL)
-                                        Link("ÁSZF", destination: configuration.termsURL)
-                                    }
-                                    .font(VizitFont.label)
-                                    .foregroundStyle(VizitColor.primary)
-                                }
-                            }
+                            .accessibilityIdentifier("settings.publicProfile")
                         }
 
                         VizitSectionHeader(title: "Veszélyes műveletek", tone: VizitColor.error)
                         VizitGroup(danger: true) {
-                            VizitRow(
-                                label: "Helyi gyorsítótár törlése",
-                                systemImage: "trash",
-                                destructive: true,
-                                showsChevron: false
-                            ) { confirmReset = true }
-                            VizitDivider()
                             VizitRow(
                                 label: "Kijelentkezés",
                                 systemImage: "rectangle.portrait.and.arrow.right",
@@ -2361,11 +2400,6 @@ struct SettingsScreen: View {
                             ) { confirmDelete = true }
                         }
 
-                        Text("VIZIT \(versionText)")
-                            .font(VizitFont.caption)
-                            .foregroundStyle(VizitColor.textMuted)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, VizitSpace.lg)
                     }
                     .padding(.horizontal, VizitSpace.md)
                     .padding(.bottom, VizitSpace.xxl)
@@ -2376,6 +2410,7 @@ struct SettingsScreen: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
             .sheet(isPresented: $changingEmail) { emailChangeSheet }
+            .sheet(isPresented: $changingTheme) { themeSheet }
             .sheet(isPresented: $customizing) {
                 CardAppearanceScreen(store: presentation, profile: store.profile)
             }
@@ -2397,16 +2432,6 @@ struct SettingsScreen: View {
                 Button("Mégse", role: .cancel) {}
             }
             .confirmationDialog(
-                "Törlöd a helyi gyorsítótárat és a profilképet erről az iPhone-ról?",
-                isPresented: $confirmReset,
-                titleVisibility: .visible
-            ) {
-                Button("Helyi adatok törlése", role: .destructive) {
-                    do { try store.reset() } catch { self.error = error.localizedDescription }
-                }
-                Button("Mégse", role: .cancel) {}
-            }
-            .confirmationDialog(
                 "Biztosan kijelentkezel? A helyi gyorsítótár is törlődik.",
                 isPresented: $confirmLogout,
                 titleVisibility: .visible
@@ -2415,11 +2440,43 @@ struct SettingsScreen: View {
                 Button("Mégse", role: .cancel) {}
             }
             .sheet(isPresented: $confirmDelete) { deleteAccountSheet }
+            .alert("NFC iPhone-on", isPresented: $showNFCInformation) {
+                Button("Rendben", role: .cancel) {}
+            } message: {
+                Text("Az iPhone nem támogat tetszőleges telefon–telefon NFC-kártyaemulációt. QR-kód, AirDrop, névjegyfájl és programozott fizikai NFC-kártya használható.")
+            }
             .alert("A művelet nem sikerült", isPresented: Binding(
                 get: { error != nil }, set: { if !$0 { error = nil } }
             )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+        }
+    }
+
+    private var themeSheet: some View {
+        NavigationStack {
+            VizitScreen {
+                VStack(alignment: .leading, spacing: VizitSpace.lg) {
+                    Text("Válaszd ki, hogy a VIZIT világos, sötét vagy a rendszer beállítását követő megjelenést használjon.")
+                        .font(VizitFont.body)
+                        .foregroundStyle(VizitColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    VizitSegmentedControl(
+                        options: ThemeMode.allCases.map(\.label),
+                        selection: themeIndex,
+                        accessibilityIdentifier: "settings.theme"
+                    )
+                    Spacer()
+                }
+                .padding(VizitSpace.md)
+            }
+            .navigationTitle("Téma")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Kész") { changingTheme = false }
+                }
+            }
         }
     }
 
@@ -2506,11 +2563,6 @@ struct SettingsScreen: View {
         }
     }
 
-    private var versionText: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-        return "\(version) (\(build))"
-    }
 }
 
 extension SyncStatus {

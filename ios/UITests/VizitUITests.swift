@@ -89,9 +89,15 @@ final class VizitUITests: XCTestCase {
         return app
     }
 
-    func testConfiguredAppShowsAuthentication() {
+    private func launchAuthentication(_ extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--ui-testing-signed-out"] + extraArguments
         app.launch()
+        return app
+    }
+
+    func testConfiguredAppShowsAuthentication() {
+        let app = launchAuthentication()
         XCTAssertTrue(app.buttons["auth.submit"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Üdv újra!"].exists)
         XCTAssertTrue(app.textFields["auth.email"].exists)
@@ -101,24 +107,24 @@ final class VizitUITests: XCTestCase {
     }
 
     func testRegistrationFlowShowsRequiredFieldsAndLegalConsent() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchAuthentication()
         XCTAssertTrue(app.buttons["Regisztráció"].waitForExistence(timeout: 10))
         app.buttons["Regisztráció"].tap()
         XCTAssertTrue(app.textFields["auth.name"].exists)
         XCTAssertTrue(app.textFields["auth.email"].exists)
         XCTAssertTrue(app.secureTextFields["auth.password"].exists)
-        XCTAssertTrue(app.secureTextFields["auth.confirmation"].exists)
+        XCTAssertFalse(app.secureTextFields["auth.confirmation"].exists)
+        XCTAssertTrue(app.buttons["Jelszó megjelenítése"].exists)
+        XCTAssertTrue(app.staticTexts["Legalább 8 karakter, benne kis- és nagybetű, valamint szám."].exists)
         XCTAssertTrue(app.buttons["auth.submit"].exists)
         capture("VIZIT-auth-registration", in: app)
     }
 
     func testPasswordRecoveryIsVisibleAndKeepsTheCurrentBuildIdentifiable() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchAuthentication()
         XCTAssertTrue(app.buttons["auth.forgotPassword"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["auth.version"].exists)
-        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 8.1.0"))
+        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 8.7.0"))
         app.buttons["auth.forgotPassword"].tap()
         XCTAssertTrue(app.textFields["auth.reset.email"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
@@ -130,9 +136,10 @@ final class VizitUITests: XCTestCase {
         app.launchArguments = ["--ui-testing", "--ui-testing-verification"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Ellenőrizd az e-mail-fiókodat"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Ellenőrizd a postaládádat"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["auth.verification.email"].label, "teszt@vizit.hu")
         XCTAssertTrue(app.buttons["auth.verification.back"].exists)
+        XCTAssertTrue(app.buttons["auth.verification.resend"].exists)
 
         capture("VIZIT-email-verification", in: app)
 
@@ -140,7 +147,7 @@ final class VizitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["auth.submit"].waitForExistence(timeout: 5))
     }
 
-    func testCreatePersistAndRequirePhotoBeforeSharing() {
+    func testContactQRWorksWithoutPhotoAndPhotoModeExplainsWhatIsMissing() {
         let app = launchClean()
         let edit = app.buttons["card.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
@@ -160,9 +167,16 @@ final class VizitUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["card.name"].label, "Teszt Elek")
         app.tabBars.buttons["Megosztás"].tap()
-        XCTAssertTrue(app.staticTexts["Profilkép szükséges"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.images["share.qr"].exists)
-        capture("VIZIT-photo-required", in: app)
+        XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Olvastasd be a másik telefonnal"].exists)
+        capture("VIZIT-share-contact-without-photo", in: app)
+
+        let modes = app.segmentedControls["share.qrMode"]
+        XCTAssertTrue(modes.waitForExistence(timeout: 5))
+        modes.buttons["Fényképes"].tap()
+        XCTAssertTrue(app.staticTexts["Nincs még profilképed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Profilkép hozzáadása"].exists)
+        capture("VIZIT-share-photo-missing", in: app)
     }
 
     func testEmptyProfileShowsValidation() {
@@ -198,10 +212,10 @@ final class VizitUITests: XCTestCase {
         capture("VIZIT-business-portal", in: app)
 
         let destinations = [
-            (identifier: "portal.vosz", title: "VOSZ forrásközpont"),
-            (identifier: "portal.education", title: "Vállalkozói Edukáció"),
-            (identifier: "portal.help", title: "Digitális segítség"),
-            (identifier: "portal.toolkit", title: "Vállalkozói eszköztár"),
+            (identifier: "portal.vosz", title: "VOSZ forrásközpont", attachment: "VIZIT-portal-vosz"),
+            (identifier: "portal.education", title: "Vállalkozói Edukáció", attachment: "VIZIT-portal-education"),
+            (identifier: "portal.help", title: "Digitális segítség", attachment: "VIZIT-portal-help"),
+            (identifier: "portal.toolkit", title: "Vállalkozói eszköztár", attachment: "VIZIT-portal-toolkit"),
         ]
         for destination in destinations {
             let button = app.buttons[destination.identifier]
@@ -209,14 +223,32 @@ final class VizitUITests: XCTestCase {
             button.tap()
             let navigationBar = app.navigationBars[destination.title]
             XCTAssertTrue(navigationBar.waitForExistence(timeout: 5), destination.title)
+            capture(destination.attachment, in: app)
             navigationBar.buttons.firstMatch.tap()
             XCTAssertTrue(app.buttons["portal.vosz"].waitForExistence(timeout: 5))
         }
     }
 
+    func testBusinessEducationCoursePlayerIsImplemented() {
+        let app = launchReleaseAudit()
+        XCTAssertTrue(app.buttons["home.businessPortal"].waitForExistence(timeout: 10))
+        app.buttons["home.businessPortal"].tap()
+        let education = app.buttons["portal.education"]
+        revealHorizontally(education, in: app)
+        education.tap()
+        XCTAssertTrue(app.navigationBars["Vállalkozói Edukáció"].waitForExistence(timeout: 5))
+
+        let course = app.buttons["portal.course.ai"]
+        XCTAssertTrue(course.waitForExistence(timeout: 5))
+        course.tap()
+        XCTAssertTrue(app.staticTexts["AI a mindennapi vállalkozásban"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Vissza a kurzusokhoz"].exists)
+        capture("VIZIT-portal-course-player", in: app)
+    }
+
     func testCardAppearanceExposesAndPersistsApprovedMaterialsAndLayouts() {
         let app = launchClean()
-        app.tabBars.buttons["Névjegy"].tap()
+        app.tabBars.buttons["Beállítások"].tap()
 
         let appearance = app.buttons["card.appearance"]
         reveal(appearance, in: app)
@@ -257,18 +289,11 @@ final class VizitUITests: XCTestCase {
 
         app.buttons["card.material.paper"].tap()
         layoutControl.buttons["Klasszikus"].tap()
+        XCTAssertFalse(app.switches["card.showPhoto"].exists)
+        XCTAssertFalse(app.switches["card.showQR"].exists)
+        XCTAssertFalse(app.switches["card.showSocial"].exists)
 
-        for identifier in ["card.showPhoto", "card.showQR", "card.showSocial"] {
-            let toggle = app.switches[identifier]
-            reveal(toggle, in: app)
-            let initial = toggle.value as? String
-            toggle.tap()
-            XCTAssertNotEqual(toggle.value as? String, initial, "Toggle did not change: \(identifier)")
-            toggle.tap()
-            XCTAssertEqual(toggle.value as? String, initial, "Toggle did not restore: \(identifier)")
-        }
-
-        app.buttons["Kész"].tap()
+        app.buttons["card.appearance.save"].tap()
         reveal(appearance, in: app)
         appearance.tap()
         let reopenedLayoutControl = app.segmentedControls["card.layout"]
@@ -289,7 +314,20 @@ final class VizitUITests: XCTestCase {
 
         app.tabBars.buttons["Megosztás"].tap()
         XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 15))
-        capture("VIZIT-share-photo-contact-qr", in: app)
+        let modes = app.segmentedControls["share.qrMode"]
+        XCTAssertTrue(modes.waitForExistence(timeout: 5))
+        for label in ["Kontakt", "Fényképes", "Profil"] {
+            XCTAssertTrue(modes.buttons[label].exists, "Missing QR mode: \(label)")
+        }
+        capture("VIZIT-share-contact-qr", in: app)
+
+        modes.buttons["Fényképes"].tap()
+        XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 15))
+        capture("VIZIT-share-photo-qr", in: app)
+
+        modes.buttons["Profil"].tap()
+        XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 15))
+        capture("VIZIT-share-profile-qr", in: app)
 
         let fullScreen = app.buttons["share.fullscreen"]
         reveal(fullScreen, in: app)
@@ -300,7 +338,75 @@ final class VizitUITests: XCTestCase {
 
         app.tabBars.buttons["Beállítások"].tap()
         XCTAssertTrue(app.staticTexts["Beállítások"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Szinkronizálás"].exists)
+        XCTAssertFalse(app.staticTexts["Adatvédelem"].exists)
         capture("VIZIT-settings-complete-profile", in: app)
+    }
+
+    func testQRModesExposeTheirRequiredFailureStates() {
+        let photoApp = launchReleaseAudit(["--ui-testing-photo-empty"])
+        photoApp.tabBars.buttons["Megosztás"].tap()
+        let photoModes = photoApp.segmentedControls["share.qrMode"]
+        XCTAssertTrue(photoModes.waitForExistence(timeout: 5))
+        photoModes.buttons["Fényképes"].tap()
+        XCTAssertTrue(photoApp.staticTexts["Nincs még profilképed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(photoApp.buttons["Profilkép hozzáadása"].exists)
+        capture("VIZIT-share-photo-unavailable", in: photoApp)
+        photoApp.terminate()
+
+        let profileApp = launchReleaseAudit(["--ui-testing-profile-qr-unavailable"])
+        profileApp.tabBars.buttons["Megosztás"].tap()
+        let profileModes = profileApp.segmentedControls["share.qrMode"]
+        XCTAssertTrue(profileModes.waitForExistence(timeout: 5))
+        profileModes.buttons["Profil"].tap()
+        XCTAssertTrue(profileApp.staticTexts["Nincs még publikus profil"].waitForExistence(timeout: 5))
+        XCTAssertTrue(profileApp.buttons["Kontakt QR megnyitása"].exists)
+        capture("VIZIT-share-profile-unavailable", in: profileApp)
+    }
+
+    func testDarkAppearanceCoversEveryPrimaryDestination() {
+        let app = launchReleaseAudit(["-AppleInterfaceStyle", "Dark"])
+        XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 10))
+        capture("VIZIT-home-dark", in: app)
+
+        app.tabBars.buttons["Névjegy"].tap()
+        XCTAssertTrue(app.staticTexts["Névjegyem"].waitForExistence(timeout: 5))
+        capture("VIZIT-card-dark", in: app)
+
+        app.tabBars.buttons["Megosztás"].tap()
+        XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 10))
+        capture("VIZIT-share-dark", in: app)
+
+        app.tabBars.buttons["Beállítások"].tap()
+        XCTAssertTrue(app.staticTexts["Beállítások"].waitForExistence(timeout: 5))
+        capture("VIZIT-settings-dark", in: app)
+    }
+
+    func testAuthenticationDarkAppearance() {
+        let app = launchAuthentication(["-AppleInterfaceStyle", "Dark"])
+        XCTAssertTrue(app.buttons["auth.submit"].waitForExistence(timeout: 10))
+        capture("VIZIT-auth-login-dark", in: app)
+    }
+
+    func testSettingsThemeAndShareControlsAreActionable() {
+        let app = launchReleaseAudit()
+        app.tabBars.buttons["Beállítások"].tap()
+        let theme = app.buttons["settings.theme.open"]
+        XCTAssertTrue(theme.waitForExistence(timeout: 5))
+        theme.tap()
+        let control = app.segmentedControls["settings.theme"]
+        XCTAssertTrue(control.waitForExistence(timeout: 5))
+        for label in ["Világos", "Sötét", "Rendszer"] {
+            XCTAssertTrue(control.buttons[label].exists)
+        }
+        control.buttons["Sötét"].tap()
+        assertSelected(control.buttons["Sötét"])
+        app.buttons["Kész"].tap()
+
+        app.tabBars.buttons["Megosztás"].tap()
+        XCTAssertTrue(app.buttons["NFC"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Link"].exists)
+        XCTAssertTrue(app.buttons["Mentés"].exists)
     }
 
     func testReleaseAuditCoversProfileEditorAndVisibility() {
@@ -313,7 +419,7 @@ final class VizitUITests: XCTestCase {
         capture("VIZIT-profile-editor", in: app)
         app.buttons["Mégse"].tap()
 
-        app.tabBars.buttons["Névjegy"].tap()
+        app.tabBars.buttons["Beállítások"].tap()
         let visibility = app.buttons["card.visibility"]
         reveal(visibility, in: app)
         visibility.tap()
@@ -328,15 +434,19 @@ final class VizitUITests: XCTestCase {
         XCTAssertTrue(scanner.waitForExistence(timeout: 10))
         scanner.tap()
         XCTAssertTrue(app.navigationBars["Beolvasás"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["QR-kód beolvasása"].exists)
+        XCTAssertTrue(app.staticTexts["Irányítsd a kamerát a másik kódra"].exists)
+        XCTAssertTrue(app.buttons["scanner.photo"].exists)
+        XCTAssertTrue(app.buttons["Bezárás"].exists)
+        XCTAssertTrue(app.buttons["Vaku bekapcsolása"].exists)
         capture("VIZIT-scanner-entry", in: app)
     }
 
     func testReleaseAuditCoversAllCustomDomainStates() {
         let states = [
-            (arguments: [String](), label: "Tulajdonjog-ellenőrzés függőben", attachment: "VIZIT-domain-pending"),
-            (arguments: ["--ui-testing-domain-verified"], label: "Ellenőrzött saját domain", attachment: "VIZIT-domain-verified"),
-            (arguments: ["--ui-testing-domain-invalid"], label: "Formailag hibás domain", attachment: "VIZIT-domain-invalid"),
+            (arguments: ["--ui-testing-domain-empty"], label: "Nincs megadva", attachment: "VIZIT-domain-default"),
+            (arguments: [String](), label: "Megadva, ellenőrzésre vár", attachment: "VIZIT-domain-pending"),
+            (arguments: ["--ui-testing-domain-verified"], label: "Ellenőrzött", attachment: "VIZIT-domain-verified"),
+            (arguments: ["--ui-testing-domain-invalid"], label: "Formailag hibás", attachment: "VIZIT-domain-invalid"),
         ]
 
         for state in states {

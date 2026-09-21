@@ -19,7 +19,6 @@ struct AuthScreen: View {
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
-    @State private var confirmation = ""
     @State private var legalAccepted = false
     @State private var forgotPassword = false
     @State private var passwordResetSent = false
@@ -29,15 +28,24 @@ struct AuthScreen: View {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
             mode = next
             password = ""
-            confirmation = ""
         }
+    }
+
+    private var modeIndex: Binding<Int> {
+        Binding(
+            get: { AuthMode.allCases.firstIndex(of: mode) ?? 0 },
+            set: { index in
+                guard AuthMode.allCases.indices.contains(index) else { return }
+                select(AuthMode.allCases[index])
+            }
+        )
     }
 
     var body: some View {
         NavigationStack {
             VizitScreen {
                 ScrollView {
-                    VStack(spacing: VizitSpace.lg) {
+                    VStack(alignment: .leading, spacing: VizitSpace.lg) {
                         VizitBrandLockup(maxHeight: 96)
                             .padding(.top, VizitSpace.xs)
 
@@ -75,52 +83,34 @@ struct AuthScreen: View {
     }
 
     private var heading: some View {
-        VStack(spacing: VizitSpace.xs) {
+        VStack(alignment: .leading, spacing: VizitSpace.xs) {
             Text(mode == .login ? "Üdv újra!" : "Csatlakozz a VIZIT-hez")
                 .font(VizitFont.h1)
                 .foregroundStyle(VizitColor.textPrimary)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.leading)
             Text(mode == .login
                  ? "A digitális névjegyed mindig veled van."
                  : "Hozd létre a fiókod, majd állítsd össze a névjegyed.")
                 .font(VizitFont.body)
                 .foregroundStyle(VizitColor.textSecondary)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    /// Kept as two plain buttons carrying the mode names, because the UI tests
-    /// address them by label ("Regisztráció") rather than by identifier.
     private var modeSelector: some View {
-        HStack(spacing: VizitSpace.xxs) {
-            ForEach(AuthMode.allCases) { item in
-                Button {
-                    select(item)
-                } label: {
-                    Text(item.rawValue)
-                        .font(VizitFont.label)
-                        .foregroundStyle(mode == item ? VizitColor.textPrimary : VizitColor.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: VizitMetrics.minTouchTarget - 4)
-                        .background(mode == item ? VizitColor.surface : .clear)
-                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.sm + 1, style: .continuous))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(mode == item ? [.isButton, .isSelected] : .isButton)
-            }
-        }
-        .padding(VizitSpace.xxs)
-        .background(VizitColor.controlTrack)
-        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+        VizitSegmentedControl(
+            options: AuthMode.allCases.map(\.rawValue),
+            selection: modeIndex,
+            accessibilityIdentifier: "auth.mode"
+        )
     }
 
     private var fields: some View {
         VStack(spacing: VizitSpace.sm) {
             if mode == .register {
                 VizitTextField(
-                    label: "Név",
+                    label: "Teljes név",
                     text: $name,
                     placeholder: "Teljes név",
                     contentType: .name,
@@ -154,18 +144,10 @@ struct AuthScreen: View {
             )
 
             if mode == .register {
-                VizitTextField(
-                    label: "Jelszó újra",
-                    text: $confirmation,
-                    placeholder: "••••••••",
-                    helper: "Legalább 8 karakter, kis- és nagybetű, valamint szám szükséges.",
-                    contentType: .newPassword,
-                    autocapitalization: .never,
-                    isSecure: true,
-                    identifier: "auth.confirmation",
-                    submitLabel: .go,
-                    onSubmit: submit
-                )
+                Text("Legalább 8 karakter, benne kis- és nagybetű, valamint szám.")
+                    .font(VizitFont.caption)
+                    .foregroundStyle(VizitColor.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -173,7 +155,7 @@ struct AuthScreen: View {
     private var legalSection: some View {
         VStack(alignment: .leading, spacing: VizitSpace.sm) {
             Toggle(isOn: $legalAccepted) {
-                Text("Elfogadom az adatkezelési tájékoztatót és az ÁSZF-et.")
+                Text("Elfogadom az Általános Szerződési Feltételeket és az Adatkezelési tájékoztatót.")
                     .font(VizitFont.bodySmall)
                     .foregroundStyle(VizitColor.textSecondary)
             }
@@ -227,6 +209,7 @@ struct AuthScreen: View {
                 .accessibilityIdentifier("auth.version")
         }
         .padding(.top, VizitSpace.xs)
+        .frame(maxWidth: .infinity)
     }
 
     private var buildVersionLabel: String {
@@ -241,7 +224,7 @@ struct AuthScreen: View {
                 await store.login(email: email, password: password)
             } else {
                 await store.register(name: name, email: email, password: password,
-                                     confirmation: confirmation, legalAccepted: legalAccepted)
+                                     confirmation: password, legalAccepted: legalAccepted)
             }
         }
     }
@@ -251,19 +234,14 @@ struct AuthScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(spacing: VizitSpace.lg) {
-                        VizitIconChip(
-                            systemImage: "key.horizontal",
-                            tint: VizitColor.primary,
-                            background: VizitColor.primarySubtle,
-                            size: 64
-                        )
-                        .padding(.top, VizitSpace.xs)
+                        VizitBrandLockup(maxHeight: 72)
+                            .padding(.top, VizitSpace.xs)
 
                         VStack(spacing: VizitSpace.xs) {
                             Text("Új jelszó kérése")
                                 .font(VizitFont.h2)
                                 .foregroundStyle(VizitColor.textPrimary)
-                            Text("Add meg az e-mail-címed, és elküldjük a jelszó-visszaállító hivatkozást.")
+                            Text("Add meg a fiókodhoz tartozó e-mail-címet. Küldünk egy hivatkozást, amivel új jelszót állíthatsz be. A hivatkozás 1 órán át érvényes.")
                                 .font(VizitFont.body)
                                 .foregroundStyle(VizitColor.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -299,13 +277,18 @@ struct AuthScreen: View {
                             )
 
                             VizitButton(
-                                title: "E-mail küldése",
+                                title: "Hivatkozás küldése",
                                 systemImage: "paperplane",
                                 isLoading: store.busy,
                                 isEnabled: !store.busy,
                                 action: requestReset
                             )
                             .accessibilityIdentifier("auth.reset.submit")
+
+                            VizitBanner(
+                                text: "Biztonsági okból akkor is ezt a választ adjuk, ha a megadott címhez nem tartozik fiók.",
+                                tone: .info
+                            )
                         }
                     }
                     .padding(VizitSpace.lg)
@@ -314,11 +297,11 @@ struct AuthScreen: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle("Jelszó-visszaállítás")
+            .navigationTitle("Új jelszó kérése")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Mégse") { forgotPassword = false }
+                    Button("Belépés") { forgotPassword = false }
                 }
             }
         }
@@ -416,6 +399,7 @@ struct PasswordChangeScreen: View {
 struct EmailVerificationScreen: View {
     @EnvironmentObject private var store: AppStore
     let email: String
+    @State private var resent = false
 
     var body: some View {
         NavigationStack {
@@ -426,15 +410,15 @@ struct EmailVerificationScreen: View {
                             .padding(.top, VizitSpace.xs)
 
                         VizitIconChip(
-                            systemImage: "envelope.badge",
-                            tint: VizitColor.primary,
-                            background: VizitColor.primarySubtle,
+                            systemImage: "checkmark",
+                            tint: VizitColor.success,
+                            background: VizitColor.successSubtle,
                             size: 72
                         )
                         .accessibilityHidden(true)
 
                         VStack(spacing: VizitSpace.sm) {
-                            Text("Ellenőrizd az e-mail-fiókodat")
+                            Text("Ellenőrizd a postaládádat")
                                 .font(VizitFont.h1)
                                 .foregroundStyle(VizitColor.textPrimary)
                                 .multilineTextAlignment(.center)
@@ -470,6 +454,15 @@ struct EmailVerificationScreen: View {
                             store.showSignIn()
                         }
                         .accessibilityIdentifier("auth.verification.back")
+
+                        Button(resent ? "A levelet újraküldtük" : "Nem érkezett meg? Levél újraküldése") {
+                            Task { resent = await store.resendVerification(email: email) }
+                        }
+                        .font(VizitFont.label)
+                        .foregroundStyle(VizitColor.primary)
+                        .frame(minHeight: VizitMetrics.minTouchTarget)
+                        .disabled(store.busy)
+                        .accessibilityIdentifier("auth.verification.resend")
                     }
                     .padding(.horizontal, VizitSpace.lg)
                     .padding(.bottom, VizitSpace.xl)

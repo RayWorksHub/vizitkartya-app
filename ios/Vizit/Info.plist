@@ -41,6 +41,8 @@
 	<string>A kamera a névjegyek QR-kódjának beolvasásához szükséges.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Az általad jóváhagyott névjegy Kontaktokba mentéséhez szükséges.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>A QR-kódot csak akkor mentjük a Fotók közé, amikor megnyomod a Mentés gombot.</string>
 	<key>VIZITAuthScheme</key>
 	<string>$(VIZIT_AUTH_SCHEME)</string>
 	<key>VIZITGoogleSignInEnabled</key>

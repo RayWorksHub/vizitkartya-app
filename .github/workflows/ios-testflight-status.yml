@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       marketing_version:
-        description: App version shown in TestFlight, for example 8.1.0
+        description: App version shown in TestFlight, for example 8.7.0
         required: true
         type: string
       build_number:

@@ -75,6 +75,12 @@ final class AppStore: ObservableObject {
         #endif
         if uiTesting {
             #if DEBUG
+            if launchArguments.contains("--ui-testing-signed-out") {
+                configuration = try? AppConfiguration.load()
+                authStatus = .signedOut
+                syncStatus = .localOnly
+                return
+            }
             if launchArguments.contains("--ui-testing-verification") {
                 authStatus = .verificationSent("teszt@vizit.hu")
                 syncStatus = .localOnly
@@ -93,7 +99,9 @@ final class AppStore: ObservableObject {
                     profile = Self.releaseAuditProfile(arguments: launchArguments)
                     configuration = try? AppConfiguration.load()
                     userEmail = "csukardi.rajmund@gmail.com"
-                    syncStatus = .synced
+                    syncStatus = launchArguments.contains("--ui-testing-profile-qr-unavailable")
+                        ? .pending
+                        : .synced
                 } else {
                     profile = try storage.load()
                     syncStatus = .localOnly
@@ -142,10 +150,12 @@ final class AppStore: ObservableObject {
         value.youtube = "https://youtube.com/@rayworks"
         value.photoSyncInitialized = true
         value.publicSlug = "csukardi-rajmund"
-        value.isPublic = true
-        value.customDomain = arguments.contains("--ui-testing-domain-invalid")
-            ? "https://nevjegy.cegem.hu/profil"
-            : "nevjegy.cegem.hu"
+        value.isPublic = !arguments.contains("--ui-testing-profile-qr-unavailable")
+        value.customDomain = arguments.contains("--ui-testing-domain-empty")
+            ? ""
+            : (arguments.contains("--ui-testing-domain-invalid")
+                ? "https://nevjegy.cegem.hu/profil"
+                : "nevjegy.cegem.hu")
         value.customDomainVerified = arguments.contains("--ui-testing-domain-verified")
 
         let format = UIGraphicsImageRendererFormat.default()
@@ -163,7 +173,9 @@ final class AppStore: ObservableObject {
                 ]
             )
         }
-        value.photoBase64 = image.jpegData(compressionQuality: 0.72)?.base64EncodedString() ?? ""
+        value.photoBase64 = arguments.contains("--ui-testing-photo-empty")
+            ? ""
+            : (image.jpegData(compressionQuality: 0.72)?.base64EncodedString() ?? "")
         return value
     }
     #endif
@@ -246,6 +258,18 @@ final class AppStore: ObservableObject {
             guard let cloud = self.cloud else { return }
             try await cloud.register(name: name, email: email, password: password)
             self.authStatus = .verificationSent(email.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
+    @discardableResult
+    func resendVerification(email: String) async -> Bool {
+        if let issue = AuthValidation.email(email) { message = issue; return false }
+        return await performAuth(
+            operation: .registration,
+            defaultError: "A megerősítő levél újraküldése nem sikerült. Próbáld újra később."
+        ) {
+            guard let cloud = self.cloud else { return }
+            try await cloud.resendSignupVerification(email: email)
         }
     }
 

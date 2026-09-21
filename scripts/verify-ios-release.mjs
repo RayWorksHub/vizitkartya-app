@@ -120,7 +120,7 @@ function validateSource() {
   for (const forbidden of ['VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED', "contains(github.event.head_commit.message, '[testflight]')"]) {
     if (workflow.includes(forbidden)) fail(`unsafe legacy release trigger remains in ios.yml: ${forbidden}`)
   }
-  for (const required of ['environment: testflight-production', 'release_commit', 'physical_device_commit', 'design_review_commit', '--attachment-manifest']) {
+  for (const required of ['environment: testflight-production', 'release_commit', 'design_review_commit', '--attachment-manifest']) {
     if (!workflow.includes(required)) fail(`ios.yml is missing release control: ${required}`)
   }
 

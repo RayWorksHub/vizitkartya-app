@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreImage.CIFilterBuiltins
 
 /// The VIZIT digital business card — the product's signature visual, identical
 /// in intent and metrics to the Android composable of the same name.
@@ -32,11 +31,6 @@ struct VizitDigitalCard: View {
         case .portrait: return 343.0 / 365.0
         case .minimal, .classic: return 343.0 / 216.0
         }
-    }
-
-    private var socialLabels: [String] {
-        guard presentation.showsSocial else { return [] }
-        return visible.socialProfiles.filter { !$0.url.isEmpty }.map { $0.platform.label }
     }
 
     private var accessibilityText: String {
@@ -116,13 +110,7 @@ struct VizitDigitalCard: View {
     private var portraitContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
-                if presentation.showsPhoto { avatar(size: 82) }
-                if presentation.showsQR {
-                    HStack {
-                        Spacer(minLength: 0)
-                        cardQR
-                    }
-                }
+                avatar(size: 82)
             }
             .frame(maxWidth: .infinity)
 
@@ -150,10 +138,9 @@ struct VizitDigitalCard: View {
     private var minimalContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                if presentation.showsPhoto { avatar() }
+                avatar()
                 identity
                 Spacer(minLength: 0)
-                if presentation.showsQR { cardQR }
             }
             Spacer(minLength: VizitSpace.md)
             HStack(alignment: .bottom) {
@@ -170,7 +157,7 @@ struct VizitDigitalCard: View {
         HStack(alignment: .top, spacing: VizitSpace.md) {
             VStack(alignment: .leading, spacing: VizitSpace.sm) {
                 HStack(spacing: 12) {
-                    if presentation.showsPhoto { avatar() }
+                    avatar()
                     identity
                 }
                 Spacer(minLength: 0)
@@ -178,7 +165,6 @@ struct VizitDigitalCard: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: VizitSpace.xs) {
-                if presentation.showsQR { cardQR }
                 Spacer(minLength: 0)
                 Text("VIZIT").vizitOverline().foregroundStyle(accent)
             }
@@ -253,12 +239,6 @@ struct VizitDigitalCard: View {
                     .foregroundStyle(secondaryText)
                     .lineLimit(1)
             }
-            if !socialLabels.isEmpty {
-                Text(socialLabels.joined(separator: " · "))
-                    .font(VizitFont.caption)
-                    .foregroundStyle(secondaryText)
-                    .lineLimit(1)
-            }
         }
     }
 
@@ -306,30 +286,8 @@ struct VizitDigitalCard: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
-            if !socialLabels.isEmpty {
-                Text(socialLabels.joined(separator: " · "))
-                    .font(VizitFont.caption)
-                    .foregroundStyle(secondaryText)
-                    .lineLimit(1)
-            }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    /// A miniature of the contact QR, drawn only when the payload is valid —
-    /// a placeholder square would promise a scan that cannot happen.
-    @ViewBuilder private var cardQR: some View {
-        if let payload = PhotoContactQR.payload(visible),
-           let image = CardQRThumbnail.make(payload) {
-            Image(uiImage: image)
-                .interpolation(.none)
-                .resizable()
-                .frame(width: 52, height: 52)
-                .padding(4)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: VizitRadius.xs, style: .continuous))
-                .accessibilityHidden(true)
-        }
     }
 
     private func avatar(size: CGFloat = 56) -> some View {
@@ -348,28 +306,6 @@ struct VizitDigitalCard: View {
             }
         }
         .frame(width: size, height: size)
-    }
-}
-
-/// A small, cached, logo-free QR for the card face. The full-size branded code
-/// with its quiet zone lives on the Megosztás screen; this one only has to
-/// survive a scan from a card held in the hand.
-private enum CardQRThumbnail {
-    private static let context = CIContext(options: [.useSoftwareRenderer: true])
-    private static let cache = NSCache<NSString, UIImage>()
-
-    static func make(_ payload: String) -> UIImage? {
-        let key = payload as NSString
-        if let cached = cache.object(forKey: key) { return cached }
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(payload.utf8)
-        filter.correctionLevel = "M"
-        guard let code = filter.outputImage else { return nil }
-        let scaled = code.transformed(by: CGAffineTransform(scaleX: 6, y: 6))
-        guard let cg = context.createCGImage(scaled, from: scaled.extent) else { return nil }
-        let image = UIImage(cgImage: cg)
-        cache.setObject(image, forKey: key)
-        return image
     }
 }
 

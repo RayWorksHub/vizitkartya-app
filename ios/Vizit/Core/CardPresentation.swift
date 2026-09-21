@@ -42,9 +42,15 @@ public struct CardPresentation: Codable, Equatable, Sendable {
         layout = storedLayout == "landscape"
             ? .classic
             : (CardLayout(rawValue: storedLayout) ?? .portrait)
-        showsPhoto = try values.decodeIfPresent(Bool.self, forKey: .showsPhoto) ?? true
-        showsQR = try values.decodeIfPresent(Bool.self, forKey: .showsQR) ?? false
-        showsSocial = try values.decodeIfPresent(Bool.self, forKey: .showsSocial) ?? false
+        // Builds before 8.7 exposed three card-face switches that were never
+        // part of the approved board. Keep decoding their keys for file
+        // compatibility, but migrate every user to the fixed Figma surface.
+        _ = try values.decodeIfPresent(Bool.self, forKey: .showsPhoto)
+        _ = try values.decodeIfPresent(Bool.self, forKey: .showsQR)
+        _ = try values.decodeIfPresent(Bool.self, forKey: .showsSocial)
+        showsPhoto = true
+        showsQR = false
+        showsSocial = false
         sharesCompany = try values.decodeIfPresent(Bool.self, forKey: .sharesCompany) ?? true
         sharesEmail = try values.decodeIfPresent(Bool.self, forKey: .sharesEmail) ?? true
         sharesPhone = try values.decodeIfPresent(Bool.self, forKey: .sharesPhone) ?? true
