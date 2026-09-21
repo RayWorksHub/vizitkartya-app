@@ -1,0 +1,28 @@
+name: VIZIT Figma source workspace
+
+on:
+  push:
+    branches: [chore/figma-ui-integration-work-20260921]
+    paths: [.github/workflows/figma-ui-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 66c351681baf219423eeab4d209f55ff98da312b
+          persist-credentials: false
+      - name: Export exact approved-branch source for editing
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '66c351681baf219423eeab4d209f55ff98da312b'
+          git archive --format=zip --output="$RUNNER_TEMP/vizit-source.zip" HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vizit-figma-source-workspace
+          path: ${{ runner.temp }}/vizit-source.zip
+          retention-days: 1
+          if-no-files-found: error
