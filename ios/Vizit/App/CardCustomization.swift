@@ -43,6 +43,13 @@ struct CardAppearanceScreen: View {
                             .foregroundStyle(VizitColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
 
+                        VizitSectionHeader(title: "Élő előnézet")
+                        VizitDigitalCard(
+                            profile: profile,
+                            presentation: draft
+                        )
+                        .accessibilityIdentifier("card.appearance.preview")
+
                         VizitSectionHeader(title: "Anyag")
                         materials
 

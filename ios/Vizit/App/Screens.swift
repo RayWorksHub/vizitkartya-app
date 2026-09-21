@@ -2456,7 +2456,7 @@ struct SettingsScreen: View {
                             VizitRow(
                                 label: "Adatok láthatósága",
                                 systemImage: "eye",
-                                value: "(presentation.value.sharedFieldCount) látható",
+                                value: "\(presentation.value.sharedFieldCount) látható",
                                 supporting: "Mezőnként szabályozható"
                             ) { adjustingVisibility = true }
                             .accessibilityIdentifier("card.visibility")
