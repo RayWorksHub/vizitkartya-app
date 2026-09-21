@@ -3,7 +3,7 @@ name: VIZIT Direct TestFlight
 on:
   push:
     branches:
-      - feature/ios-web-complete-design-sync-20260920
+      - feature/figma-ui-complete-20260921
     paths:
       - .github/workflows/ios.yml
       - ios/**
@@ -84,7 +84,7 @@ jobs:
           echo "VIZIT_PROFILE_PATH=$profile_path" >> "$GITHUB_ENV"
           echo "VIZIT_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
-      - name: Archive VIZIT 8.7.0
+      - name: Archive VIZIT Figma-complete
         shell: bash
         run: |
           set -euo pipefail
