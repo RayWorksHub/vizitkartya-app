@@ -1,4 +1,4 @@
-# VIZIT Android v2
+# VIZIT
 
 A VIZIT natív Android/Xiaomi alkalmazása. A fejlesztés a `develop` ágon történik; a jelenlegi verzió `0.2.0-alpha.1`, nem production kiadás.
 
