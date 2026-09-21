@@ -287,6 +287,7 @@ struct ShareScreen: View {
     @State private var temporaryURL: URL?
     @State private var showFullScreenQR = false
     @State private var editingProfile = false
+    @State private var showAccountDetails = false
     @State private var error: String?
     @State private var copiedProfileLink = false
     @State private var savedQRCode = false
@@ -332,7 +333,6 @@ struct ShareScreen: View {
                             ) { showFullScreenQR = true }
                             .accessibilityIdentifier("share.fullscreen")
 
-                            compactActions(image: image)
                         } else {
                             unavailableMode
                         }
@@ -342,7 +342,8 @@ struct ShareScreen: View {
                             VizitRow(
                                 label: "NFC érintés",
                                 systemImage: "wave.3.right",
-                                supporting: "Az iPhone korlátozásainak megtekintése"
+                                value: "Készen áll",
+                                supporting: "Érintéses átadás és iPhone-kompatibilitás"
                             ) { showNFCInformation = true }
                             VizitDivider()
                             VizitRow(
@@ -356,6 +357,14 @@ struct ShareScreen: View {
                                 systemImage: "square.and.arrow.up",
                                 supporting: "Üzenet, e-mail, AirDrop"
                             ) { shareCurrentSelection() }
+                            if let image = currentQRImage {
+                                VizitDivider()
+                                VizitRow(
+                                    label: "QR mentése",
+                                    systemImage: "arrow.down.to.line",
+                                    supporting: "Mentés a Fotók közé"
+                                ) { saveQRCode(image) }
+                            }
                         }
 
                         if copiedProfileLink {
@@ -376,6 +385,7 @@ struct ShareScreen: View {
                 photoQRPayload = PhotoContactQR.payload(sharedProfile)
             }
             .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
+            .sheet(isPresented: $showAccountDetails) { accountDetailsSheet }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
@@ -2414,45 +2424,18 @@ struct SettingsScreen: View {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
                         VizitLargeTitle("Beállítások")
 
-                        VizitSectionHeader(title: "Fiók")
-                        VizitGroup {
-                            VizitRow(
-                                label: "Profil",
-                                systemImage: "person.crop.circle",
-                                supporting: store.profile.displayName.isEmpty
-                                    ? "Névjegyadatok beállítása"
-                                    : store.profile.displayName
-                            ) { editingProfile = true }
-                            VizitDivider()
-                            VizitRow(
-                                label: "E-mail",
-                                systemImage: "envelope",
-                                value: store.accountEmail,
-                                supporting: "Bejelentkezési cím módosítása"
-                            ) {
-                                emailDraft = store.accountEmail
-                                changingEmail = true
-                            }
-                            VizitDivider()
-                            VizitRow(
-                                label: "Jelszó",
-                                systemImage: "lock",
-                                supporting: "Biztonságos módosító link kérése"
-                            ) { confirmPasswordReset = true }
-                        }
-
                         VizitSectionHeader(title: "Megjelenés")
                         VizitGroup {
                             VizitRow(
                                 label: "Téma",
-                                systemImage: "eye",
+                                systemImage: "paintpalette",
                                 value: themeMode.label
                             ) { changingTheme = true }
                             .accessibilityIdentifier("settings.theme.open")
                             VizitDivider()
                             VizitRow(
                                 label: "Kártya megjelenése",
-                                systemImage: "paintpalette",
+                                systemImage: "rectangle.on.rectangle",
                                 value: presentation.value.colorway.label
                             ) { customizing = true }
                             .accessibilityIdentifier("card.appearance")
@@ -2463,18 +2446,20 @@ struct SettingsScreen: View {
                             VizitRow(
                                 label: "NFC",
                                 systemImage: "wave.3.right",
-                                supporting: "iPhone-kompatibilitás és fizikai NFC-kártya"
+                                value: "Be",
+                                supporting: "Érintéses átadás és fizikai NFC-kártya"
                             ) { showNFCInformation = true }
                             VizitDivider()
                             VizitRow(
                                 label: "Adatok láthatósága",
                                 systemImage: "eye",
-                                supporting: "\(presentation.value.sharedFieldCount) mező látható a \(CardPresentation.optionalFieldCount)-ből"
+                                value: "(presentation.value.sharedFieldCount) látható",
+                                supporting: "Mezőnként szabályozható"
                             ) { adjustingVisibility = true }
                             .accessibilityIdentifier("card.visibility")
                             VizitDivider()
                             VizitRow(
-                                label: "Publikus profil",
+                                label: "Nyilvános profil",
                                 systemImage: "globe",
                                 value: store.profile.isPublic ? "Be" : "Ki",
                                 supporting: store.profile.customDomainVerified
@@ -2484,21 +2469,28 @@ struct SettingsScreen: View {
                             .accessibilityIdentifier("settings.publicProfile")
                         }
 
+                        VizitSectionHeader(title: "Fiók")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Belépve",
+                                systemImage: "person.crop.circle",
+                                value: store.accountEmail,
+                                supporting: store.profile.displayName.isEmpty ? nil : store.profile.displayName
+                            ) { showAccountDetails = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Kijelentkezés",
+                                systemImage: "rectangle.portrait.and.arrow.right"
+                            ) { confirmLogout = true }
+                        }
+
                         VizitSectionHeader(title: "Veszélyes műveletek", tone: VizitColor.error)
                         VizitGroup(danger: true) {
                             VizitRow(
-                                label: "Kijelentkezés",
-                                systemImage: "rectangle.portrait.and.arrow.right",
-                                destructive: true,
-                                showsChevron: false
-                            ) { confirmLogout = true }
-                            VizitDivider()
-                            VizitRow(
                                 label: "Fiók végleges törlése",
-                                systemImage: "person.crop.circle.badge.xmark",
+                                systemImage: "trash",
                                 supporting: "A fiók és a szerveradatok is törlődnek.",
-                                destructive: true,
-                                showsChevron: false
+                                destructive: true
                             ) { confirmDelete = true }
                         }
 
@@ -2552,6 +2544,60 @@ struct SettingsScreen: View {
             )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+        }
+    }
+
+    private var accountDetailsSheet: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        VizitSectionHeader(title: "Fiók")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Profil",
+                                systemImage: "person.crop.circle",
+                                supporting: store.profile.displayName.isEmpty
+                                    ? "Névjegyadatok beállítása"
+                                    : store.profile.displayName
+                            ) {
+                                showAccountDetails = false
+                                editingProfile = true
+                            }
+                            VizitDivider()
+                            VizitRow(
+                                label: "E-mail",
+                                systemImage: "envelope",
+                                value: store.accountEmail,
+                                supporting: "Bejelentkezési cím módosítása"
+                            ) {
+                                emailDraft = store.accountEmail
+                                showAccountDetails = false
+                                changingEmail = true
+                            }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Jelszó",
+                                systemImage: "lock",
+                                supporting: "Biztonságos módosító link kérése"
+                            ) {
+                                showAccountDetails = false
+                                confirmPasswordReset = true
+                            }
+                        }
+                    }
+                    .padding(VizitSpace.md)
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationTitle("Fiók")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Kész") { showAccountDetails = false }
+                }
+            }
         }
     }
 
