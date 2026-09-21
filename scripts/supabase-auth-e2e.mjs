@@ -52,11 +52,12 @@ async function request(
     headers = {},
   } = {},
 ) {
+  const isOpaqueApiKey = token === apiKey && /^sb_(?:publishable|secret)_/.test(token)
   const response = await fetch(new URL(path, supabaseUrl), {
     method,
     headers: {
       apikey: apiKey,
-      Authorization: `Bearer ${token}`,
+      ...(token && !isOpaqueApiKey ? { Authorization: `Bearer ${token}` } : {}),
       ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...headers,
     },
