@@ -385,9 +385,6 @@ struct ShareScreen: View {
                 photoQRPayload = PhotoContactQR.payload(sharedProfile)
             }
             .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
-            .sheet(isPresented: $showAccountDetails) { accountDetailsSheet }
-            .sheet(isPresented: $showLegalInformation) { legalInformationSheet }
-            .sheet(isPresented: $showSyncConflict) { syncConflictSheet }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
@@ -2396,6 +2393,7 @@ struct SettingsScreen: View {
     @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var themeMode: ThemeMode
     @State private var editingProfile = false
+    @State private var showAccountDetails = false
     @State private var changingEmail = false
     @State private var emailDraft = ""
     @State private var confirmPasswordReset = false
@@ -2543,6 +2541,9 @@ struct SettingsScreen: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
+            .sheet(isPresented: $showAccountDetails) { accountDetailsSheet }
+            .sheet(isPresented: $showLegalInformation) { legalInformationSheet }
+            .sheet(isPresented: $showSyncConflict) { syncConflictSheet }
             .sheet(isPresented: $changingEmail) { emailChangeSheet }
             .sheet(isPresented: $changingTheme) { themeSheet }
             .sheet(isPresented: $customizing) {
