@@ -57,7 +57,7 @@ jobs:
           python3 - <<'PY'
           import json,os,pathlib
           pathlib.Path('release-output/build.json').write_text(json.dumps({
-            'commit':os.environ['GITHUB_SHA'],'version':'7.3.1','versionCode':7030001,
+            'commit':os.environ['GITHUB_SHA'],'version':'7.3.2','versionCode':7030002,
             'package':'hu.rayworks.vizit','backend':'https://vizitkartyam-backend.vercel.app',
             'testsRun':False,'productionSigned':os.environ['SIGNED']=='true'
           },indent=2))
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VIZIT-7.3.1-Node-production
+          name: VIZIT-7.3.2-Node-production
           path: release-output/
           retention-days: 14
           if-no-files-found: warn
