@@ -1985,7 +1985,7 @@ private struct YouTubeLessonPlayer: UIViewRepresentable {
             // A real HTTPS document origin is required by the YouTube iframe
             // API. Without it the player may reject WKWebView as an unidentified
             // client with error 153 even though the video itself is available.
-            baseURL: URL(string: "https://e-nevjegy.vercel.app")
+            baseURL: URL(string: "https://www.vizitkartyam.hu")
         )
     }
 
@@ -2002,13 +2002,14 @@ private struct YouTubeLessonPlayer: UIViewRepresentable {
         let safeIndex = min(max(chapterIndex, 0), safeCount - 1)
         return """
         <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+         <meta name="referrer" content="strict-origin-when-cross-origin">
         <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
         <body><div id="player"></div><script src="https://www.youtube.com/iframe_api"></script><script>
         var player, tick=0, lastTime=0, segmentStart=0, segmentEnd=0, sent=false;
         const watchedBuckets=new Set(), bucketCount=100;
         const chapterIndex=\(safeIndex), chapterCount=\(safeCount);
         function onYouTubeIframeAPIReady(){
-          player=new YT.Player('player',{videoId:'\(safeID)',host:'https://www.youtube-nocookie.com',playerVars:{playsinline:1,rel:0,modestbranding:1,origin:'https://e-nevjegy.vercel.app'},events:{onReady:onReady,onStateChange:onState,onError:onError}});
+          player=new YT.Player('player',{videoId:'\(safeID)',host:'https://www.youtube-nocookie.com',playerVars:{playsinline:1,rel:0,modestbranding:1,origin:'https://www.vizitkartyam.hu'},events:{onReady:onReady,onStateChange:onState,onError:onError}});
         }
         function onReady(){
           const duration=player.getDuration();
