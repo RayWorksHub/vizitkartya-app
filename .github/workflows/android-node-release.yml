@@ -1,0 +1,79 @@
+name: Android Node production package - build only
+on:
+  push:
+    branches: [release/android-node-20260926]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-node-production-package
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Use existing production upload key when configured
+        id: signing
+        env:
+          KEYSTORE: ${{ secrets.VIZIT_PROD_SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.VIZIT_PROD_SIGNING_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VIZIT_PROD_SIGNING_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VIZIT_PROD_SIGNING_KEY_PASSWORD }}
+        run: |
+          mkdir -p release-output
+          if [ -n "$KEYSTORE" ] && [ -n "$STORE_PASSWORD" ]; then
+            umask 077
+            printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/vizit-production.jks"
+            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_STORE_FILE=$RUNNER_TEMP/vizit-production.jks" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_ALIAS=${KEY_ALIAS:-vizit-upload}" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_KEY_PASSWORD=${KEY_PASSWORD:-$STORE_PASSWORD}" >> "$GITHUB_ENV"
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build production AAB and APK only - no test or lint commands
+        run: ./gradlew :app:bundleProdRelease :app:assembleProdRelease --no-daemon
+      - name: Collect production packages
+        env:
+          SIGNED: ${{ steps.signing.outputs.configured }}
+        run: |
+          cp app/build/outputs/bundle/prodRelease/*.aab release-output/
+          cp app/build/outputs/apk/prod/release/*.apk release-output/
+          cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" release-output/
+          git archive --format=zip -o release-output/android-node-source.zip HEAD app config build.gradle.kts gradle gradle.properties gradlew gradlew.bat settings.gradle.kts
+          python3 - <<'PY'
+          import json,os,pathlib
+          pathlib.Path('release-output/build.json').write_text(json.dumps({
+            'commit':os.environ['GITHUB_SHA'],'version':'7.3.1','versionCode':7030001,
+            'package':'hu.rayworks.vizit','backend':'https://vizitkartyam-backend.vercel.app',
+            'testsRun':False,'productionSigned':os.environ['SIGNED']=='true'
+          },indent=2))
+          PY
+      - name: Submit the signed package to Google Play production when authorized
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          SIGNED: ${{ steps.signing.outputs.configured }}
+        run: python3 scripts/publish-android-node.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: VIZIT-7.3.1-Node-production
+          path: release-output/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vizit-production.jks"

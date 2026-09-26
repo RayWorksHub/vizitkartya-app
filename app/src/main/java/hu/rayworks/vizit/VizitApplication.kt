@@ -5,7 +5,7 @@ import hu.rayworks.vizit.data.ContactProfileRepository
 import hu.rayworks.vizit.data.local.LegacyContactProfileStore
 import hu.rayworks.vizit.data.local.RoomProfileStore
 import hu.rayworks.vizit.data.local.VizitDatabase
-import hu.rayworks.vizit.data.remote.SupabaseProfileRemoteDataSource
+import hu.rayworks.vizit.data.remote.NodeProfileRemoteDataSource
 import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.data.card.CardPresentationStore
 import hu.rayworks.vizit.data.settings.AppSettingsStore
@@ -16,32 +16,24 @@ import hu.rayworks.vizit.nfc.NfcRouting
 class VizitApplication : Application() {
     lateinit var container: VizitAppContainer
         private set
-
     override fun onCreate() {
         super.onCreate()
         NfcRouting.reset(this)
         container = VizitAppContainer(this)
     }
 }
-
 class VizitAppContainer(application: Application) {
     val settingsStore = AppSettingsStore(application)
     val cardPresentationStore = CardPresentationStore(application)
     private val database = VizitDatabase.get(application)
     private val localStore = RoomProfileStore(database.profileDao())
     private val syncScheduler = WorkManagerProfileSyncScheduler(application)
-    private val remoteDataSource: hu.rayworks.vizit.data.sync.ProfileRemoteDataSource =
-        if (BuildConfig.PROFILE_BACKEND == "legacy") hu.rayworks.vizit.data.remote.LegacyProfileRemoteDataSource(SupabaseProvider.getOrNull())
-        else SupabaseProfileRemoteDataSource(SupabaseProvider.getOrNull())
-
+    private val remoteDataSource = NodeProfileRemoteDataSource(SupabaseProvider.getOrNull())
     val profileRepository = ContactProfileRepository(
         localStore = localStore,
         settingsStore = settingsStore,
         legacyStore = LegacyContactProfileStore(application),
         syncScheduler = syncScheduler,
     )
-    val profileSyncEngine = ProfileSyncEngine(
-        localStore = localStore,
-        remoteDataSource = remoteDataSource,
-    )
+    val profileSyncEngine = ProfileSyncEngine(localStore = localStore, remoteDataSource = remoteDataSource)
 }

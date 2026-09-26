@@ -6,12 +6,8 @@ fun String.asBuildConfigString(): String =
     "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 fun String.isHttpsDocumentUrl(): Boolean = runCatching {
-    URI(trim()).let { uri ->
-        uri.scheme.equals("https", ignoreCase = true) &&
-            !uri.host.isNullOrBlank() &&
-            uri.userInfo == null &&
-            uri.fragment == null
-    }
+    URI(trim()).let { uri -> uri.scheme.equals("https", ignoreCase = true) &&
+        !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null }
 }.getOrDefault(false)
 
 plugins {
@@ -22,52 +18,55 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sharing = Properties().apply { rootProject.file("config/sharing.properties").inputStream().use { load(it) } }
-val sharingBase = providers.gradleProperty("VIZIT_PUBLIC_PROFILE_BASE_URL").orElse(sharing.getProperty("publicProfileBaseUrl")).get()
+// Android-only configuration: the iOS source and shared configuration are unchanged.
+val backend = Properties().apply { rootProject.file("config/android-node.properties").inputStream().use { load(it) } }
+val nodeBackendBase = providers.gradleProperty("VIZIT_NODE_BACKEND_BASE_URL").orElse(backend.getProperty("backendBaseUrl")).get()
+require(nodeBackendBase.isHttpsDocumentUrl())
+val sharingBase = providers.gradleProperty("VIZIT_PUBLIC_PROFILE_BASE_URL").orElse(backend.getProperty("publicProfileBaseUrl")).get()
 val profileHost = providers.gradleProperty("VIZIT_PROFILE_HOST").orElse(URI(sharingBase).host).get()
-val profileBackend = providers.gradleProperty("VIZIT_PROFILE_BACKEND").orElse(sharing.getProperty("profileBackend", "legacy")).get()
-require(profileBackend in setOf("legacy", "v2"))
-val devSupabaseUrl = providers.gradleProperty("VIZIT_DEV_SUPABASE_URL").orElse("").get()
-val devSupabaseKey = providers.gradleProperty("VIZIT_DEV_SUPABASE_KEY").orElse("").get()
-val betaSupabaseUrl = providers.gradleProperty("VIZIT_BETA_SUPABASE_URL").orElse("").get()
-val betaSupabaseKey = providers.gradleProperty("VIZIT_BETA_SUPABASE_KEY").orElse("").get()
-val prodSupabaseUrl = providers.gradleProperty("VIZIT_PROD_SUPABASE_URL").orElse("").get()
-val prodSupabaseKey = providers.gradleProperty("VIZIT_PROD_SUPABASE_KEY").orElse("").get()
+// Legacy names describe the retained local profile/consent codec, not data transport.
+val profileBackend = "legacy"
+val authUrl = backend.getProperty("authUrl")
+val authKey = backend.getProperty("authPublishableKey")
+val devSupabaseUrl = providers.gradleProperty("VIZIT_DEV_SUPABASE_URL").orElse(authUrl).get()
+val devSupabaseKey = providers.gradleProperty("VIZIT_DEV_SUPABASE_KEY").orElse(authKey).get()
+val betaSupabaseUrl = providers.gradleProperty("VIZIT_BETA_SUPABASE_URL").orElse(authUrl).get()
+val betaSupabaseKey = providers.gradleProperty("VIZIT_BETA_SUPABASE_KEY").orElse(authKey).get()
+val prodSupabaseUrl = providers.gradleProperty("VIZIT_PROD_SUPABASE_URL").orElse(authUrl).get()
+val prodSupabaseKey = providers.gradleProperty("VIZIT_PROD_SUPABASE_KEY").orElse(authKey).get()
 val devGoogleWebClientId = providers.gradleProperty("VIZIT_DEV_GOOGLE_WEB_CLIENT_ID").orElse("").get()
 val devSigningStoreFile = providers.gradleProperty("VIZIT_DEV_SIGNING_STORE_FILE").orElse("").get()
 val devSigningPassword = providers.gradleProperty("VIZIT_DEV_SIGNING_PASSWORD").orElse("").get()
-val privacyPolicyUrl = providers.gradleProperty("VIZIT_PRIVACY_POLICY_URL").orElse("").get()
-val privacyPolicyVersion = providers.gradleProperty("VIZIT_PRIVACY_POLICY_VERSION").orElse("").get()
-val termsUrl = providers.gradleProperty("VIZIT_TERMS_URL").orElse("").get()
-val termsVersion = providers.gradleProperty("VIZIT_TERMS_VERSION").orElse("").get()
-val legalDocumentsReady =
-    privacyPolicyUrl.isHttpsDocumentUrl() &&
-        privacyPolicyVersion.isNotBlank() &&
-        termsUrl.isHttpsDocumentUrl() &&
-        termsVersion.isNotBlank()
+val prodSigningStoreFile = providers.gradleProperty("VIZIT_PROD_SIGNING_STORE_FILE").orElse("").get()
+val prodSigningPassword = providers.gradleProperty("VIZIT_PROD_SIGNING_PASSWORD").orElse("").get()
+val prodSigningAlias = providers.gradleProperty("VIZIT_PROD_SIGNING_ALIAS").orElse("vizit-upload").get()
+val prodSigningKeyPassword = providers.gradleProperty("VIZIT_PROD_SIGNING_KEY_PASSWORD").orElse(prodSigningPassword).get()
+val privacyPolicyUrl = providers.gradleProperty("VIZIT_PRIVACY_POLICY_URL").orElse("https://www.vizitkartyam.hu/adatvedelem").get()
+val privacyPolicyVersion = providers.gradleProperty("VIZIT_PRIVACY_POLICY_VERSION").orElse("2026-09-22").get()
+val termsUrl = providers.gradleProperty("VIZIT_TERMS_URL").orElse("https://www.vizitkartyam.hu/felhasznalasi-feltetelek").get()
+val termsVersion = providers.gradleProperty("VIZIT_TERMS_VERSION").orElse("2026-09-22").get()
+val legalDocumentsReady = privacyPolicyUrl.isHttpsDocumentUrl() && privacyPolicyVersion.isNotBlank() && termsUrl.isHttpsDocumentUrl() && termsVersion.isNotBlank()
 
 android {
     namespace = "hu.rayworks.vizit"
     compileSdk = 36
-
     defaultConfig {
         applicationId = "hu.rayworks.vizit"
         minSdk = 29
         targetSdk = 36
-        versionCode = 7030000
-        versionName = "7.3.0"
-
+        versionCode = 7030001
+        versionName = "7.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders["profileHost"] = profileHost
         buildConfigField("String", "PROFILE_BACKEND", profileBackend.asBuildConfigString())
+        buildConfigField("String", "NODE_BACKEND_BASE_URL", nodeBackendBase.asBuildConfigString())
         buildConfigField("String", "PRIVACY_POLICY_URL", privacyPolicyUrl.asBuildConfigString())
         buildConfigField("String", "PRIVACY_POLICY_VERSION", privacyPolicyVersion.asBuildConfigString())
         buildConfigField("String", "TERMS_URL", termsUrl.asBuildConfigString())
         buildConfigField("String", "TERMS_VERSION", termsVersion.asBuildConfigString())
         buildConfigField("boolean", "LEGAL_DOCUMENTS_READY", legalDocumentsReady.toString())
     }
-
     signingConfigs {
         if (devSigningStoreFile.isNotBlank() && devSigningPassword.isNotBlank()) {
             create("devStable") {
@@ -77,8 +76,15 @@ android {
                 keyPassword = devSigningPassword
             }
         }
+        if (prodSigningStoreFile.isNotBlank() && prodSigningPassword.isNotBlank()) {
+            create("productionUpload") {
+                storeFile = file(prodSigningStoreFile)
+                storePassword = prodSigningPassword
+                keyAlias = prodSigningAlias
+                keyPassword = prodSigningKeyPassword
+            }
+        }
     }
-
     flavorDimensions += "environment"
     productFlavors {
         create("dev") {
@@ -125,18 +131,16 @@ android {
             buildConfigField("String", "PUBLIC_PROFILE_BASE_URL", sharingBase.asBuildConfigString())
         }
     }
-
     buildTypes {
         debug {
             isDebuggable = true
-            if (devSigningStoreFile.isNotBlank() && devSigningPassword.isNotBlank()) {
-                signingConfig = signingConfigs.getByName("devStable")
-            }
+            if (devSigningStoreFile.isNotBlank() && devSigningPassword.isNotBlank()) signingConfig = signingConfigs.getByName("devStable")
         }
         release {
             isDebuggable = false
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (prodSigningStoreFile.isNotBlank() && prodSigningPassword.isNotBlank()) signingConfig = signingConfigs.getByName("productionUpload")
         }
     }
     compileOptions {
@@ -181,8 +185,6 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
     implementation("com.google.zxing:core:3.5.4")
-    // Camera preview and frame analysis for the QR scanner. Decoding itself
-    // reuses the ZXing core already here, so no barcode SDK is pulled in.
     implementation("androidx.camera:camera-core:1.5.1")
     implementation("androidx.camera:camera-camera2:1.5.1")
     implementation("androidx.camera:camera-lifecycle:1.5.1")
