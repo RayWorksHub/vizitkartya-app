@@ -31,7 +31,7 @@ jobs:
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
+      VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
 
     steps:
       - uses: actions/checkout@v4
@@ -299,7 +299,7 @@ jobs:
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
+      VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
       APPLE_TEAM_ID: K7BC6R47KA
       APPLE_BUNDLE_ID: hu.rayworks.vizit.ios.dev
       APPLE_PROFILE_NAME: VIZIT App Store
