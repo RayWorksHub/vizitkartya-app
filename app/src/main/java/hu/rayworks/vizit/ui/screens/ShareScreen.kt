@@ -112,14 +112,10 @@ fun ShareScreen(
     val contactPayload = remember(shared, publicProfileUrl) {
         QrPayloadFactory.contact(shared, publicProfileUrl)
     }
-    val photoContactPayload = remember(shared, publicProfileUrl) {
-        shared.photoBase64.takeIf(String::isNotBlank)
-            ?.let { QrPayloadFactory.photoContact(shared, publicProfileUrl).getOrNull() }
-    }
-    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, photoContactPayload) {
+    val qrPayload = remember(qrMode, publicProfileUrl, contactPayload, shared.photoBase64) {
         when (qrMode) {
             QrMode.PROFILE -> publicProfileUrl
-            QrMode.PHOTO -> photoContactPayload
+            QrMode.PHOTO -> publicProfileUrl?.takeIf { shared.photoBase64.isNotBlank() }
             QrMode.CONTACT -> contactPayload.getOrNull()
         }
     }
@@ -163,7 +159,7 @@ fun ShareScreen(
                         QrMode.PROFILE ->
                             "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
                         QrMode.PHOTO ->
-                            "A teljes névjegyed a profilképeddel együtt, internet nélkül is beolvasható."
+                            "A nyilvános profilodat nyitja meg jó minőségű képpel. Névjegyfájlhoz válaszd a fényképes megosztást."
                         QrMode.CONTACT ->
                             "A teljes névjegyed profilkép nélkül, hogy a kód gyorsan beolvasható maradjon."
                     },
@@ -231,7 +227,7 @@ fun ShareScreen(
                     icon = Icons.Outlined.QrCode2,
                     title = when (qrMode) {
                         QrMode.PROFILE -> "Nincs még publikus profil"
-                        QrMode.PHOTO -> "A profilkép nem fér bele a kódba"
+                        QrMode.PHOTO -> "A fényképes profil nem érhető el QR-rel"
                         QrMode.CONTACT -> "A Kontakt QR nem állítható elő"
                     },
                     message = when (qrMode) {
@@ -239,10 +235,10 @@ fun ShareScreen(
                             "A Profil QR-hez engedélyezd a publikus profilt, adj meg profilazonosítót, és várd meg a sikeres szinkront."
                         QrMode.PHOTO ->
                             if (profile.photoBase64.isBlank()) {
-                                "A fényképes kódhoz előbb adj meg profilképet."
+                                "Előbb adj meg profilképet. A Kontakt QR kép nélkül továbbra is használható."
                             } else {
-                                "A névjegyed adatai már kitöltik a QR kapacitását. Válassz kisebb profilképet, " +
-                                    "vagy maradj a Kontakt módnál — abból semmilyen adat nem marad ki, csak a kép."
+                                "A fényképes QR-hez engedélyezd a nyilvános profilt, és várd meg a szinkront. " +
+                                    "A névjegyfájlt az alábbi gombbal most is megoszthatod."
                             }
                         QrMode.CONTACT ->
                             // Naming the real cause: an empty code because every
@@ -266,6 +262,18 @@ fun ShareScreen(
                 )
             }
 
+            if (qrMode == QrMode.PHOTO && shared.photoBase64.isNotBlank()) {
+                VizitButton(
+                    text = "Fényképes névjegy megosztása",
+                    onClick = {
+                        runCatching { QrShareHelper.shareContact(context, shared, publicProfileUrl) }
+                            .onFailure { toast("A fényképes névjegy megosztása nem sikerült.") }
+                    },
+                    icon = Icons.Outlined.Share,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             VizitSectionHeader("Közvetlen átadás")
             Column(
                 modifier = Modifier
@@ -281,7 +289,7 @@ fun ShareScreen(
                 )
                 Text(
                     text = if (nfcStatus.isReady) {
-                        "Android fogadó telefonon a kontaktimport VIZIT telepítése nélkül indul. iPhone-nál a QR a biztos út."
+                        "Kompatibilis Android telefonon a névjegy NFC-n olvasható. Ha a fogadó telefon üres címkét jelez, használd a Kontakt QR-t."
                     } else {
                         "Kapcsold be az NFC-t a rendszerbeállításokban. A QR-megosztás ettől függetlenül működik."
                     },

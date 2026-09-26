@@ -1,5 +1,6 @@
 package hu.rayworks.vizit.data.remote
 
+import hu.rayworks.vizit.BuildConfig
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.sync.*
 import hu.rayworks.vizit.qr.QrPayloadFactory
@@ -53,7 +54,7 @@ class LegacyProfileCodecTest {
         val p=ContactProfile(fullName="Teszt Elek",phone="123",publicSlug="teszt-elek",isPublic=true)
         assertNull(QrPayloadFactory.profileUrl(p))
         assertNull(QrPayloadFactory.profileUrl(p.copy(isPublic=false),true))
-        assertEquals("https://e-nevjegy.vercel.app/p/teszt-elek",QrPayloadFactory.profileUrl(p,true))
+        assertEquals("${BuildConfig.PUBLIC_PROFILE_BASE_URL}/teszt-elek",QrPayloadFactory.profileUrl(p,true))
     }
     @Test fun `first save creates a readable identifier without user input`() {
         val payload = ProfileSyncPayload(displayName = "Csukárdi Rajmund")
@@ -65,7 +66,7 @@ class LegacyProfileCodecTest {
             fullName = "Teszt Elek", phone = "123", publicSlug = "teszt-elek", isPublic = true,
             customDomain = "nevjegy.example.hu",
         )
-        assertEquals("https://e-nevjegy.vercel.app/p/teszt-elek", QrPayloadFactory.profileUrl(profile, true))
+        assertEquals("${BuildConfig.PUBLIC_PROFILE_BASE_URL}/teszt-elek", QrPayloadFactory.profileUrl(profile, true))
         assertEquals(
             "https://nevjegy.example.hu",
             QrPayloadFactory.profileUrl(profile.copy(customDomainVerified = true), true),

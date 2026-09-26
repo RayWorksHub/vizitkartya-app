@@ -1181,7 +1181,7 @@ private fun YouTubeLessonPlayer(url: String, lessonIndex: Int, onCompleted: () -
                     webViewClient = WebViewClient()
                     addJavascriptInterface(LessonCompletionBridge(onCompleted), "VizitLesson")
                     loadDataWithBaseURL(
-                        "https://www.youtube-nocookie.com",
+                        "https://www.vizitkartyam.hu/",
                         youtubePlayerHtml(videoId),
                         "text/html",
                         "UTF-8",
@@ -1196,10 +1196,12 @@ private fun YouTubeLessonPlayer(url: String, lessonIndex: Int, onCompleted: () -
 
 private fun youtubePlayerHtml(videoId: String): String = """
     <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-    <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
-    <body><div id="player"></div><script src="https://www.youtube.com/iframe_api"></script><script>
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#fallback{display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;color:white;padding:20px;box-sizing:border-box;background:#05163a;font:16px sans-serif}#fallback a{color:#13d1fc}</style></head>
+    <body><div id="player"></div><div id="fallback">A videó itt nem indítható. <a href="https://www.youtube.com/watch?v=$videoId">Megnyitás a YouTube-on</a></div><script src="https://www.youtube.com/iframe_api"></script><script>
     var player, watched=0, tick=0;
-    function onYouTubeIframeAPIReady(){ player=new YT.Player('player',{videoId:'$videoId',playerVars:{playsinline:1,rel:0},events:{onStateChange:onState}}); }
+    function onYouTubeIframeAPIReady(){ player=new YT.Player('player',{videoId:'$videoId',playerVars:{playsinline:1,rel:0,origin:'https://www.vizitkartyam.hu'},events:{onStateChange:onState,onError:onError}}); }
+    function onError(){document.getElementById('fallback').style.display='flex';}
     function onState(e){
       if(e.data===YT.PlayerState.PLAYING && !tick){tick=setInterval(function(){watched+=1;},1000);}
       if(e.data!==YT.PlayerState.PLAYING && tick){clearInterval(tick);tick=0;}

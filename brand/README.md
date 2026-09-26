@@ -4,5 +4,6 @@
 - `app/src/main/res/drawable-nodpi/vizit_logo_full.png`: körbevágott teljes logó az alkalmazásfelületekhez.
 - `app/src/main/res/drawable-nodpi/vizit_logo_mark.png`: a „V + NFC” márkajel felirat nélkül.
 - `app/src/main/res/drawable-nodpi/ic_launcher_foreground_logo.png`: az adaptív Android-ikon biztonságos zónájára méretezett márkajel.
+- `store-icon-white-512.png`: a fehér hátterű Play-áruházi ikon ugyanebből a márkajelből.
 
 A logót generatív módon újrarajzolni, torzítani vagy a felhasználói céges logóval összekeverni tilos.

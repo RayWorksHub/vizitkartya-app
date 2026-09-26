@@ -220,7 +220,7 @@ final class VizitCoreTests: XCTestCase {
     }
 
     func testVerifiedCustomDomainOverridesCanonicalAddress() {
-        let base = URL(string: "https://e-nevjegy.vercel.app/p")!
+        let base = URL(string: "https://www.vizitkartyam.hu/p")!
         XCTAssertEqual(
             PublicProfileLink.preferred(
                 baseURL: base, slug: "teszt-elek", customDomain: "nevjegy.example.hu",
@@ -233,7 +233,7 @@ final class VizitCoreTests: XCTestCase {
                 baseURL: base, slug: "teszt-elek", customDomain: "nevjegy.example.hu",
                 customDomainVerified: false
             )?.absoluteString,
-            "https://e-nevjegy.vercel.app/p/teszt-elek"
+            "https://www.vizitkartyam.hu/p/teszt-elek"
         )
         XCTAssertFalse(CustomProfileDomain.isValid("https://example.hu/path"))
     }

@@ -320,7 +320,7 @@ struct ProfileEditor: View {
                                 .foregroundStyle(VizitColor.textSecondary)
                             Text(draft.publicSlug.isEmpty
                                  ? "Az egyedi azonosítót az első mentéskor a nevedből hozzuk létre."
-                                 : "e-nevjegy.vercel.app/p/\(draft.publicSlug)")
+                                 : "www.vizitkartyam.hu/p/\(draft.publicSlug)")
                                 .font(VizitFont.bodySmall)
                                 .foregroundStyle(VizitColor.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)

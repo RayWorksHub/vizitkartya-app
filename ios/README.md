@@ -9,7 +9,7 @@ Natív SwiftUI iPhone/iPad kliens iOS/iPadOS 16.0-tól. A fejlesztői build az a
 - A Supabase-munkamenet kSecAttrAccessibleWhenUnlockedThisDeviceOnly kulcstár-elemként tárolódik.
 - Felhasználónként elkülönített, atomi és teljes fájlvédelemmel mentett helyi profil; a könyvtár ki van zárva az eszközmentésből.
 - Helyi-first profilmentés és optimista konkurenciavezérlés az adatbázis updated_at értékével. Ütközéskor a helyi példány nem íródik felül.
-- Nyilvános profil engedélyezése, Kontakt QR, HTTPS-profil QR, képes .vcf-megosztás és manuálisan jóváhagyott Kontaktokba mentés.
+- Nyilvános profil engedélyezése, offline Kontakt QR kép nélkül, fényképes HTTPS-profil QR, teljes képet tartalmazó .vcf-megosztás és manuálisan jóváhagyott Kontaktokba mentés. A QR kapacitása miatt fényképet nem sűrítünk többé néhány tucat pixelre.
 - Kamerás QR-beolvasás; HTTPS-link csak felhasználói megerősítés után nyílik meg.
 - Szerveroldali fióktörlés JWT-ellenőrzéssel, avatar-takarítással és az Auth-felhasználóhoz kapcsolt sorok kaszkádos törlésével.
 

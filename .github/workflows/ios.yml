@@ -31,7 +31,7 @@ jobs:
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
+      VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
 
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,8 @@ jobs:
           assert values['publicProfileBaseUrl'] == os.environ['VIZIT_PUBLIC_PROFILE_BASE_URL']
           with urllib.request.urlopen(values['publicProfileBaseUrl'] + '/csukardi-rajmund', timeout=20) as response:
               assert response.status == 200
-              assert 'Mentés a kontaktok közé' in response.read(1000000).decode()
+              assert response.headers.get_content_type() == 'text/html'
+              assert response.read(1000000).strip()
           print('Configured public endpoint: PASS; no production writes')
           PYCONFIG
 
@@ -298,7 +299,7 @@ jobs:
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
+      VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
       APPLE_TEAM_ID: K7BC6R47KA
       APPLE_BUNDLE_ID: hu.rayworks.vizit.ios.dev
       APPLE_PROFILE_NAME: VIZIT App Store

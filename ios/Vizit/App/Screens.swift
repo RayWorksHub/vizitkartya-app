@@ -282,10 +282,9 @@ struct ShareScreen: View {
     @State private var showScanner = false
     @State private var error: String?
     @State private var modeIndex = 0
-    @State private var embeddedPhotoQRPayload: String?
 
-    /// Three codes, three jobs: the contact card without a photo, the same card
-    /// with one, and the public address. Only the first is always available.
+    /// The offline contact QR omits photos; a photo needs the public profile
+    /// or a full-resolution vCard file to avoid a visibly pixelated avatar.
     private enum QRMode: Int, CaseIterable {
         case contact, photo, profile
         static var allTitles: [String] { ["Kontakt", "Fényképes", "Profil"] }
@@ -326,6 +325,14 @@ struct ShareScreen: View {
                             )
                         }
 
+                        if mode == .photo, !sharedProfile.photoBase64.isEmpty {
+                            VizitButton(
+                                title: "Fényképes névjegy megosztása",
+                                systemImage: "square.and.arrow.up",
+                                kind: .primary
+                            ) { shareVCard() }
+                        }
+
                         VizitSectionHeader(title: "iPhone-on")
                         VizitPanel {
                             VStack(alignment: .leading, spacing: VizitSpace.sm) {
@@ -349,9 +356,6 @@ struct ShareScreen: View {
                 }
             }
             .navigationBarHidden(true)
-            .task(id: sharedProfile) {
-                embeddedPhotoQRPayload = PhotoContactQR.payload(sharedProfile)
-            }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
             }
@@ -406,7 +410,7 @@ struct ShareScreen: View {
         case .profile:
             return "A nyilvános névjegyoldalt nyitja meg. A mentéshez nem kell VIZIT alkalmazás."
         case .photo:
-            return "A teljes névjegyed a profilképeddel együtt, internet nélkül is beolvasható."
+            return "A nyilvános profilodat nyitja meg a tárolt képpel. Névjegyfájlhoz válaszd a fényképes megosztást."
         case .contact:
             return "A teljes névjegyed profilkép nélkül, hogy a kód gyorsan beolvasható maradjon."
         }
@@ -440,7 +444,7 @@ struct ShareScreen: View {
     private var emptyTitle: String {
         switch mode {
         case .profile: return "Nincs még publikus profil"
-        case .photo: return "A profilkép nem fér bele a kódba"
+        case .photo: return "A fényképes profil nem érhető el QR-rel"
         case .contact: return "A Kontakt QR nem állítható elő"
         }
     }
@@ -450,7 +454,8 @@ struct ShareScreen: View {
         case .profile:
             return "A Profil QR-hez engedélyezd a publikus profilt, adj meg profilazonosítót, és várd meg a sikeres szinkront."
         case .photo:
-            return "A névjegyed adatai már kitöltik a QR kapacitását. Válassz kisebb profilképet, vagy maradj a Kontakt módnál — abból semmilyen adat nem marad ki, csak a kép."
+            if sharedProfile.photoBase64.isEmpty { return "Előbb adj meg profilképet. A Kontakt QR kép nélkül továbbra is használható." }
+            return "A fényképes QR-hez engedélyezd a nyilvános profilt, és várd meg a szinkront. A fényképes névjegyfájlt az alábbi gombbal már most megoszthatod."
         case .contact:
             // Naming the real cause: an empty code because every reachable field
             // is switched off looks identical to one because the profile is empty.
@@ -470,7 +475,7 @@ struct ShareScreen: View {
     private var qrPayload: String? {
         switch mode {
         case .profile: return publicURL?.absoluteString
-        case .photo: return embeddedPhotoQRPayload
+        case .photo: return sharedProfile.photoBase64.isEmpty ? nil : publicURL?.absoluteString
         case .contact: return try? VCard.qrPayload(sharedProfile)
         }
     }
@@ -602,43 +607,6 @@ enum QRImage {
                 ), withAttributes: attributes)
             }
         }
-    }
-}
-
-private enum PhotoContactQR {
-    static func payload(_ profile: ContactProfile) -> String? {
-        guard !profile.photoBase64.isEmpty,
-              let bytes = Data(base64Encoded: profile.photoBase64),
-              let source = UIImage(data: bytes) else { return nil }
-
-        for side in [64, 56, 48, 40, 32] {
-            let size = CGSize(width: side, height: side)
-            let format = UIGraphicsImageRendererFormat.default()
-            format.scale = 1
-            format.opaque = true
-            let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
-                UIColor.white.setFill()
-                context.cgContext.fill(CGRect(origin: .zero, size: size))
-                let scale = max(size.width / source.size.width, size.height / source.size.height)
-                let drawSize = CGSize(width: source.size.width * scale, height: source.size.height * scale)
-                source.draw(in: CGRect(
-                    x: (size.width - drawSize.width) / 2,
-                    y: (size.height - drawSize.height) / 2,
-                    width: drawSize.width,
-                    height: drawSize.height
-                ))
-            }
-            for quality in [0.55, 0.45, 0.35, 0.25, 0.18] {
-                guard let jpeg = image.jpegData(compressionQuality: quality) else { continue }
-                var candidate = profile
-                candidate.photoBase64 = jpeg.base64EncodedString()
-                if let value = try? VCard.qrPayload(candidate, includePhoto: true),
-                   value.contains("PHOTO;ENCODING=b;TYPE=JPEG:") {
-                    return value
-                }
-            }
-        }
-        return nil
     }
 }
 
@@ -1573,7 +1541,7 @@ private struct YouTubeLessonPlayer: UIViewRepresentable {
         context.coordinator.onCompleted = onCompleted
         guard let videoID = YouTubeVideoID.from(url), context.coordinator.videoID != videoID else { return }
         context.coordinator.videoID = videoID
-        webView.loadHTMLString(Self.html(videoID: videoID), baseURL: URL(string: "https://www.youtube-nocookie.com"))
+        webView.loadHTMLString(Self.html(videoID: videoID), baseURL: URL(string: "https://www.vizitkartyam.hu/"))
     }
 
     static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -1585,10 +1553,12 @@ private struct YouTubeLessonPlayer: UIViewRepresentable {
         let safeID = videoID.replacingOccurrences(of: "'", with: "")
         return """
         <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-        <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
-        <body><div id="player"></div><script src="https://www.youtube.com/iframe_api"></script><script>
+        <meta name="referrer" content="strict-origin-when-cross-origin">
+        <style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#fallback{display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;color:white;padding:20px;box-sizing:border-box;background:#05163a;font:16px -apple-system,sans-serif}#fallback a{color:#13d1fc}</style></head>
+        <body><div id="player"></div><div id="fallback">A videó itt nem indítható. <a href="https://www.youtube.com/watch?v=\(safeID)">Megnyitás a YouTube-on</a></div><script src="https://www.youtube.com/iframe_api"></script><script>
         var player, watched=0, tick=0;
-        function onYouTubeIframeAPIReady(){ player=new YT.Player('player',{videoId:'\(safeID)',playerVars:{playsinline:1,rel:0},events:{onStateChange:onState}}); }
+        function onYouTubeIframeAPIReady(){ player=new YT.Player('player',{videoId:'\(safeID)',playerVars:{playsinline:1,rel:0,origin:'https://www.vizitkartyam.hu'},events:{onStateChange:onState,onError:onError}}); }
+        function onError(){document.getElementById('fallback').style.display='flex';}
         function onState(e){
           if(e.data===YT.PlayerState.PLAYING && !tick){ tick=setInterval(()=>{watched+=1;},1000); }
           if(e.data!==YT.PlayerState.PLAYING && tick){clearInterval(tick);tick=0;}

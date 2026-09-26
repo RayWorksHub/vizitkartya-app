@@ -19,7 +19,7 @@ SHA-256:
 | `ic_launcher_foreground_logo.png` | Adaptive és round launcher icon foreground |
 | `ic_launcher_monochrome.xml` | A hivatalos márkajel alfaalakját használó themed/monochrome drawable |
 
-Az adaptív ikon háttérszíne `VizitIce`, mert ezen a hivatalos márkajel sötét és világos gradiense egyaránt kontrasztos. A foreground a teljes feliratos logó helyett kizárólag a „V + NFC” márkajel; a themed icon ugyanennek a torzítatlan alfaalakját használja.
+Az adaptív Android-ikon és az iOS App Store-ikon háttere tiszta fehér. A foreground a teljes feliratos logó helyett kizárólag a jóváhagyott „V + NFC” márkajel; a themed icon ugyanennek a torzítatlan alfaalakját használja. A 1024 × 1024-es iOS marketingikon és a `brand/store-icon-white-512.png` Play-ikon az eredeti foreground változatlan, méretezett kompozíciói.
 
 ## Színek
 
