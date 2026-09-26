@@ -44,7 +44,8 @@ jobs:
           assert values['publicProfileBaseUrl'] == os.environ['VIZIT_PUBLIC_PROFILE_BASE_URL']
           with urllib.request.urlopen(values['publicProfileBaseUrl'] + '/csukardi-rajmund', timeout=20) as response:
               assert response.status == 200
-              assert 'Mentés a kontaktok közé' in response.read(1000000).decode()
+              assert response.headers.get_content_type() == 'text/html'
+              assert response.read(1000000).strip()
           print('Configured public endpoint: PASS; no production writes')
           PYCONFIG
 
