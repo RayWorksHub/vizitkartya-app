@@ -16,7 +16,7 @@ Az aktív képernyő a VIZIT `HostApduService` komponenst foreground preferred H
 
 ## Sikerállapot
 
-A kapcsolat létrejötte önmagában nem siker. A service csak akkor jelez `NFC adat kiolvasva` állapotot, ha az NDEF fájl teljes tartományát kiolvasta a reader. Ez nem bizonyítja, hogy a fogadó felhasználó a kontaktot el is mentette.
+A kapcsolat létrejötte önmagában nem siker. A service csak akkor jelez `NFC adat kiolvasva` állapotot, ha az NDEF fájl teljes tartományát kiolvasta a reader. Az utolsó APDU válaszát még 300 ms ideig ki kell szolgálnia, mielőtt a felület kikapcsolja az előtérbeli HCE-szolgáltatást. Ez nem bizonyítja, hogy a fogadó felhasználó a kontaktot el is mentette.
 
 ## Fotó
 
@@ -25,3 +25,5 @@ A display kép és NFC kontaktkép külön cél. Az NFC avatar agresszíven csö
 ## Eszközteszt
 
 Unit teszt nem elég. Xiaomi→Xiaomi/Redmi/POCO/Samsung/Pixel fizikai teszt kötelező. Android→iPhone esetén a vCard MIME import és a HTTPS URI fallback külön mérendő.
+
+Egy régebbi fogadó Android készülék „A címke üres, vagy a telefon nincs beigazítva” hibát jelzett az NFC-küldési képernyő mellett. A képernyőkép nem bizonyítja, hogy az APDU kiválasztás vagy az NDEF kiolvasás megtörtént, ezért a kompatibilitás javulása csak két fizikai készüléken, APDU-naplóval és tényleges névjegyimporttal igazolható. Addig a Kontakt QR a megbízható átadási út; a felületen is ezt ajánljuk sikertelen NFC-olvasásnál.

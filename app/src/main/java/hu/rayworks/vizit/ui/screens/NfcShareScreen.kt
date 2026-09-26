@@ -225,7 +225,7 @@ fun NfcShareScreen(
                 }
                 if (phase == NfcSharePhase.WAITING && profile.photoBase64.isNotBlank() && !photoIncluded) {
                     Text(
-                        text = "A profilkép mérete miatt NFC-n nem kerül át.",
+                        text = "A profilkép NFC-n nem kerül át. Fényképes névjegyhez használd a megosztási módokat.",
                         style = Vizit.type.caption,
                         color = Color.White.copy(alpha = 0.7f),
                     )

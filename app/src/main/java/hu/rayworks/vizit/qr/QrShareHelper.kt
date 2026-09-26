@@ -6,10 +6,29 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import hu.rayworks.vizit.data.ContactProfile
+import hu.rayworks.vizit.nfc.VCardBuilder
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 
 object QrShareHelper {
+    fun shareContact(context: Context, profile: ContactProfile, profileUrl: String?) {
+        val directory = File(context.cacheDir, "shared").apply { mkdirs() }
+        val file = File(directory, "vizit-${UUID.randomUUID()}.vcf")
+        file.writeText(
+            VCardBuilder.build(profile, includePhoto = true, vizitProfileUrl = profileUrl),
+            Charsets.UTF_8,
+        )
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/vcard"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Fényképes névjegy megosztása"))
+    }
+
     fun share(context: Context, bitmap: Bitmap, fileName: String = "vizit-qr.png") {
         val directory = File(context.cacheDir, "shared").apply { mkdirs() }
         val file = File(directory, fileName)
