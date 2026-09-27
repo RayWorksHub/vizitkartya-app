@@ -361,6 +361,16 @@ final class AppStore: ObservableObject {
         }
     }
 
+    func analyticsSummary() async throws -> AnalyticsSummary {
+        guard let cloud, authStatus == .authenticated else { throw CloudError.authenticationRequired }
+        return try await cloud.analyticsSummary()
+    }
+
+    func accountExport() async throws -> Data {
+        guard let cloud, authStatus == .authenticated else { throw CloudError.authenticationRequired }
+        return try await cloud.accountExport()
+    }
+
     func save(_ draft: ContactProfile) throws {
         guard let storage = fileStore, let metadataStore = syncStore else { throw ProfileError.damagedFile }
         try draft.validate()

@@ -323,6 +323,18 @@ final class CloudService: @unchecked Sendable {
         let _: EmptyResponse = try await nodeRequest(path: ["api", "account"], method: "DELETE")
     }
 
+    func analyticsSummary() async throws -> AnalyticsSummary {
+        try await nodeRequest(path: ["api", "analytics", "summary"])
+    }
+
+    func accountExport() async throws -> Data {
+        let data = try await nodeData(path: ["api", "account"])
+        guard (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else {
+            throw CloudError.invalidResponse
+        }
+        return data
+    }
+
     func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
         let envelope: NodeProfileEnvelope = try await nodeRequest(path: ["api", "profile"])
         guard var remote = envelope.profile else { return nil }
@@ -499,13 +511,25 @@ final class CloudService: @unchecked Sendable {
     private func nodeRequest<Response: Decodable>(
         path: [String], method: String = "GET", body: Data? = nil
     ) async throws -> Response {
+        let data = try await nodeData(path: path, method: method, body: body)
+        if Response.self == EmptyResponse.self, data.isEmpty {
+            return EmptyResponse() as! Response
+        }
+        do {
+            return try JSONDecoder().decode(Response.self, from: data)
+        } catch {
+            throw CloudError.invalidResponse
+        }
+    }
+
+    private func nodeData(path: [String], method: String = "GET", body: Data? = nil) async throws -> Data {
         let session: Session
         do {
             session = try await validSession()
         } catch {
             throw CloudError.authenticationRequired
         }
-        guard path == ["api", "profile"] || path == ["api", "account"],
+        guard path == ["api", "profile"] || path == ["api", "account"] || path == ["api", "analytics", "summary"],
               let url = RESTURLBuilder.make(baseURL: configuration.backendURL, path: path, query: [])
         else { throw CloudError.invalidRequest }
         var request = URLRequest(url: url)
@@ -538,14 +562,7 @@ final class CloudService: @unchecked Sendable {
             let payload = try? JSONDecoder().decode(PostgRESTErrorPayload.self, from: data)
             throw CloudError.server(status: httpResponse.statusCode, code: payload?.code)
         }
-        if Response.self == EmptyResponse.self, data.isEmpty {
-            return EmptyResponse() as! Response
-        }
-        do {
-            return try JSONDecoder().decode(Response.self, from: data)
-        } catch {
-            throw CloudError.invalidResponse
-        }
+        return data
     }
 }
 

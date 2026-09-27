@@ -374,6 +374,20 @@ struct ProfileEditor: View {
                                 .font(VizitFont.bodySmall)
                                 .foregroundStyle(VizitColor.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
+                            VizitTextField(
+                                label: "Egyedi profilcím",
+                                text: Binding(
+                                    get: { draft.publicSlug },
+                                    set: { draft.publicSlug = $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                                ),
+                                placeholder: "vezeteknev-keresztnev",
+                                helper: "Kisbetű, szám és kötőjel. A régi cím változhat.",
+                                error: draft.publicSlug.isEmpty || PublicProfileLink.isValidSlug(draft.publicSlug)
+                                    ? nil : "3–50 karakter; kisbetű, szám és kötőjel megengedett.",
+                                keyboard: .URL,
+                                autocapitalization: .never,
+                                identifier: "profile.publicSlug"
+                            )
                         }
                     }
 
