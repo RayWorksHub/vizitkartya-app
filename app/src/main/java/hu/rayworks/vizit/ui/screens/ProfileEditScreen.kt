@@ -83,6 +83,7 @@ fun ProfileEditScreen(
     var photoLoading by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val photo = rememberProfilePhoto(draft.photoBase64)
+    val logo = rememberProfilePhoto(draft.logoBase64)
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -96,6 +97,15 @@ fun ProfileEditScreen(
                     .onFailure { snackbarHostState.showSnackbar("A kiválasztott kép nem dolgozható fel.") }
                 photoLoading = false
             }
+        }
+    }
+    val logoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            photoLoading = true
+            runCatching { withContext(Dispatchers.IO) { PhotoProcessor.loadSquareJpegBase64(context, uri) } }
+                .onSuccess { draft = draft.copy(logoBase64 = it) }
+                .onFailure { snackbarHostState.showSnackbar("A logó nem dolgozható fel.") }
+            photoLoading = false
         }
     }
 
@@ -181,6 +191,16 @@ fun ProfileEditScreen(
                 }
             }
 
+            // --- Logo
+            VizitSectionHeader("Céges logó")
+            if (logo != null) Image(logo, contentDescription = "Céges logó",
+                modifier = Modifier.fillMaxWidth().height(96.dp), contentScale = ContentScale.Fit)
+            VizitButton(if (logo == null) "Logó kiválasztása" else "Logó cseréje", onClick = {
+                logoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }, style = VizitButtonStyle.Secondary, enabled = !photoLoading)
+            if (logo != null) VizitButton("Logó eltávolítása", onClick = { draft = draft.copy(logoBase64 = "") },
+                style = VizitButtonStyle.Tertiary)
+
             // --- Personal
             VizitSectionHeader("Személyes adatok")
             VizitTextField(
@@ -193,6 +213,12 @@ fun ProfileEditScreen(
                 value = draft.jobTitle,
                 onValueChange = { draft = draft.copy(jobTitle = it) },
                 label = "Beosztás / foglalkozás",
+            )
+            VizitTextField(
+                value = draft.bio,
+                onValueChange = { draft = draft.copy(bio = it.take(420)) },
+                label = "Rövid bemutatkozás",
+                singleLine = false,
             )
 
             // --- Work
@@ -265,8 +291,11 @@ fun ProfileEditScreen(
                 onValueChange = { draft = draft.copy(youtube = it) },
                 label = "YouTube",
                 keyboardType = KeyboardType.Uri,
-                imeAction = ImeAction.Done,
             )
+            VizitTextField(draft.x, { draft = draft.copy(x = it) }, "X", keyboardType = KeyboardType.Uri)
+            VizitTextField(draft.github, { draft = draft.copy(github = it) }, "GitHub", keyboardType = KeyboardType.Uri)
+            VizitTextField(draft.customSocial, { draft = draft.copy(customSocial = it) }, "Egyéb hivatkozás",
+                keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done)
 
             // --- Sharing
             VizitSectionHeader("Megosztási adatok")

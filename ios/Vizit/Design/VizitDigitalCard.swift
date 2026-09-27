@@ -197,6 +197,18 @@ struct VizitDigitalCard: View {
             }
         }
         .frame(width: 56, height: 56)
+        .overlay(alignment: .bottomTrailing) {
+            if let data = Data(base64Encoded: visible.logoBase64), let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 24, height: 24)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .offset(x: 4, y: 4)
+                    .accessibilityLabel("Céges logó")
+            }
+        }
     }
 }
 

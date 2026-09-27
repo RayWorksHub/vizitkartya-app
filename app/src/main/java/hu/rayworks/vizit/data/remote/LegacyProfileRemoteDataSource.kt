@@ -17,6 +17,9 @@ class LegacyProfileRemoteDataSource(private val client: SupabaseClient?) : Profi
         SocialDefinition("instagram", "Instagram", 3),
         SocialDefinition("tiktok", "TikTok", 4),
         SocialDefinition("youtube", "YouTube", 5),
+        SocialDefinition("x", "X", 6),
+        SocialDefinition("github", "GitHub", 7),
+        SocialDefinition("custom", "Egyéb", 8),
     )
 
     override fun authenticatedUserId(): String? = client?.auth?.currentSessionOrNull()?.user?.id
@@ -30,7 +33,10 @@ class LegacyProfileRemoteDataSource(private val client: SupabaseClient?) : Profi
     }
 
     private suspend fun snapshot(row: LegacyProfileRecord): RemoteProfileSnapshot = RemoteProfileSnapshot(
-        row.version, row.payload(RemoteContactPhoto.load(row.avatarUrl, BuildConfig.SUPABASE_URL))
+        row.version, row.payload(
+            RemoteContactPhoto.load(row.avatarUrl, BuildConfig.SUPABASE_URL),
+            RemoteContactPhoto.load(RemoteProfileLogo.url(row.appearance), BuildConfig.SUPABASE_URL),
+        )
     )
 
     override suspend fun pull(userId: String): RemoteProfileSnapshot? {
@@ -50,7 +56,15 @@ class LegacyProfileRemoteDataSource(private val client: SupabaseClient?) : Profi
             val remote = snapshot(current)
             return RemoteProfileSyncResult.Conflict(remote.serverVersion, remote.payload)
         }
-        val values = LegacyProfileCodec.write(mutation.payload,current,mutation.userId)
+        val remoteLogo = if (mutation.payload.logoPath != null && current != null)
+            RemoteContactPhoto.load(RemoteProfileLogo.url(current.appearance), BuildConfig.SUPABASE_URL)
+        else ""
+        val appearance = RemoteProfileLogo.prepare(api, mutation.userId, current?.appearance,
+            remoteLogo, mutation.payload.logoPath, current?.theme ?: "midnight")
+        val values = buildJsonObject {
+            for ((key, value) in LegacyProfileCodec.write(mutation.payload, current, mutation.userId)) put(key, value)
+            if (appearance != null) put("appearance", appearance)
+        }
         if (current != null) {
             val before = current
             val alreadyApplied = values.all { (key,value) ->
@@ -70,13 +84,14 @@ class LegacyProfileRemoteDataSource(private val client: SupabaseClient?) : Profi
                     "website" -> value.jsonPrimitive.content == before.website
                     "address" -> value.jsonPrimitive.content == before.address
                     "avatar_url" -> value.jsonPrimitive.content == before.avatarUrl.orEmpty()
+                    "appearance" -> value == before.appearance
                     else -> false
                 }
             } && supportedSocialLinks.all { definition ->
                 mutation.payload.links.firstOrNull { it.kind == definition.platform }?.url.orEmpty() ==
                     before.socialLinks.firstOrNull { it.platform == definition.platform }?.url.orEmpty()
             }
-            if (!alreadyApplied && !LegacyProfileCodec.canApply(mutation.baseServerVersion,mutation.payload.baseFingerprint,current)) {
+            if (!alreadyApplied && !LegacyProfileCodec.canApply(mutation.baseServerVersion,mutation.payload.baseFingerprint,current,remoteLogo)) {
                 val remote = snapshot(current)
                 return RemoteProfileSyncResult.Conflict(remote.serverVersion,remote.payload)
             }

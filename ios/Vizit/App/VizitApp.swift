@@ -374,7 +374,10 @@ final class AppStore: ObservableObject {
                     }
                     guard var remote = try await cloud.updateProfile(ownerID: id, profileID: remoteBundle.0.id,
                                                                      profile: localProfile,
-                                                                     expectedUpdatedAt: remoteBundle.0.updatedAt) else {
+                                                                     expectedUpdatedAt: remoteBundle.0.updatedAt,
+                                                                     previousAppearance: remoteBundle.0.appearance,
+                                                                     previousLogoBase64: remoteBundle.1.logoBase64,
+                                                                     theme: remoteBundle.0.theme) else {
                         metadata.conflict = true
                         try metadataStore.save(metadata)
                         syncStatus = .conflict
@@ -447,11 +450,12 @@ final class AppStore: ObservableObject {
                 guard userID == id else { return }
                 metadata = try metadataStore.load()
                 guard profileRevision == revision else { syncAgain = true; syncStatus = .pending; return }
-                guard let verified, verified.0.matches(profile) else { throw CloudError.profileConflict }
+                guard let verified, verified.0.matches(profile, remoteLogo: verified.1.logoBase64) else { throw CloudError.profileConflict }
                 metadata.remoteUpdatedAt = verified.0.updatedAt
                 metadata.remoteFingerprint = verified.0.fingerprint
                 var photoSynced = profile
                 photoSynced.photoSyncInitialized = true
+                photoSynced.logoSyncInitialized = true
                 photoSynced.publicSlug = verified.1.publicSlug
                 photoSynced.customDomain = verified.1.customDomain
                 photoSynced.customDomainVerified = verified.1.customDomainVerified
@@ -609,6 +613,7 @@ enum RootTab: Hashable {
 struct AppGate: View {
     @EnvironmentObject private var store: AppStore
     @State private var themeMode: ThemeMode = ThemeStorage.current
+    @State private var finishingWizard = false
 
     var body: some View {
         Group {
@@ -632,10 +637,19 @@ struct AppGate: View {
                 }
 
             case .authenticated, .offline:
-                RootView(themeMode: $themeMode)
+                if store.hasProfile && !finishingWizard {
+                    RootView(themeMode: $themeMode)
+                } else {
+                    ProfileWizard(onSaving: { finishingWizard = true },
+                                  onSaveFailed: { finishingWizard = false },
+                                  onFinished: { finishingWizard = false })
+                }
             }
         }
         .preferredColorScheme(themeMode.colorScheme)
+        .onChange(of: store.authStatus) { status in
+            if status == .signedOut { finishingWizard = false }
+        }
         .alert("VIZIT", isPresented: Binding(
             get: { store.message != nil },
             set: { if !$0 { store.dismissMessage() } }

@@ -47,6 +47,12 @@ class LegacyProfileCodecTest {
         assertFalse(LegacyProfileCodec.canApply(base.version,hash,base.copy(avatarUrl="")))
         assertFalse(LegacyProfileCodec.canApply(base.version,hash,base.copy(avatarUrl="different")))
     }
+    @Test fun `remote logo replacement and deletion change the content revision`() {
+        val original = row().payload(logo = "old-jpeg")
+        val changed = row().payload(logo = "new-jpeg")
+        assertNotEquals(LegacyProfileCodec.fingerprint(original), LegacyProfileCodec.fingerprint(changed))
+        assertNotEquals(LegacyProfileCodec.fingerprint(original), LegacyProfileCodec.fingerprint(row().payload(logo = "")))
+    }
     @Test fun `unacknowledged initial write cannot overwrite remote`() {
         assertFalse(LegacyProfileCodec.canApply(0,null,row()))
     }

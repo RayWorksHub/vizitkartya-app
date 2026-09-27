@@ -9,6 +9,7 @@ data class ContactProfile(
     val lastName: String = "",
     val jobTitle: String = "",
     val company: String = "",
+    val bio: String = "",
     val phone: String = "",
     val email: String = "",
     val website: String = "",
@@ -18,7 +19,11 @@ data class ContactProfile(
     val instagram: String = "",
     val tiktok: String = "",
     val youtube: String = "",
+    val x: String = "",
+    val github: String = "",
+    val customSocial: String = "",
     val photoBase64: String = "",
+    val logoBase64: String = "",
     val publicSlug: String = "",
     val isPublic: Boolean = false,
     val customDomain: String = "",
@@ -46,9 +51,7 @@ data class ContactProfile(
 object ContactProfileValidator {
     fun validate(profile: ContactProfile): String? = when {
         profile.resolvedDisplayName.isBlank() -> "Add meg a nevedet a névjegyben."
-        profile.phone.isBlank() && profile.email.isBlank() ->
-            "Legalább egy telefonszámot vagy e-mail-címet adj meg."
-
+        profile.bio.length > 420 -> "A bemutatkozás legfeljebb 420 karakter lehet."
         profile.email.isNotBlank() && !profile.email.contains("@") ->
             "Az e-mail-cím formátuma nem megfelelő."
 
@@ -71,6 +74,9 @@ object ContactProfileValidator {
         instagram,
         tiktok,
         youtube,
+        x,
+        github,
+        customSocial,
     ).map(String::trim).filter(String::isNotBlank)
 
     private fun isValidHttpsUrl(value: String): Boolean = runCatching {

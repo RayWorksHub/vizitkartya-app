@@ -5,6 +5,45 @@ import UIKit
 import ImageIO
 import CryptoKit
 
+struct ProfileAppearance: Codable, Sendable {
+    let version: Int
+    let mode: String
+    let start: String
+    let end: String
+    let angle: Int
+    let text: String
+    var logoURL: String?
+    let logoScale: Int
+    let logoSurface: String
+    let mediaLayout: String
+
+    enum CodingKeys: String, CodingKey {
+        case version, mode, start, end, angle, text
+        case logoURL = "logo_url"
+        case logoScale = "logo_scale"
+        case logoSurface = "logo_surface"
+        case mediaLayout = "media_layout"
+    }
+
+    static func preset(_ theme: String) -> Self {
+        let colors: (String, String)
+        switch theme {
+        case "ivory": colors = ("#1668f0", "#0742a8")
+        case "forest": colors = ("#0e6b4a", "#063526")
+        case "plum": colors = ("#5b2e9e", "#2c1550")
+        default: colors = ("#0c2c63", "#05163a")
+        }
+        return Self(version: 1, mode: "preset", start: colors.0, end: colors.1,
+                    angle: 145, text: "auto", logoURL: nil, logoScale: 88,
+                    logoSurface: "white", mediaLayout: "overlay")
+    }
+
+    var revision: String {
+        [String(version), mode, start, end, String(angle), text, logoURL ?? "",
+         String(logoScale), logoSurface, mediaLayout].joined(separator: "|")
+    }
+}
+
 struct RemoteProfile: Decodable, Sendable {
     let id: UUID
     let ownerID: UUID
@@ -12,6 +51,7 @@ struct RemoteProfile: Decodable, Sendable {
     let displayName: String
     let jobTitle: String
     let company: String
+    let bio: String
     let publicEmail: String
     let phone: String
     let website: String
@@ -21,29 +61,35 @@ struct RemoteProfile: Decodable, Sendable {
     let customDomainVerified: Bool?
     let updatedAt: String
     let avatarURL: String?
+    let appearance: ProfileAppearance?
+    let theme: String
     var linkedIn = ""
     var facebook = ""
     var instagram = ""
     var tiktok = ""
     var youtube = ""
+    var x = ""
+    var github = ""
+    var custom = ""
 
     var fingerprint: String {
-        let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company,
+        let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company, bio,
                       publicEmail, phone, website, address, String(isPublic), customDomain ?? "",
-                      String(customDomainVerified == true), avatarURL ?? ""]
+                      String(customDomainVerified == true), avatarURL ?? "", appearance?.revision ?? ""]
             + SocialPlatform.allCases.map { socialURL(for: $0) }
         let bytes = (try? JSONEncoder().encode(values)) ?? Data()
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
 
-    func matches(_ value: ContactProfile) -> Bool {
+    func matches(_ value: ContactProfile, remoteLogo: String? = nil) -> Bool {
         let p = value.normalized
         return displayName == p.displayName && slug == p.publicSlug && jobTitle == p.jobTitle &&
-            company == p.company && publicEmail == p.email && phone == p.phone && website == p.website &&
+            company == p.company && bio == p.bio && publicEmail == p.email && phone == p.phone && website == p.website &&
             address == p.address && isPublic == p.isPublic &&
             (customDomain ?? "") == p.customDomain &&
             SocialPlatform.allCases.allSatisfy { socialURL(for: $0) == p.socialURL(for: $0) } &&
-            (avatarURL ?? "") == ((try? ProfilePhoto.inlineURL(p.photoBase64)) ?? "invalid-photo")
+            (avatarURL ?? "") == ((try? ProfilePhoto.inlineURL(p.photoBase64)) ?? "invalid-photo") &&
+            (remoteLogo == nil || remoteLogo == p.logoBase64)
     }
 
     func socialURL(for platform: SocialPlatform) -> String {
@@ -53,6 +99,9 @@ struct RemoteProfile: Decodable, Sendable {
         case .instagram: return instagram
         case .tiktok: return tiktok
         case .youtube: return youtube
+        case .x: return x
+        case .github: return github
+        case .custom: return custom
         }
     }
 
@@ -63,6 +112,9 @@ struct RemoteProfile: Decodable, Sendable {
         case .instagram: instagram = value
         case .tiktok: tiktok = value
         case .youtube: youtube = value
+        case .x: x = value
+        case .github: github = value
+        case .custom: custom = value
         }
     }
 
@@ -77,12 +129,13 @@ struct RemoteProfile: Decodable, Sendable {
         case ownerID = "owner_id"
         case displayName = "display_name"
         case jobTitle = "job_title"
-        case company
+        case company, bio
         case publicEmail = "public_email"
         case isPublic = "is_public"
         case customDomain = "custom_domain"
         case customDomainVerified = "custom_domain_verified"
         case avatarURL = "avatar_url"
+        case appearance, theme
         case updatedAt = "updated_at"
     }
 }
@@ -100,6 +153,7 @@ private struct ProfileWrite: Encodable {
     let displayName: String
     let jobTitle: String
     let company: String
+    let bio: String
     let publicEmail: String
     let phone: String
     let website: String
@@ -107,9 +161,10 @@ private struct ProfileWrite: Encodable {
     let isPublic: Bool
     let customDomain: String?
     let avatarURL: String
+    let appearance: ProfileAppearance?
 
     enum CodingKeys: String, CodingKey {
-        case id, slug, phone, website, address, company
+        case id, slug, phone, website, address, company, bio
         case ownerID = "owner_id"
         case displayName = "display_name"
         case jobTitle = "job_title"
@@ -117,6 +172,7 @@ private struct ProfileWrite: Encodable {
         case isPublic = "is_public"
         case customDomain = "custom_domain"
         case avatarURL = "avatar_url"
+        case appearance
     }
 }
 
@@ -295,7 +351,7 @@ final class CloudService: @unchecked Sendable {
     func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
         let query = [
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url"),
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme"),
             URLQueryItem(name: "limit", value: "1")
         ]
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
@@ -308,6 +364,7 @@ final class CloudService: @unchecked Sendable {
         profile.fullName = remote.displayName
         profile.jobTitle = remote.jobTitle
         profile.company = remote.company
+        profile.bio = remote.bio
         profile.email = remote.publicEmail
         profile.phone = remote.phone
         profile.website = remote.website
@@ -327,6 +384,13 @@ final class CloudService: @unchecked Sendable {
         } else if loadPhoto && local.photoSyncInitialized {
             // A later deletion from the web must not resurrect an old local image.
             profile.photoBase64 = ""
+        }
+        if let logo = remote.appearance?.logoURL {
+            profile.logoBase64 = try await readProfilePhoto(logo)
+            profile.logoSyncInitialized = true
+        } else if local.logoSyncInitialized {
+            profile.logoBase64 = ""
+            profile.logoSyncInitialized = true
         }
         return (remote, profile)
     }
@@ -350,35 +414,58 @@ final class CloudService: @unchecked Sendable {
 
     private func insertProfile(ownerID: UUID, profileID: UUID,
                                profile: ContactProfile, slug: String) async throws -> RemoteProfile {
-        let payload = try write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
+        let payload = try await write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
-            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")],
+            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")],
             body: payload, prefer: "return=representation")
         guard let remote = rows.first else { throw CloudError.emptyResponse }
         return remote
     }
 
     func updateProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile,
-                       expectedUpdatedAt: String) async throws -> RemoteProfile? {
-        let payload = try write(profile, profileID: nil, ownerID: nil, slug: profile.publicSlug)
+                       expectedUpdatedAt: String, previousAppearance: ProfileAppearance? = nil,
+                       previousLogoBase64: String = "", theme: String = "midnight") async throws -> RemoteProfile? {
+        let payload = try await write(profile, profileID: nil, ownerID: nil, slug: profile.publicSlug,
+                                      previousAppearance: previousAppearance,
+                                      previousLogoBase64: previousLogoBase64, theme: theme)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "PATCH", query: [
             URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
             URLQueryItem(name: "updated_at", value: "eq.\(expectedUpdatedAt)"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")
         ], body: payload, prefer: "return=representation")
         guard let remote = rows.first else { return nil }
         return remote
     }
 
-    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String) throws -> ProfileWrite {
+    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String,
+                       previousAppearance: ProfileAppearance? = nil, previousLogoBase64: String = "",
+                       theme: String = "midnight") async throws -> ProfileWrite {
         let p = profile.normalized
+        var appearance = previousAppearance
+        if p.logoBase64 != previousLogoBase64 {
+            if p.logoBase64.isEmpty {
+                if appearance != nil { appearance?.logoURL = nil }
+            } else {
+                guard let data = Data(base64Encoded: p.logoBase64), data.count <= 256 * 1024,
+                      data.starts(with: [0xff, 0xd8, 0xff]), let owner = ownerID ?? cachedSession?.user.id
+                else { throw ProfileError.invalidPhoto }
+                let path = "\(owner.uuidString.lowercased())/logo-\(UUID().uuidString.lowercased()).jpg"
+                try await client.storage.from("avatars").upload(
+                    path: path, file: data,
+                    options: FileOptions(cacheControl: "3600", contentType: "image/jpeg", upsert: false)
+                )
+                let url = try client.storage.from("avatars").getPublicURL(path: path)
+                appearance = appearance ?? ProfileAppearance.preset(theme)
+                appearance?.logoURL = url.absoluteString
+            }
+        }
         return ProfileWrite(id: profileID, ownerID: ownerID, slug: slug, displayName: p.displayName,
-                            jobTitle: p.jobTitle, company: p.company, publicEmail: p.email,
+                            jobTitle: p.jobTitle, company: p.company, bio: p.bio, publicEmail: p.email,
                             phone: p.phone, website: p.website, address: p.address,
                             isPublic: p.isPublic,
                             customDomain: p.customDomain.isEmpty ? nil : p.customDomain,
-                            avatarURL: try ProfilePhoto.inlineURL(p.photoBase64))
+                            avatarURL: try ProfilePhoto.inlineURL(p.photoBase64), appearance: appearance)
     }
 
     func syncSocialProfiles(profileID: UUID, value: ContactProfile, expected: ContactProfile) async throws {
@@ -453,7 +540,13 @@ final class CloudService: @unchecked Sendable {
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
               let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
-              width.doubleValue * height.doubleValue <= 16_000_000,
+              width.doubleValue * height.doubleValue <= 16_000_000 else { throw ProfileError.invalidPhoto }
+        // Keep our own small JPEG unchanged so a later save does not upload a
+        // second, visually identical logo and conflict with the web revision.
+        if bytes.count <= 256 * 1024 && bytes.starts(with: [0xff, 0xd8, 0xff]) {
+            return bytes.base64EncodedString()
+        }
+        guard
               let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,

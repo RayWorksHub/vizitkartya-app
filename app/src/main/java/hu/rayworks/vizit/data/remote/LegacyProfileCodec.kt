@@ -24,6 +24,8 @@ data class LegacyProfileRecord(
     val website: String = "",
     val address: String = "",
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    val appearance: JsonObject? = null,
+    val theme: String = "midnight",
     @SerialName("is_public") val isPublic: Boolean = false,
     @SerialName("custom_domain") val customDomain: String? = null,
     @SerialName("custom_domain_verified") val customDomainVerified: Boolean = false,
@@ -31,11 +33,12 @@ data class LegacyProfileRecord(
     @SerialName("social_links") val socialLinks: List<LegacySocialLink> = emptyList(),
 ) {
     val version: Long get() = Instant.parse(updatedAt).let { it.epochSecond * 1_000_000 + it.nano / 1_000 }
-    fun payload(photo: String? = null): ProfileSyncPayload = ProfileSyncPayload(
+    fun payload(photo: String? = null, logo: String? = null): ProfileSyncPayload = ProfileSyncPayload(
         displayName = displayName, company = company, jobTitle = jobTitle, bio = bio,
         displayImagePath = avatarUrl.orEmpty(), publicSlug = slug, isPublic = isPublic,
         customDomain = customDomain, customDomainVerified = customDomainVerified,
         photoBase64 = photo,
+        logoPath = logo?.let { if (it.isEmpty()) "" else LegacyProfileCodec.INLINE_PREFIX + it },
         contacts = listOfNotNull(
             phone.takeIf(String::isNotBlank)?.let { ProfileContactPayload(stableId(ownerId,"phone"),"phone","Telefon",it,0,true) },
             publicEmail.takeIf(String::isNotBlank)?.let { ProfileContactPayload(stableId(ownerId,"email"),"email","E-mail",it,1,true) },
@@ -70,6 +73,7 @@ object LegacyProfileCodec {
         val fields = listOf(payload.displayName, payload.company, payload.jobTitle, payload.bio,
             payload.publicSlug.orEmpty(), payload.customDomain.orEmpty(),
             payload.customDomainVerified.toString(), payload.isPublic.toString(), avatar(payload).orEmpty(),
+            payload.logoPath.orEmpty(),
             payload.contacts.firstOrNull { it.kind == "phone" }?.value.orEmpty(),
             payload.contacts.firstOrNull { it.kind == "email" }?.value.orEmpty(),
             payload.addresses.firstOrNull()?.formattedAddress.orEmpty(),
@@ -78,7 +82,10 @@ object LegacyProfileCodec {
             payload.links.firstOrNull { it.kind == "facebook" }?.url.orEmpty(),
             payload.links.firstOrNull { it.kind == "instagram" }?.url.orEmpty(),
             payload.links.firstOrNull { it.kind == "tiktok" }?.url.orEmpty(),
-            payload.links.firstOrNull { it.kind == "youtube" }?.url.orEmpty())
+            payload.links.firstOrNull { it.kind == "youtube" }?.url.orEmpty(),
+            payload.links.firstOrNull { it.kind == "x" }?.url.orEmpty(),
+            payload.links.firstOrNull { it.kind == "github" }?.url.orEmpty(),
+            payload.links.firstOrNull { it.kind == "custom" }?.url.orEmpty())
         val bytes = Json.encodeToString(JsonArray.serializer(),JsonArray(fields.map(::JsonPrimitive))).toByteArray()
         return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
     }
@@ -118,6 +125,6 @@ object LegacyProfileCodec {
         }
     }
 
-    fun canApply(baseVersion: Long, baseFingerprint: String?, current: LegacyProfileRecord): Boolean =
-        if (baseFingerprint != null) baseFingerprint == fingerprint(current.payload()) else baseVersion == current.version
+    fun canApply(baseVersion: Long, baseFingerprint: String?, current: LegacyProfileRecord, logo: String? = null): Boolean =
+        if (baseFingerprint != null) baseFingerprint == fingerprint(current.payload(logo = logo)) else baseVersion == current.version
 }

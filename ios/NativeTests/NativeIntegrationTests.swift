@@ -96,6 +96,16 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertFalse(CloudError.server(status: 500, code: "23505").isUniqueConstraintViolation)
     }
 
+    func testMobileAppearanceUsesTheSharedWebLogoField() throws {
+        var appearance = ProfileAppearance.preset("forest")
+        appearance.logoURL = "https://example.supabase.co/storage/v1/object/public/avatars/user/logo-test.jpg"
+        let data = try JSONEncoder().encode(appearance)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["logo_url"] as? String, appearance.logoURL)
+        XCTAssertEqual(object["logo_scale"] as? Int, 88)
+        XCTAssertEqual(try JSONDecoder().decode(ProfileAppearance.self, from: data).revision, appearance.revision)
+    }
+
     func testRESTURLBuilderPercentEncodesTimestampOffsetPlus() throws {
         let timestamp = "eq.2026-09-18T17:12:04.733081+00:00"
         let url = try XCTUnwrap(RESTURLBuilder.make(
@@ -140,7 +150,7 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertThrowsError(try ProfileSyncStore(directory: directory).save(journal))
     }
     func testRemoteFingerprintTracksContentNotAnalyticsTimestamp() throws {
-        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null}"#
+        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","bio":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null,"theme":"midnight"}"#
         let decode = { (text: String) throws in try JSONDecoder().decode(RemoteProfile.self, from: Data(text.utf8)) }
         var first = try decode(raw)
         XCTAssertEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "first", with: "later")).fingerprint)

@@ -8,6 +8,7 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public var lastName = ""
     public var jobTitle = ""
     public var company = ""
+    public var bio = ""
     public var phone = ""
     public var email = ""
     public var website = ""
@@ -17,8 +18,13 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public var instagram = ""
     public var tiktok = ""
     public var youtube = ""
+    public var x = ""
+    public var github = ""
+    public var customSocial = ""
     public var photoBase64 = ""
+    public var logoBase64 = ""
     public var photoSyncInitialized = false
+    public var logoSyncInitialized = false
     public var publicSlug = ""
     public var isPublic = false
     public var customDomain = ""
@@ -27,9 +33,9 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case fullName, firstName, lastName, jobTitle, company, phone, email
-        case website, address, linkedIn, facebook, instagram, tiktok, youtube
-        case photoBase64, photoSyncInitialized, publicSlug, isPublic
+        case fullName, firstName, lastName, jobTitle, company, bio, phone, email
+        case website, address, linkedIn, facebook, instagram, tiktok, youtube, x, github, customSocial
+        case photoBase64, logoBase64, photoSyncInitialized, logoSyncInitialized, publicSlug, isPublic
         case customDomain, customDomainVerified
     }
 
@@ -42,6 +48,7 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
         lastName = try values.decodeIfPresent(String.self, forKey: .lastName) ?? ""
         jobTitle = try values.decodeIfPresent(String.self, forKey: .jobTitle) ?? ""
         company = try values.decodeIfPresent(String.self, forKey: .company) ?? ""
+        bio = try values.decodeIfPresent(String.self, forKey: .bio) ?? ""
         phone = try values.decodeIfPresent(String.self, forKey: .phone) ?? ""
         email = try values.decodeIfPresent(String.self, forKey: .email) ?? ""
         website = try values.decodeIfPresent(String.self, forKey: .website) ?? ""
@@ -51,8 +58,13 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
         instagram = try values.decodeIfPresent(String.self, forKey: .instagram) ?? ""
         tiktok = try values.decodeIfPresent(String.self, forKey: .tiktok) ?? ""
         youtube = try values.decodeIfPresent(String.self, forKey: .youtube) ?? ""
+        x = try values.decodeIfPresent(String.self, forKey: .x) ?? ""
+        github = try values.decodeIfPresent(String.self, forKey: .github) ?? ""
+        customSocial = try values.decodeIfPresent(String.self, forKey: .customSocial) ?? ""
         photoBase64 = try values.decodeIfPresent(String.self, forKey: .photoBase64) ?? ""
+        logoBase64 = try values.decodeIfPresent(String.self, forKey: .logoBase64) ?? ""
         photoSyncInitialized = try values.decodeIfPresent(Bool.self, forKey: .photoSyncInitialized) ?? false
+        logoSyncInitialized = try values.decodeIfPresent(Bool.self, forKey: .logoSyncInitialized) ?? false
         publicSlug = try values.decodeIfPresent(String.self, forKey: .publicSlug) ?? ""
         isPublic = try values.decodeIfPresent(Bool.self, forKey: .isPublic) ?? false
         customDomain = try values.decodeIfPresent(String.self, forKey: .customDomain) ?? ""
@@ -75,9 +87,9 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public var normalized: ContactProfile {
         var value = self
         let paths: [WritableKeyPath<ContactProfile, String>] = [
-            \.fullName, \.firstName, \.lastName, \.jobTitle, \.company,
+            \.fullName, \.firstName, \.lastName, \.jobTitle, \.company, \.bio,
             \.phone, \.email, \.website, \.address, \.linkedIn, \.facebook,
-            \.instagram, \.tiktok, \.youtube, \.publicSlug, \.customDomain
+            \.instagram, \.tiktok, \.youtube, \.x, \.github, \.customSocial, \.publicSlug, \.customDomain
         ]
         for path in paths {
             value[keyPath: path] = value[keyPath: path].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -89,10 +101,9 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public func validate() throws {
         let p = normalized
         guard !p.displayName.isEmpty else { throw ProfileError.missingName }
-        guard !p.phone.isEmpty || !p.email.isEmpty else { throw ProfileError.missingContact }
-        let fields = [p.fullName, p.firstName, p.lastName, p.jobTitle, p.company,
+        let fields = [p.fullName, p.firstName, p.lastName, p.jobTitle, p.company, p.bio,
                       p.phone, p.email, p.website, p.address, p.linkedIn,
-                      p.facebook, p.instagram, p.tiktok, p.youtube]
+                      p.facebook, p.instagram, p.tiktok, p.youtube, p.x, p.github, p.customSocial]
         guard fields.allSatisfy({ $0.utf8.count <= 512 && !$0.unicodeScalars.contains(where: {
             CharacterSet.controlCharacters.contains($0)
         }) }) else { throw ProfileError.invalidField }
@@ -100,7 +111,9 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
               p.jobTitle.count <= 100, p.company.count <= 100, p.phone.count <= 40,
               p.email.count <= 254, p.website.count <= 300, p.address.count <= 180,
               p.linkedIn.count <= 300, p.facebook.count <= 300, p.instagram.count <= 300,
-              p.tiktok.count <= 300, p.youtube.count <= 300 else { throw ProfileError.invalidField }
+              p.tiktok.count <= 300, p.youtube.count <= 300, p.x.count <= 300,
+              p.github.count <= 300, p.customSocial.count <= 300,
+              p.bio.count <= 420 else { throw ProfileError.invalidField }
         if !p.email.isEmpty {
             guard p.email.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
             else { throw ProfileError.invalidEmail }
@@ -117,6 +130,10 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
             guard let data = Data(base64Encoded: p.photoBase64), data.count <= 256 * 1024
             else { throw ProfileError.invalidPhoto }
         }
+        if !p.logoBase64.isEmpty {
+            guard let data = Data(base64Encoded: p.logoBase64), data.count <= 256 * 1024
+            else { throw ProfileError.invalidPhoto }
+        }
         if !p.publicSlug.isEmpty && !PublicProfileLink.isValidSlug(p.publicSlug) {
             throw ProfileError.invalidSlug
         }
@@ -127,7 +144,7 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
 }
 
 public enum SocialPlatform: String, CaseIterable, Sendable {
-    case linkedin, facebook, instagram, tiktok, youtube
+    case linkedin, facebook, instagram, tiktok, youtube, x, github, custom
 
     public var label: String {
         switch self {
@@ -136,6 +153,9 @@ public enum SocialPlatform: String, CaseIterable, Sendable {
         case .instagram: return "Instagram"
         case .tiktok: return "TikTok"
         case .youtube: return "YouTube"
+        case .x: return "X"
+        case .github: return "GitHub"
+        case .custom: return "Egyéb"
         }
     }
 
@@ -146,6 +166,9 @@ public enum SocialPlatform: String, CaseIterable, Sendable {
         case .instagram: return 3
         case .tiktok: return 4
         case .youtube: return 5
+        case .x: return 6
+        case .github: return 7
+        case .custom: return 8
         }
     }
 }
@@ -158,6 +181,9 @@ public extension ContactProfile {
         case .instagram: return instagram
         case .tiktok: return tiktok
         case .youtube: return youtube
+        case .x: return x
+        case .github: return github
+        case .custom: return customSocial
         }
     }
 
@@ -168,6 +194,9 @@ public extension ContactProfile {
         case .instagram: instagram = value
         case .tiktok: tiktok = value
         case .youtube: youtube = value
+        case .x: x = value
+        case .github: github = value
+        case .custom: customSocial = value
         }
     }
 
