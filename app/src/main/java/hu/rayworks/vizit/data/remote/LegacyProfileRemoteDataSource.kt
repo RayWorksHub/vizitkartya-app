@@ -17,6 +17,9 @@ class LegacyProfileRemoteDataSource(private val client: SupabaseClient?) : Profi
         SocialDefinition("instagram", "Instagram", 3),
         SocialDefinition("tiktok", "TikTok", 4),
         SocialDefinition("youtube", "YouTube", 5),
+        SocialDefinition("x", "X", 6),
+        SocialDefinition("github", "GitHub", 7),
+        SocialDefinition("custom", "Egyéb", 8),
     )
 
     override fun authenticatedUserId(): String? = client?.auth?.currentSessionOrNull()?.user?.id

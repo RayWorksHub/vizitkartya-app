@@ -347,6 +347,7 @@ internal fun ProfileCard(
         email = shown.email,
         modifier = modifier,
         photo = rememberProfilePhoto(shown.photoBase64),
+        logo = rememberProfilePhoto(shown.logoBase64),
         presentation = presentation,
         socialLabels = shown.socialLabels(),
         qrCode = rememberCardQr(profile, presentation),
@@ -379,4 +380,7 @@ internal fun ContactProfile.socialLabels(): List<String> = listOf(
     "Instagram" to instagram,
     "TikTok" to tiktok,
     "YouTube" to youtube,
+    "X" to x,
+    "GitHub" to github,
+    "Egyéb" to customSocial,
 ).filter { it.second.isNotBlank() }.map { it.first }

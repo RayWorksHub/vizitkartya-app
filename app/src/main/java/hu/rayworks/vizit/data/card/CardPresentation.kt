@@ -75,4 +75,7 @@ fun ContactProfile.visibleThrough(presentation: CardPresentation): ContactProfil
     instagram = if (presentation.sharesSocial) instagram else "",
     tiktok = if (presentation.sharesSocial) tiktok else "",
     youtube = if (presentation.sharesSocial) youtube else "",
+    x = if (presentation.sharesSocial) x else "",
+    github = if (presentation.sharesSocial) github else "",
+    customSocial = if (presentation.sharesSocial) customSocial else "",
 )

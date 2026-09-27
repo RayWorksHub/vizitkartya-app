@@ -37,6 +37,9 @@ object VCardBuilder {
             "instagram" to profile.instagram,
             "tiktok" to profile.tiktok,
             "youtube" to profile.youtube,
+            "x" to profile.x,
+            "github" to profile.github,
+            "custom" to profile.customSocial,
         ).filter { it.second.isNotBlank() }.forEach { (platform, url) ->
             appendVCardLine("X-SOCIALPROFILE;TYPE=$platform:${escape(url)}")
         }

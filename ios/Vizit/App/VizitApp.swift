@@ -609,6 +609,7 @@ enum RootTab: Hashable {
 struct AppGate: View {
     @EnvironmentObject private var store: AppStore
     @State private var themeMode: ThemeMode = ThemeStorage.current
+    @State private var finishingWizard = false
 
     var body: some View {
         Group {
@@ -632,10 +633,19 @@ struct AppGate: View {
                 }
 
             case .authenticated, .offline:
-                RootView(themeMode: $themeMode)
+                if store.hasProfile && !finishingWizard {
+                    RootView(themeMode: $themeMode)
+                } else {
+                    ProfileWizard(onSaving: { finishingWizard = true },
+                                  onSaveFailed: { finishingWizard = false },
+                                  onFinished: { finishingWizard = false })
+                }
             }
         }
         .preferredColorScheme(themeMode.colorScheme)
+        .onChange(of: store.authStatus) { status in
+            if status == .signedOut { finishingWizard = false }
+        }
         .alert("VIZIT", isPresented: Binding(
             get: { store.message != nil },
             set: { if !$0 { store.dismissMessage() } }

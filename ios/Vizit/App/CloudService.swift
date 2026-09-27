@@ -12,6 +12,7 @@ struct RemoteProfile: Decodable, Sendable {
     let displayName: String
     let jobTitle: String
     let company: String
+    let bio: String
     let publicEmail: String
     let phone: String
     let website: String
@@ -26,9 +27,12 @@ struct RemoteProfile: Decodable, Sendable {
     var instagram = ""
     var tiktok = ""
     var youtube = ""
+    var x = ""
+    var github = ""
+    var custom = ""
 
     var fingerprint: String {
-        let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company,
+        let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company, bio,
                       publicEmail, phone, website, address, String(isPublic), customDomain ?? "",
                       String(customDomainVerified == true), avatarURL ?? ""]
             + SocialPlatform.allCases.map { socialURL(for: $0) }
@@ -39,7 +43,7 @@ struct RemoteProfile: Decodable, Sendable {
     func matches(_ value: ContactProfile) -> Bool {
         let p = value.normalized
         return displayName == p.displayName && slug == p.publicSlug && jobTitle == p.jobTitle &&
-            company == p.company && publicEmail == p.email && phone == p.phone && website == p.website &&
+            company == p.company && bio == p.bio && publicEmail == p.email && phone == p.phone && website == p.website &&
             address == p.address && isPublic == p.isPublic &&
             (customDomain ?? "") == p.customDomain &&
             SocialPlatform.allCases.allSatisfy { socialURL(for: $0) == p.socialURL(for: $0) } &&
@@ -53,6 +57,9 @@ struct RemoteProfile: Decodable, Sendable {
         case .instagram: return instagram
         case .tiktok: return tiktok
         case .youtube: return youtube
+        case .x: return x
+        case .github: return github
+        case .custom: return custom
         }
     }
 
@@ -63,6 +70,9 @@ struct RemoteProfile: Decodable, Sendable {
         case .instagram: instagram = value
         case .tiktok: tiktok = value
         case .youtube: youtube = value
+        case .x: x = value
+        case .github: github = value
+        case .custom: custom = value
         }
     }
 
@@ -77,7 +87,7 @@ struct RemoteProfile: Decodable, Sendable {
         case ownerID = "owner_id"
         case displayName = "display_name"
         case jobTitle = "job_title"
-        case company
+        case company, bio
         case publicEmail = "public_email"
         case isPublic = "is_public"
         case customDomain = "custom_domain"
@@ -100,6 +110,7 @@ private struct ProfileWrite: Encodable {
     let displayName: String
     let jobTitle: String
     let company: String
+    let bio: String
     let publicEmail: String
     let phone: String
     let website: String
@@ -109,7 +120,7 @@ private struct ProfileWrite: Encodable {
     let avatarURL: String
 
     enum CodingKeys: String, CodingKey {
-        case id, slug, phone, website, address, company
+        case id, slug, phone, website, address, company, bio
         case ownerID = "owner_id"
         case displayName = "display_name"
         case jobTitle = "job_title"
@@ -295,7 +306,7 @@ final class CloudService: @unchecked Sendable {
     func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
         let query = [
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url"),
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url"),
             URLQueryItem(name: "limit", value: "1")
         ]
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
@@ -308,6 +319,7 @@ final class CloudService: @unchecked Sendable {
         profile.fullName = remote.displayName
         profile.jobTitle = remote.jobTitle
         profile.company = remote.company
+        profile.bio = remote.bio
         profile.email = remote.publicEmail
         profile.phone = remote.phone
         profile.website = remote.website
@@ -352,7 +364,7 @@ final class CloudService: @unchecked Sendable {
                                profile: ContactProfile, slug: String) async throws -> RemoteProfile {
         let payload = try write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
-            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")],
+            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")],
             body: payload, prefer: "return=representation")
         guard let remote = rows.first else { throw CloudError.emptyResponse }
         return remote
@@ -365,7 +377,7 @@ final class CloudService: @unchecked Sendable {
             URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
             URLQueryItem(name: "updated_at", value: "eq.\(expectedUpdatedAt)"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")
         ], body: payload, prefer: "return=representation")
         guard let remote = rows.first else { return nil }
         return remote
@@ -374,7 +386,7 @@ final class CloudService: @unchecked Sendable {
     private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String) throws -> ProfileWrite {
         let p = profile.normalized
         return ProfileWrite(id: profileID, ownerID: ownerID, slug: slug, displayName: p.displayName,
-                            jobTitle: p.jobTitle, company: p.company, publicEmail: p.email,
+                            jobTitle: p.jobTitle, company: p.company, bio: p.bio, publicEmail: p.email,
                             phone: p.phone, website: p.website, address: p.address,
                             isPublic: p.isPublic,
                             customDomain: p.customDomain.isEmpty ? nil : p.customDomain,

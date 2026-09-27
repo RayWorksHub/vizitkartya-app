@@ -27,9 +27,9 @@ final class VizitCoreTests: XCTestCase {
     func testBlankNameFails() {
         XCTAssertThrowsError(try ContactProfile().validate()) { XCTAssertEqual($0 as? ProfileError, .missingName) }
     }
-    func testContactMethodRequired() {
+    func testContactMethodOptional() {
         var p = sample(); p.phone = ""; p.email = ""
-        XCTAssertThrowsError(try p.validate()) { XCTAssertEqual($0 as? ProfileError, .missingContact) }
+        XCTAssertNoThrow(try p.validate()) // Contact details are optional in the first-card wizard.
     }
     func testEmailWithoutPhoneWorks() throws {
         var p = sample(); p.phone = ""; try p.validate()

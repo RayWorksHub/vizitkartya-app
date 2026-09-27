@@ -9,7 +9,7 @@ import kotlinx.serialization.json.*
 class NodeProfileRemoteDataSource(client: SupabaseClient?) : ProfileRemoteDataSource {
     private val api = NodeBackendApi(client)
     private val json = Json { ignoreUnknownKeys = true }
-    private val editableSocial = setOf("linkedin", "facebook", "instagram", "tiktok", "youtube")
+    private val editableSocial = setOf("linkedin", "facebook", "instagram", "tiktok", "youtube", "x", "github", "custom")
     private data class Record(val raw: JsonObject, val row: LegacyProfileRecord, val fingerprint: String)
     override fun authenticatedUserId(): String? = api.userId()
 

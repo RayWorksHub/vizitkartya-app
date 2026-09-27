@@ -78,7 +78,10 @@ object LegacyProfileCodec {
             payload.links.firstOrNull { it.kind == "facebook" }?.url.orEmpty(),
             payload.links.firstOrNull { it.kind == "instagram" }?.url.orEmpty(),
             payload.links.firstOrNull { it.kind == "tiktok" }?.url.orEmpty(),
-            payload.links.firstOrNull { it.kind == "youtube" }?.url.orEmpty())
+            payload.links.firstOrNull { it.kind == "youtube" }?.url.orEmpty(),
+            payload.links.firstOrNull { it.kind == "x" }?.url.orEmpty(),
+            payload.links.firstOrNull { it.kind == "github" }?.url.orEmpty(),
+            payload.links.firstOrNull { it.kind == "custom" }?.url.orEmpty())
         val bytes = Json.encodeToString(JsonArray.serializer(),JsonArray(fields.map(::JsonPrimitive))).toByteArray()
         return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
     }

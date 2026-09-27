@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -56,6 +57,7 @@ fun VizitDigitalCard(
     email: String,
     modifier: Modifier = Modifier,
     photo: ImageBitmap? = null,
+    logo: ImageBitmap? = null,
     presentation: CardPresentation = CardPresentation(),
     socialLabels: List<String> = emptyList(),
     qrCode: ImageBitmap? = null,
@@ -115,7 +117,7 @@ fun VizitDigitalCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (presentation.showsPhoto) {
-                        CardAvatar(initials = initials, photo = photo)
+                        CardAvatar(initials = initials, photo = photo, logo = logo)
                         Spacer(Modifier.width(14.dp))
                     }
                     CardIdentity(fullName = fullName, subtitle = subtitle, modifier = Modifier.weight(1f))
@@ -146,7 +148,7 @@ fun VizitDigitalCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (presentation.showsPhoto) {
-                            CardAvatar(initials = initials, photo = photo)
+                            CardAvatar(initials = initials, photo = photo, logo = logo)
                             Spacer(Modifier.width(12.dp))
                         }
                         CardIdentity(fullName = fullName, subtitle = subtitle)
@@ -172,12 +174,11 @@ fun VizitDigitalCard(
 }
 
 @Composable
-private fun CardAvatar(initials: String, photo: ImageBitmap?) {
+private fun CardAvatar(initials: String, photo: ImageBitmap?, logo: ImageBitmap?) {
     Box(
         modifier = Modifier
             .size(56.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
             .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(28.dp)),
         contentAlignment = Alignment.Center,
     ) {
@@ -194,6 +195,12 @@ private fun CardAvatar(initials: String, photo: ImageBitmap?) {
                 style = Vizit.type.title,
                 color = Color.White.copy(alpha = 0.92f),
             )
+        }
+        if (logo != null) {
+            Image(bitmap = logo, contentDescription = "Céges logó", contentScale = ContentScale.Crop,
+                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp)
+                    .size(20.dp).clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, Color.White, RoundedCornerShape(10.dp)))
         }
     }
 }

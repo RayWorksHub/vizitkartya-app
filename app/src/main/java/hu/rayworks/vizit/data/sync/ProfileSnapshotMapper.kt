@@ -141,11 +141,11 @@ object ProfileSnapshotMapper {
                 displayName = canonical.fullName,
                 company = canonical.company,
                 jobTitle = canonical.jobTitle,
-                bio = previous?.profile?.bio.orEmpty(),
+                bio = canonical.bio,
                 displayImagePath = if (canonical.photoBase64 == previous?.profile?.localContactPhotoBase64)
                     previous?.profile?.displayImagePath else null,
                 contactImagePath = previous?.profile?.contactImagePath,
-                logoPath = previous?.profile?.logoPath,
+                logoPath = canonical.logoBase64.takeIf(String::isNotBlank)?.let { "data:image/jpeg;base64,$it" },
                 publicSlug = canonical.publicSlug.ifBlank { null },
                 customDomain = canonical.customDomain.ifBlank { null },
                 customDomainVerified = previous?.profile?.let {
@@ -187,7 +187,7 @@ object ProfileSnapshotMapper {
             bio = payload.bio,
             displayImagePath = payload.displayImagePath,
             contactImagePath = payload.contactImagePath,
-            logoPath = payload.logoPath,
+            logoPath = payload.logoPath ?: previous?.profile?.logoPath,
             publicSlug = payload.publicSlug,
             customDomain = payload.customDomain,
             customDomainVerified = payload.customDomainVerified,
@@ -305,12 +305,16 @@ object ProfileSnapshotMapper {
         val instagram = snapshot.links.firstOrNull { it.kind == "instagram" }?.url.orEmpty()
         val tiktok = snapshot.links.firstOrNull { it.kind == "tiktok" }?.url.orEmpty()
         val youtube = snapshot.links.firstOrNull { it.kind == "youtube" }?.url.orEmpty()
+        val x = snapshot.links.firstOrNull { it.kind == "x" }?.url.orEmpty()
+        val github = snapshot.links.firstOrNull { it.kind == "github" }?.url.orEmpty()
+        val customSocial = snapshot.links.firstOrNull { it.kind == "custom" }?.url.orEmpty()
         return ContactProfile(
             fullName = snapshot.profile.displayName,
             firstName = snapshot.profile.firstName,
             lastName = snapshot.profile.lastName,
             jobTitle = snapshot.profile.jobTitle,
             company = snapshot.profile.company,
+            bio = snapshot.profile.bio,
             phone = phone,
             email = email,
             website = website,
@@ -320,7 +324,12 @@ object ProfileSnapshotMapper {
             instagram = instagram,
             tiktok = tiktok,
             youtube = youtube,
+            x = x,
+            github = github,
+            customSocial = customSocial,
             photoBase64 = snapshot.profile.localContactPhotoBase64,
+            logoBase64 = snapshot.profile.logoPath?.removePrefix("data:image/jpeg;base64,")
+                ?.takeIf { snapshot.profile.logoPath?.startsWith("data:image/jpeg;base64,") == true }.orEmpty(),
             publicSlug = snapshot.profile.publicSlug.orEmpty(),
             customDomain = snapshot.profile.customDomain.orEmpty(),
             customDomainVerified = snapshot.profile.customDomainVerified,
@@ -334,6 +343,7 @@ object ProfileSnapshotMapper {
         lastName = lastName.trim(),
         jobTitle = jobTitle.trim(),
         company = company.trim(),
+        bio = bio.trim(),
         phone = phone.trim(),
         email = email.trim(),
         website = website.trim(),
@@ -343,6 +353,9 @@ object ProfileSnapshotMapper {
         instagram = instagram.trim(),
         tiktok = tiktok.trim(),
         youtube = youtube.trim(),
+        x = x.trim(),
+        github = github.trim(),
+        customSocial = customSocial.trim(),
         publicSlug = publicSlug.trim(),
         customDomain = customDomain.trim().takeIf(String::isNotBlank)
             ?.let(PublicProfileUrlFactory::normalizeCustomDomain).orEmpty(),
@@ -355,6 +368,9 @@ object ProfileSnapshotMapper {
         ManagedLink("instagram", "Instagram", 3, instagram),
         ManagedLink("tiktok", "TikTok", 4, tiktok),
         ManagedLink("youtube", "YouTube", 5, youtube),
+        ManagedLink("x", "X", 6, x),
+        ManagedLink("github", "GitHub", 7, github),
+        ManagedLink("custom", "Egyéb", 8, customSocial),
     )
 
     private data class ManagedLink(

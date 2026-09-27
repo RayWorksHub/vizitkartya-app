@@ -72,6 +72,7 @@ import hu.rayworks.vizit.ui.screens.NfcShareScreen
 import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
+import hu.rayworks.vizit.ui.screens.ProfileWizardScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -100,6 +101,8 @@ fun VizitApp(
     var showCardAppearance by rememberSaveable { mutableStateOf(false) }
     var showDataVisibility by rememberSaveable { mutableStateOf(false) }
     var showScanner by rememberSaveable { mutableStateOf(false) }
+    var wizardCompleted by rememberSaveable { mutableStateOf(false) }
+    var wizardSaving by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
@@ -136,6 +139,19 @@ fun VizitApp(
                 exportMessage = failure.localizedMessage ?: "Az exportálás nem sikerült."
             }
         }
+    }
+
+    if ((viewModel.profile.resolvedDisplayName.isBlank() || wizardSaving) && !wizardCompleted) {
+        ProfileWizardScreen(onSave = { draft ->
+            wizardSaving = true
+            val issue = try { viewModel.saveProfile(draft) } catch (failure: Exception) {
+                failure.localizedMessage ?: "A mentés nem sikerült."
+            }
+            if (issue != null) wizardSaving = false
+            issue
+        }, presentation = viewModel.cardPresentation,
+            onAppearanceChange = viewModel::updateCardPresentation, onDone = { wizardCompleted = true; wizardSaving = false })
+        return
     }
 
     // Full-screen NFC hand-off takes over the whole app while it is running.

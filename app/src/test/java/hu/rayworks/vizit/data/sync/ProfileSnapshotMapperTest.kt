@@ -16,6 +16,7 @@ class ProfileSnapshotMapperTest {
             lastName = " Teszt ",
             jobTitle = " Fejlesztő ",
             company = " VIZIT ",
+            bio = " Vállalkozó vagyok. ",
             phone = " +36 30 123 4567 ",
             email = " elek@example.com ",
             website = " https://example.com ",
@@ -25,7 +26,11 @@ class ProfileSnapshotMapperTest {
             instagram = " https://instagram.com/elek ",
             tiktok = " https://tiktok.com/@elek ",
             youtube = " https://youtube.com/@elek ",
+            x = " https://x.com/elek ",
+            github = " https://github.com/elek ",
+            customSocial = " https://example.com/elek ",
             photoBase64 = "local-photo",
+            logoBase64 = "local-logo",
             publicSlug = " teszt-elek ",
             customDomain = " HTTPS://Nevjegy.Example.HU/ ",
             isPublic = true,
@@ -39,7 +44,7 @@ class ProfileSnapshotMapperTest {
         assertEquals("local-photo", snapshot.profile.localContactPhotoBase64)
         assertEquals(listOf("phone", "email"), snapshot.contacts.map { it.kind })
         assertEquals(
-            listOf("website", "linkedin", "facebook", "instagram", "tiktok", "youtube"),
+            listOf("website", "linkedin", "facebook", "instagram", "tiktok", "youtube", "x", "github", "custom"),
             snapshot.links.map { it.kind },
         )
         val restored = ProfileSnapshotMapper.toContactProfile(snapshot)
@@ -47,6 +52,11 @@ class ProfileSnapshotMapperTest {
         assertEquals("https://instagram.com/elek", restored.instagram)
         assertEquals("https://tiktok.com/@elek", restored.tiktok)
         assertEquals("https://youtube.com/@elek", restored.youtube)
+        assertEquals("https://x.com/elek", restored.x)
+        assertEquals("https://github.com/elek", restored.github)
+        assertEquals("https://example.com/elek", restored.customSocial)
+        assertEquals("Vállalkozó vagyok.", restored.bio)
+        assertEquals("local-logo", restored.logoBase64)
         assertTrue(snapshot.profile.pendingSync)
         assertTrue(payload.isPublic)
         assertEquals("nevjegy.example.hu", payload.customDomain)
