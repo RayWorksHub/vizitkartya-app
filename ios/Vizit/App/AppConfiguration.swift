@@ -1,6 +1,7 @@
 import Foundation
 
 struct AppConfiguration: Sendable {
+    let backendURL: URL
     let supabaseURL: URL
     let publishableKey: String
     let callbackURL: URL
@@ -46,7 +47,14 @@ struct AppConfiguration: Sendable {
             throw ConfigurationError.invalid("VIZITGoogleSignInEnabled")
         }
 
+        let backendURL = try httpsURL("VIZITBackendURL")
+        guard backendURL.path.isEmpty || backendURL.path == "/",
+              backendURL.query == nil, backendURL.fragment == nil else {
+            throw ConfigurationError.invalid("VIZITBackendURL")
+        }
+
         return AppConfiguration(
+            backendURL: backendURL,
             supabaseURL: supabaseURL,
             publishableKey: key,
             callbackURL: callback,

@@ -1,6 +1,12 @@
 name: VIZIT Direct TestFlight
 
 on:
+  pull_request:
+    branches:
+      - feature/ios-web-complete-design-sync-20260920
+    paths:
+      - .github/workflows/ios.yml
+      - ios/**
   push:
     branches:
       - feature/ios-web-complete-design-sync-20260920
@@ -16,12 +22,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify live API identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/api/auth/config > "$RUNNER_TEMP/vizit-auth-config.json"
+          python3 -c 'import json, sys; config=json.load(open(sys.argv[1])); assert config.get("supabase_url")=="https://zlrrmkbbyfkbjeqozzde.supabase.co"; assert config.get("publishable_key")=="sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS"' "$RUNNER_TEMP/vizit-auth-config.json"
+          curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/health/database > /dev/null
+      - name: Compile iOS simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_26.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          fi
+          xcodebuild -project ios/VIZIT.xcodeproj -scheme VIZIT \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            VIZIT_BACKEND_URL=https://vizitkartyam-backend.vercel.app \
+            VIZIT_SUPABASE_URL=https://zlrrmkbbyfkbjeqozzde.supabase.co \
+            VIZIT_SUPABASE_KEY=sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS \
+            VIZIT_AUTH_SCHEME=hu.rayworks.vizit.ios.dev.auth \
+            VIZIT_GOOGLE_SIGN_IN_ENABLED=NO \
+            VIZIT_PUBLIC_PROFILE_BASE_URL=https://www.vizitkartyam.hu/p \
+            build
+
   upload:
+    if: github.event_name == 'push'
     runs-on: macos-15
     timeout-minutes: 60
     env:
-      VIZIT_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
-      VIZIT_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
+      VIZIT_BACKEND_URL: https://vizitkartyam-backend.vercel.app
+      VIZIT_SUPABASE_URL: https://zlrrmkbbyfkbjeqozzde.supabase.co
+      VIZIT_SUPABASE_KEY: sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS
       VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
@@ -84,6 +123,14 @@ jobs:
           echo "VIZIT_PROFILE_PATH=$profile_path" >> "$GITHUB_ENV"
           echo "VIZIT_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
+      - name: Verify API and authentication configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --max-time 20 "$VIZIT_BACKEND_URL/api/auth/config" > "$RUNNER_TEMP/vizit-auth-config.json"
+          python3 -c 'import json, os, sys; config=json.load(open(sys.argv[1])); assert config.get("supabase_url")==os.environ["VIZIT_SUPABASE_URL"]; assert config.get("publishable_key")==os.environ["VIZIT_SUPABASE_KEY"]' "$RUNNER_TEMP/vizit-auth-config.json"
+          curl --fail --silent --show-error --retry 3 --max-time 20 "$VIZIT_BACKEND_URL/health/database" > /dev/null
+
       - name: Archive VIZIT 8.7.0
         shell: bash
         run: |
@@ -95,6 +142,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/VIZIT.xcarchive" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            VIZIT_BACKEND_URL="$VIZIT_BACKEND_URL" \
             VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" \
             VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY" \
             VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME" \

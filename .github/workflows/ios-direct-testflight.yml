@@ -1,11 +1,7 @@
 name: VIZIT Direct TestFlight
 
 on:
-  push:
-    branches: [feature/ios-web-complete-design-sync-20260920]
-    paths:
-      - 'ios/.direct-testflight-*'
-      - '.github/workflows/ios-direct-testflight.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,15 +16,16 @@ jobs:
     timeout-minutes: 60
     environment: testflight-production
     env:
-      VIZIT_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
-      VIZIT_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
+      VIZIT_BACKEND_URL: https://vizitkartyam-backend.vercel.app
+      VIZIT_SUPABASE_URL: https://zlrrmkbbyfkbjeqozzde.supabase.co
+      VIZIT_SUPABASE_KEY: sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS
       VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
       VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
-      VIZIT_PUBLIC_PROFILE_BASE_URL: https://e-nevjegy.vercel.app/p
+      VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
       APPLE_TEAM_ID: K7BC6R47KA
       APPLE_BUNDLE_ID: hu.rayworks.vizit.ios.dev
       APPLE_PROFILE_NAME: VIZIT App Store
@@ -100,7 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          xcodebuild             -project ios/VIZIT.xcodeproj             -scheme VIZIT             -configuration Release             -destination 'generic/platform=iOS'             -archivePath "$RUNNER_TEMP/VIZIT.xcarchive"             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"             -disableAutomaticPackageResolution             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"             VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL"             VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY"             VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME"             VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED"             VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL"             VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION"             VIZIT_TERMS_URL="$VIZIT_TERMS_URL"             VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION"             VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL"             archive
+          xcodebuild             -project ios/VIZIT.xcodeproj             -scheme VIZIT             -configuration Release             -destination 'generic/platform=iOS'             -archivePath "$RUNNER_TEMP/VIZIT.xcarchive"             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"             -disableAutomaticPackageResolution             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"             VIZIT_BACKEND_URL="$VIZIT_BACKEND_URL"             VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL"             VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY"             VIZIT_AUTH_SCHEME="$VIZIT_AUTH_SCHEME"             VIZIT_GOOGLE_SIGN_IN_ENABLED="$VIZIT_GOOGLE_SIGN_IN_ENABLED"             VIZIT_PRIVACY_POLICY_URL="$VIZIT_PRIVACY_POLICY_URL"             VIZIT_PRIVACY_POLICY_VERSION="$VIZIT_PRIVACY_POLICY_VERSION"             VIZIT_TERMS_URL="$VIZIT_TERMS_URL"             VIZIT_TERMS_VERSION="$VIZIT_TERMS_VERSION"             VIZIT_PUBLIC_PROFILE_BASE_URL="$VIZIT_PUBLIC_PROFILE_BASE_URL"             archive
 
       - name: Export IPA
         shell: bash
