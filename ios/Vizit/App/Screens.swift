@@ -292,7 +292,6 @@ struct ShareScreen: View {
     @State private var savedQRCode = false
     @State private var showNFCInformation = false
     @State private var selectedMode: ShareQRMode = .contact
-    @State private var photoQRPayload: String?
 
     /// What actually leaves the device: the stored profile minus whatever the
     /// owner switched off in Adatláthatóság.
@@ -333,6 +332,14 @@ struct ShareScreen: View {
                             .accessibilityIdentifier("share.fullscreen")
 
                             compactActions(image: image)
+                            if selectedMode == .photo {
+                                VizitButton(
+                                    title: "Fényképes névjegyfájl küldése",
+                                    systemImage: "square.and.arrow.up",
+                                    kind: .secondary
+                                ) { shareCurrentSelection() }
+                                .accessibilityIdentifier("share.fullPhotoVCard")
+                            }
                         } else {
                             unavailableMode
                         }
@@ -372,9 +379,6 @@ struct ShareScreen: View {
                 }
             }
             .navigationBarHidden(true)
-            .task(id: sharedProfile) {
-                photoQRPayload = PhotoContactQR.payload(sharedProfile)
-            }
             .sheet(isPresented: $editingProfile) { ProfileEditor(draft: store.profile) }
             .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
                 ActivitySheet(url: file.url)
@@ -425,7 +429,7 @@ struct ShareScreen: View {
                     .foregroundStyle(Color(uiColor: UIColor(hex: 0x4A5568)))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                if selectedMode != .profile, let payload = qrPayload {
+                if selectedMode == .contact, let payload = qrPayload {
                     VizitStatusPill(
                         text: "\(payload.utf8.count) / \(VCard.maximumHighCorrectionBytes.formatted()) bájt",
                         tone: .success
@@ -448,14 +452,14 @@ struct ShareScreen: View {
         case .contact:
             return "Ez a kód a teljes névjegyedet tartalmazza, és internet nélkül is bekerül a másik telefon névjegyei közé."
         case .photo:
-            return "A teljes névjegyet és a méretre igazított profilképet is tartalmazza. Internet nem szükséges."
+            return "A kód a nyilvános, naprakész fényképes profilodat nyitja meg. Internet szükséges. Az eredeti minőségű képet névjegyfájlként is elküldheted."
         case .profile:
             return "A naprakész nyilvános profilodat nyitja meg. Ehhez internetkapcsolat szükséges."
         }
     }
 
     private var qrTitle: String {
-        selectedMode == .profile ? "Nyisd meg a profilomat" : "Olvastasd be a másik telefonnal"
+        selectedMode == .contact ? "Olvastasd be a másik telefonnal" : "Nyisd meg a profilomat"
     }
 
     private func compactActions(image: UIImage) -> some View {
@@ -486,11 +490,11 @@ struct ShareScreen: View {
                 )
             } else {
                 VizitEmptyState(
-                    systemImage: "exclamationmark.triangle",
-                    title: "A profilkép nem fér bele a kódba",
-                    message: "A névjegyed adatai már kitöltik a QR-kapacitást. Választhatsz kisebb profilképet, vagy használhatod a Kontakt módot – abból semmilyen adat nem marad ki, csak a kép.",
-                    actionTitle: "Vissza a Kontakt QR-hoz",
-                    action: { selectedMode = .contact }
+                    systemImage: "wifi.slash",
+                    title: "A fényképes QR még nem elérhető",
+                    message: "Kapcsold be a nyilvános profilt, és várd meg a szinkront. Addig a teljes méretű képet névjegyfájlként elküldheted.",
+                    actionTitle: "Fényképes névjegyfájl küldése",
+                    action: { shareCurrentSelection() }
                 )
             }
         case .profile:
@@ -528,7 +532,8 @@ struct ShareScreen: View {
         case .contact:
             return try? VCard.qrPayload(sharedProfile, includePhoto: false)
         case .photo:
-            return photoQRPayload
+            return PhotoContactQR.payload(sharedProfile, baseURL: store.configuration?.publicProfileBaseURL,
+                                          synced: store.syncStatus == .synced)
         case .profile:
             return publicURL?.absoluteString
         }
@@ -767,142 +772,14 @@ enum QRImage {
 }
 
 enum PhotoContactQR {
-    static func payload(_ profile: ContactProfile) -> String? {
-        guard !profile.photoBase64.isEmpty,
-              let bytes = Data(base64Encoded: profile.photoBase64),
-              let source = UIImage(data: bytes) else { return nil }
-
-        for side in [72, 64, 56, 48, 40, 32, 28, 24, 20, 16, 12, 10, 8, 6, 4] {
-            let size = CGSize(width: side, height: side)
-            let format = UIGraphicsImageRendererFormat.default()
-            format.scale = 1
-            format.opaque = true
-            let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
-                UIColor.white.setFill()
-                context.cgContext.fill(CGRect(origin: .zero, size: size))
-                let scale = max(size.width / source.size.width, size.height / source.size.height)
-                let drawSize = CGSize(width: source.size.width * scale, height: source.size.height * scale)
-                source.draw(in: CGRect(
-                    x: (size.width - drawSize.width) / 2,
-                    y: (size.height - drawSize.height) / 2,
-                    width: drawSize.width,
-                    height: drawSize.height
-                ))
-            }
-            for quality in [0.65, 0.55, 0.45, 0.35, 0.25, 0.18, 0.12, 0.08] {
-                guard let encoded = image.jpegData(compressionQuality: quality),
-                      let jpeg = jpegWithoutMetadata(encoded) else { continue }
-                var candidate = profile
-                candidate.photoBase64 = jpeg.base64EncodedString()
-                if let value = try? VCard.qrPayload(candidate, includePhoto: true),
-                   value.contains("PHOTO;ENCODING=b;TYPE=JPEG:"),
-                   QRImage.canEncode(value) {
-                    return value
-                }
-            }
-        }
-
-        // A baseline colour JPEG carries two quantisation tables and four
-        // Huffman tables even at 4x4 pixels. For a contact with every optional
-        // field populated that fixed overhead can be the last few hundred
-        // bytes above QR version 40-H. A grayscale JPEG remains a real embedded
-        // contact photo while using one component and roughly half the tables.
-        for side in [16, 12, 10, 8, 6, 4] {
-            guard let image = grayscaleThumbnail(source, side: side) else { continue }
-            for quality in [0.55, 0.35, 0.18, 0.08] {
-                guard let encoded = image.jpegData(compressionQuality: quality),
-                      let jpeg = jpegWithoutMetadata(encoded) else { continue }
-                var candidate = profile
-                candidate.photoBase64 = jpeg.base64EncodedString()
-                if let value = try? VCard.qrPayload(candidate, includePhoto: true),
-                   value.contains("PHOTO;ENCODING=b;TYPE=JPEG:"),
-                   QRImage.canEncode(value) {
-                    return value
-                }
-            }
-        }
-        return nil
-    }
-
-    private static func grayscaleThumbnail(_ source: UIImage, side: Int) -> UIImage? {
-        guard let sourceImage = source.cgImage else { return nil }
-        let bytesPerRow = ((side + 15) / 16) * 16
-        guard let context = CGContext(
-            data: nil,
-            width: side,
-            height: side,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: CGColorSpaceCreateDeviceGray(),
-            bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else { return nil }
-
-        context.interpolationQuality = .medium
-        context.translateBy(x: 0, y: CGFloat(side))
-        context.scaleBy(x: 1, y: -1)
-        let width = CGFloat(sourceImage.width)
-        let height = CGFloat(sourceImage.height)
-        let scale = max(CGFloat(side) / width, CGFloat(side) / height)
-        let drawSize = CGSize(width: width * scale, height: height * scale)
-        context.draw(sourceImage, in: CGRect(
-            x: (CGFloat(side) - drawSize.width) / 2,
-            y: (CGFloat(side) - drawSize.height) / 2,
-            width: drawSize.width,
-            height: drawSize.height
-        ))
-        guard let image = context.makeImage() else { return nil }
-        return UIImage(cgImage: image)
-    }
-
-    /// `UIImage.jpegData` may attach a multi-kilobyte ICC/EXIF payload even to
-    /// a tiny thumbnail. Those application segments describe the source image,
-    /// not the pixels Contacts needs, and can by themselves overflow a level-H
-    /// QR code. Preserve the actual JPEG image/colour-transform segments while
-    /// removing only metadata segments before embedding the photo in the vCard.
-    private static func jpegWithoutMetadata(_ data: Data) -> Data? {
-        let bytes = [UInt8](data)
-        guard bytes.count >= 4, bytes[0] == 0xff, bytes[1] == 0xd8 else { return nil }
-
-        var output = Data([0xff, 0xd8])
-        var index = 2
-        while index < bytes.count {
-            let markerStart = index
-            guard bytes[index] == 0xff else { return nil }
-            while index < bytes.count, bytes[index] == 0xff { index += 1 }
-            guard index < bytes.count else { return nil }
-
-            let marker = bytes[index]
-            index += 1
-
-            // Start-of-scan owns the entropy-coded remainder, where 0xff bytes
-            // no longer follow the regular segment-length grammar.
-            if marker == 0xda {
-                output.append(contentsOf: bytes[markerStart...])
-                return output
-            }
-            if marker == 0xd9 {
-                output.append(contentsOf: bytes[markerStart..<index])
-                return output
-            }
-            if marker == 0x01 || (0xd0...0xd7).contains(marker) {
-                output.append(contentsOf: bytes[markerStart..<index])
-                continue
-            }
-
-            guard index + 1 < bytes.count else { return nil }
-            let length = Int(bytes[index]) << 8 | Int(bytes[index + 1])
-            guard length >= 2, index + length <= bytes.count else { return nil }
-            let segmentEnd = index + length
-
-            // APP1...APP13, APP15 and COM are EXIF/XMP/ICC/vendor metadata.
-            // APP0 (JFIF) and APP14 (Adobe colour transform) remain intact.
-            let metadata = (0xe1...0xed).contains(marker) || marker == 0xef || marker == 0xfe
-            if !metadata {
-                output.append(contentsOf: bytes[markerStart..<segmentEnd])
-            }
-            index = segmentEnd
-        }
-        return nil
+    // A QR's fixed byte budget cannot carry a recognizable portrait. Link to
+    // the synchronized public profile; full resolution stays in the .vcf share.
+    static func payload(_ profile: ContactProfile, baseURL: URL?, synced: Bool) -> String? {
+        guard !profile.photoBase64.isEmpty, profile.isPublic, synced,
+              let baseURL else { return nil }
+        return PublicProfileLink.preferred(baseURL: baseURL, slug: profile.publicSlug,
+                                           customDomain: profile.customDomain,
+                                           customDomainVerified: profile.customDomainVerified)?.absoluteString
     }
 }
 
