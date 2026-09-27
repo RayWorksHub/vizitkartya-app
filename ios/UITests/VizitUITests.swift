@@ -64,16 +64,18 @@ final class VizitUITests: XCTestCase {
 
     func testCreatePersistAndShowQR() {
         let app = launchClean()
-        let edit = app.buttons["card.edit"]
-        XCTAssertTrue(edit.waitForExistence(timeout: 10))
-        edit.tap()
-        let name = app.textFields["profile.fullName"]
+        XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 10))
+        app.buttons["wizard.private"].tap()
+        app.buttons["wizard.primary"].tap()
+        let name = app.textFields["wizard.fullName"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap(); name.typeText("Teszt Elek")
-        let phone = app.textFields["profile.phone"]
-        reveal(phone, in: app)
-        phone.tap(); phone.typeText("06201234567")
-        app.buttons["profile.save"].tap()
+        app.buttons["wizard.primary"].tap()
+        for _ in 0..<3 { app.buttons["wizard.skip"].tap() }
+        app.buttons["wizard.primary"].tap()
+        app.buttons["wizard.primary"].tap()
+        XCTAssertTrue(app.buttons["wizard.finish"].waitForExistence(timeout: 5))
+        app.buttons["wizard.finish"].tap()
         XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["card.name"].label, "Teszt Elek")
         app.terminate()
@@ -91,21 +93,29 @@ final class VizitUITests: XCTestCase {
 
     func testEmptyProfileShowsValidation() {
         let app = launchClean()
-        XCTAssertTrue(app.buttons["card.edit"].waitForExistence(timeout: 10))
-        app.buttons["card.edit"].tap()
-        app.buttons["profile.save"].tap()
-        XCTAssertTrue(app.alerts["A névjegy nem menthető"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.alerts.staticTexts["Add meg a nevedet."].exists)
+        let next = app.buttons["wizard.primary"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        XCTAssertFalse(next.isEnabled)
+        app.buttons["wizard.private"].tap()
+        XCTAssertTrue(next.isEnabled)
+        next.tap()
+        XCTAssertFalse(next.isEnabled)
     }
 
-    func testCancelDoesNotSaveDraft() {
+    func testBackKeepsDraftWithoutPublishing() {
         let app = launchClean()
-        XCTAssertTrue(app.buttons["card.edit"].waitForExistence(timeout: 10))
-        app.buttons["card.edit"].tap()
-        let name = app.textFields["profile.fullName"]
+        XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 10))
+        app.buttons["wizard.private"].tap()
+        app.buttons["wizard.primary"].tap()
+        let name = app.textFields["wizard.fullName"]
         name.tap(); name.typeText("Nem mentett adat")
-        app.buttons["Mégse"].tap()
-        XCTAssertTrue(app.buttons["card.edit"].waitForExistence(timeout: 5))
+        app.buttons["Vissza"].tap()
+        app.buttons["wizard.primary"].tap()
+        XCTAssertEqual(app.textFields["wizard.fullName"].value as? String, "Nem mentett adat")
+        app.terminate()
+        app.launchArguments = ["--ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["card.name"].exists)
     }
 }
