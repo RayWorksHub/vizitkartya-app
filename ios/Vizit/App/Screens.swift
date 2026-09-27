@@ -80,13 +80,13 @@ struct HomeScreen: View {
                                 label: "CRM",
                                 systemImage: "briefcase",
                                 supporting: "Partnerek, ügyletek és feladatok a webes munkatérben"
-                            ) { openURL(URL(string: "https://www.vizitkartyam.hu/dashboard/crm")!) }
+                            ) { openURL(URL(string: "https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fcrm")!) }
                             VizitDivider()
                             VizitRow(
                                 label: "Online névjegy szerkesztése",
                                 systemImage: "paintpalette",
                                 supporting: "Nyilvános színek, logó és közösségi hivatkozások"
-                            ) { openURL(URL(string: "https://www.vizitkartyam.hu/dashboard/profile")!) }
+                            ) { openURL(URL(string: "https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fprofile")!) }
                         }
                     }
                     .padding(.horizontal, VizitSpace.md)
