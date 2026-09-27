@@ -6,8 +6,12 @@ site_url = "http://127.0.0.1:3000"
 additional_redirect_urls = [
   "hu.rayworks.vizit.ios.dev.auth://auth-callback",
   "hu.rayworks.vizit.ios.dev.auth://auth-callback?flow=recovery",
+  "vizit-dev://auth-callback",
+  "vizit-dev://auth-callback?flow=recovery",
   "vizit-beta://auth-callback",
+  "vizit-beta://auth-callback?flow=recovery",
   "vizit://auth-callback",
+  "vizit://auth-callback?flow=recovery",
 ]
 
 [auth.email]
