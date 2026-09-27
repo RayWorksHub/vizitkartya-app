@@ -150,7 +150,7 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertThrowsError(try ProfileSyncStore(directory: directory).save(journal))
     }
     func testRemoteFingerprintTracksContentNotAnalyticsTimestamp() throws {
-        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","bio":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null}"#
+        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","bio":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null,"theme":"midnight"}"#
         let decode = { (text: String) throws in try JSONDecoder().decode(RemoteProfile.self, from: Data(text.utf8)) }
         var first = try decode(raw)
         XCTAssertEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "first", with: "later")).fingerprint)
