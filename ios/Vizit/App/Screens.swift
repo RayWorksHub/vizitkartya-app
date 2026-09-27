@@ -4,6 +4,7 @@ import Photos
 import PhotosUI
 import CoreImage.CIFilterBuiltins
 import WebKit
+import UniformTypeIdentifiers
 
 // MARK: - Home
 
@@ -12,11 +13,13 @@ import WebKit
 /// One primary action, three shortcuts, then status.
 struct HomeScreen: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var selectedTab: RootTab
     @State private var editing = false
     @State private var showScanner = false
     @State private var showKnowledgeHub = false
+    @State private var showAnalytics = false
 
     var body: some View {
         NavigationStack {
@@ -66,6 +69,24 @@ struct HomeScreen: View {
                                 supporting: "Edukáció, források és digitális segítség"
                             ) { showKnowledgeHub = true }
                             .accessibilityIdentifier("home.businessPortal")
+                            VizitDivider()
+                            VizitRow(
+                                label: "Statisztikák",
+                                systemImage: "chart.bar",
+                                supporting: "Profilmegtekintés, mentések és kattintások · 30 nap"
+                            ) { showAnalytics = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "CRM",
+                                systemImage: "briefcase",
+                                supporting: "Partnerek, ügyletek és feladatok a webes munkatérben"
+                            ) { openURL(URL(string: "https://www.vizitkartyam.hu/dashboard/crm")!) }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Online névjegy szerkesztése",
+                                systemImage: "paintpalette",
+                                supporting: "Nyilvános színek, logó és közösségi hivatkozások"
+                            ) { openURL(URL(string: "https://www.vizitkartyam.hu/dashboard/profile")!) }
                         }
                     }
                     .padding(.horizontal, VizitSpace.md)
@@ -77,6 +98,7 @@ struct HomeScreen: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
             .sheet(isPresented: $showKnowledgeHub) { BusinessHubScreen() }
+            .sheet(isPresented: $showAnalytics) { AnalyticsScreen() }
             .fullScreenCover(isPresented: $showScanner) { ScanFlow() }
         }
     }
@@ -122,6 +144,97 @@ private struct QuickTile: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+    }
+}
+
+struct AnalyticsSummary: Decodable {
+    struct Day: Decodable, Identifiable {
+        let day: String
+        let views: Int
+        let clicks: Int
+        var id: String { day }
+    }
+    struct Action: Decodable, Identifiable {
+        let label: String
+        let count: Int
+        var id: String { label }
+    }
+    let totalViews: Int
+    let totalSaves: Int
+    let totalClicks: Int
+    let last30Days: [Day]
+    let topActions: [Action]
+}
+
+private struct AnalyticsScreen: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var summary: AnalyticsSummary?
+    @State private var error: String?
+    @State private var loading = false
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        Text("Az elmúlt 30 nap összesített profilaktivitása.")
+                            .font(VizitFont.body)
+                            .foregroundStyle(VizitColor.textSecondary)
+                        if loading { ProgressView("Statisztika betöltése…") }
+                        if let error { VizitBanner(text: error, tone: .error) }
+                        if let summary {
+                            VizitSectionHeader(title: "Összesítés")
+                            VizitGroup {
+                                VizitRow(label: "Profilmegtekintés", value: "\(summary.totalViews)", showsChevron: false)
+                                VizitDivider()
+                                VizitRow(label: "Kapcsolatmentés", value: "\(summary.totalSaves)", showsChevron: false)
+                                VizitDivider()
+                                VizitRow(label: "Hivatkozáskattintás", value: "\(summary.totalClicks)", showsChevron: false)
+                            }
+                            VizitSectionHeader(title: "Napi aktivitás")
+                            if summary.last30Days.isEmpty {
+                                Text("Még nincs mérhető esemény az elmúlt 30 napban.")
+                                    .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
+                            }
+                            ForEach(summary.last30Days) { day in
+                                VStack(alignment: .leading, spacing: VizitSpace.xs) {
+                                    Text("\(day.day) · \(day.views) megtekintés · \(day.clicks) kattintás")
+                                        .font(VizitFont.bodySmall)
+                                    ProgressView(value: Double(day.views + day.clicks),
+                                                 total: Double(max(1, summary.last30Days.map { $0.views + $0.clicks }.max() ?? 1)))
+                                        .tint(VizitColor.primary)
+                                }
+                            }
+                            if !summary.topActions.isEmpty {
+                                VizitSectionHeader(title: "Leggyakoribb műveletek")
+                                VizitGroup {
+                                    ForEach(summary.topActions) { action in
+                                        VizitRow(label: action.label, value: "\(action.count)", showsChevron: false)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(VizitSpace.md)
+                    .frame(maxWidth: 620)
+                    .frame(maxWidth: .infinity)
+                }
+                .refreshable { await refresh() }
+            }
+            .navigationTitle("Statisztikák")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Kész") { dismiss() } } }
+            .task { await refresh() }
+        }
+    }
+
+    private func refresh() async {
+        loading = true
+        error = nil
+        do { summary = try await store.analyticsSummary() }
+        catch { self.error = error.localizedDescription }
+        loading = false
     }
 }
 
@@ -2273,6 +2386,9 @@ struct SettingsScreen: View {
     @State private var confirmLogout = false
     @State private var confirmDelete = false
     @State private var deletionPhrase = ""
+    @State private var exportDocument: AccountDataDocument?
+    @State private var showExport = false
+    @State private var exporting = false
 
     private var themeIndex: Binding<Int> {
         Binding(
@@ -2362,6 +2478,25 @@ struct SettingsScreen: View {
                             .accessibilityIdentifier("settings.publicProfile")
                         }
 
+                        VizitSectionHeader(title: "Saját adatok")
+                        VizitGroup {
+                            VizitRow(
+                                label: exporting ? "Adatok betöltése…" : "Adataim exportálása",
+                                systemImage: "square.and.arrow.down",
+                                supporting: "Profil, névjegy és hozzájárulások JSON-fájlban",
+                                isEnabled: !exporting
+                            ) {
+                                Task {
+                                    exporting = true
+                                    defer { exporting = false }
+                                    do {
+                                        exportDocument = AccountDataDocument(data: try await store.accountExport())
+                                        showExport = true
+                                    } catch { self.error = error.localizedDescription }
+                                }
+                            }
+                        }
+
                         VizitSectionHeader(title: "Veszélyes műveletek", tone: VizitColor.error)
                         VizitGroup(danger: true) {
                             VizitRow(
@@ -2420,6 +2555,11 @@ struct SettingsScreen: View {
                 Button("Mégse", role: .cancel) {}
             }
             .sheet(isPresented: $confirmDelete) { deleteAccountSheet }
+            .fileExporter(isPresented: $showExport, document: exportDocument,
+                          contentType: .json, defaultFilename: "vizit-adataim") { result in
+                exportDocument = nil
+                if case let .failure(exportError) = result { error = exportError.localizedDescription }
+            }
             .alert("NFC iPhone-on", isPresented: $showNFCInformation) {
                 Button("Rendben", role: .cancel) {}
             } message: {
@@ -2543,6 +2683,24 @@ struct SettingsScreen: View {
         }
     }
 
+}
+
+private struct AccountDataDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    var data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let contents = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        data = contents
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
 }
 
 extension SyncStatus {
