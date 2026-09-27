@@ -25,15 +25,18 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(contacts[0].emailAddresses.first?.value as String?, "test@example.com")
     }
 
-    func testAppleCoreImageDecodesGeneratedQR() throws {
+    func testPhotoQRPointsToSynchronizedPublicProfile() throws {
         var p = profile()
+        p.isPublic = true
+        p.publicSlug = "teszt-elek"
         let source = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 640)).image { context in
             UIColor.systemBlue.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 640, height: 640))
         }
         p.photoBase64 = try XCTUnwrap(source.jpegData(compressionQuality: 0.95)).base64EncodedString()
-        let payload = try XCTUnwrap(PhotoContactQR.payload(p))
-        XCTAssertTrue(payload.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
+        let base = try XCTUnwrap(URL(string: "https://www.vizitkartyam.hu/p"))
+        let payload = try XCTUnwrap(PhotoContactQR.payload(p, baseURL: base, synced: true))
+        XCTAssertEqual(payload, "https://www.vizitkartyam.hu/p/teszt-elek")
         let rendered = try XCTUnwrap(QRImage.make(payload))
         let image = try XCTUnwrap(rendered.ciImage ?? rendered.cgImage.map { CIImage(cgImage: $0) })
         let detector = try XCTUnwrap(CIDetector(ofType: CIDetectorTypeQRCode,
@@ -41,9 +44,12 @@ final class NativeIntegrationTests: XCTestCase {
                                                 options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
         let decoded = detector.features(in: image).compactMap { ($0 as? CIQRCodeFeature)?.messageString }
         XCTAssertEqual(decoded.first, payload)
+        XCTAssertNil(PhotoContactQR.payload(p, baseURL: base, synced: false))
+        p.isPublic = false
+        XCTAssertNil(PhotoContactQR.payload(p, baseURL: base, synced: true))
     }
 
-    func testCompleteProfileWithPhotoFitsHighCorrectionQRWithoutDroppingValues() throws {
+    func testPhotoVCFImportsFullImageAndAllContactFields() throws {
         var p = profile()
         p.fullName = "Csukárdi Rajmund"
         p.firstName = "Rajmund"
@@ -59,32 +65,28 @@ final class NativeIntegrationTests: XCTestCase {
         p.instagram = "https://instagram.com/csukardi.rajmund"
         p.tiktok = "https://tiktok.com/@csukardi.rajmund"
         p.youtube = "https://youtube.com/@rayworks"
-
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = true
         let source = UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96), format: format).image { context in
             UIColor.systemBlue.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 96, height: 96))
-            ("CR" as NSString).draw(
-                at: CGPoint(x: 20, y: 31),
-                withAttributes: [
-                    .font: UIFont.systemFont(ofSize: 28, weight: .bold),
-                    .foregroundColor: UIColor.white,
-                ]
-            )
+            ("CR" as NSString).draw(at: CGPoint(x: 20, y: 31),
+                withAttributes: [.font: UIFont.systemFont(ofSize: 28, weight: .bold),
+                                 .foregroundColor: UIColor.white])
         }
         p.photoBase64 = try XCTUnwrap(source.jpegData(compressionQuality: 0.72)).base64EncodedString()
-
-        let payload = try XCTUnwrap(PhotoContactQR.payload(p))
-        XCTAssertNotNil(QRImage.make(payload))
+        let file = try ContactBridge.shareFile(p, includePhoto: true)
+        defer { ContactBridge.removeShareFile(file.url) }
+        let payload = try String(contentsOf: file.url, encoding: .utf8)
         for value in [p.fullName, p.company, p.phone, p.email, p.website, p.address,
                       p.linkedIn, p.facebook, p.instagram, p.tiktok, p.youtube] {
-            XCTAssertTrue(payload.contains(value), "Photo QR dropped: \(value)")
+            XCTAssertTrue(payload.contains(value), "Photo VCF dropped: \(value)")
         }
         let contacts = try CNContactVCardSerialization.contacts(with: Data(payload.utf8))
         let contact = try XCTUnwrap(contacts.first)
-        XCTAssertNotNil(contact.imageData)
+        let photo = try XCTUnwrap(contact.imageData)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(UIImage(data: photo)?.size.width), 96)
         XCTAssertEqual(contact.urlAddresses.count, 6)
     }
 
@@ -142,17 +144,15 @@ final class NativeIntegrationTests: XCTestCase {
         }
         let jpeg = try XCTUnwrap(image.jpegData(compressionQuality: 0.8))
         p.photoBase64 = jpeg.base64EncodedString()
-        let payload = try XCTUnwrap(PhotoContactQR.payload(p))
+        let file = try ContactBridge.shareFile(p, includePhoto: true)
+        defer { ContactBridge.removeShareFile(file.url) }
+        let payload = try String(contentsOf: file.url, encoding: .utf8)
         let contacts = try CNContactVCardSerialization.contacts(with: Data(payload.utf8))
         XCTAssertEqual(contacts.count, 1)
         let imported = try XCTUnwrap(contacts.first?.imageData)
         XCTAssertNotNil(UIImage(data: imported))
         XCTAssertEqual(contacts.first?.givenName, "Elek")
-
-        let file = try ContactBridge.shareFile(p, includePhoto: true)
-        defer { ContactBridge.removeShareFile(file.url) }
-        let shared = try String(contentsOf: file.url, encoding: .utf8)
-        XCTAssertTrue(shared.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
+        XCTAssertTrue(payload.contains("PHOTO;ENCODING=b;TYPE=JPEG:"))
     }
 
     func testOnlyDatabaseUniqueViolationIsRetryableAsSlugCollision() {
