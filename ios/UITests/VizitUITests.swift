@@ -110,8 +110,10 @@ final class VizitUITests: XCTestCase {
         let name = app.textFields["wizard.fullName"]
         name.tap(); name.typeText("Nem mentett adat")
         app.buttons["Vissza"].tap()
+        XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 5))
         app.buttons["wizard.primary"].tap()
-        XCTAssertEqual(app.textFields["wizard.fullName"].value as? String, "Nem mentett adat")
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertEqual(name.value as? String, "Nem mentett adat")
         app.terminate()
         app.launchArguments = ["--ui-testing"]
         app.launch()
