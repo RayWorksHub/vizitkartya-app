@@ -28,6 +28,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Verify live API identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/api/auth/config > "$RUNNER_TEMP/vizit-auth-config.json"
+          python3 -c 'import json, sys; config=json.load(open(sys.argv[1])); assert config.get("supabase_url")=="https://zlrrmkbbyfkbjeqozzde.supabase.co"; assert config.get("publishable_key")=="sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS"' "$RUNNER_TEMP/vizit-auth-config.json"
+          curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/health/database > /dev/null
       - name: Compile iOS simulator app
         shell: bash
         run: |

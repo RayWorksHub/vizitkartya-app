@@ -24,6 +24,8 @@ struct ProfileSyncStore {
             let legacyData = try Data(contentsOf: legacyURL)
             guard legacyData.count <= 524_288 else { throw ProfileError.damagedFile }
             let old = try JSONDecoder().decode(ProfileSyncMetadata.self, from: legacyData)
+            try old.pendingProfile?.validateIfPresent()
+            guard old.pendingProfile == nil || old.pendingUpload else { throw ProfileError.damagedFile }
             // A legacy fingerprint belongs to a different API and cannot be used
             // as the new backend's optimistic write precondition.
             return ProfileSyncMetadata(profileID: old.profileID, remoteUpdatedAt: nil,
@@ -51,5 +53,6 @@ struct ProfileSyncStore {
 
     func reset() throws {
         if FileManager.default.fileExists(atPath: fileURL.path) { try FileManager.default.removeItem(at: fileURL) }
+        if FileManager.default.fileExists(atPath: legacyURL.path) { try FileManager.default.removeItem(at: legacyURL) }
     }
 }
