@@ -11,13 +11,25 @@ struct ProfileSyncMetadata: Codable, Equatable {
 
 struct ProfileSyncStore {
     let fileURL: URL
+    private let legacyURL: URL
 
     init(directory: URL) {
-        fileURL = directory.appendingPathComponent("sync-v1.json", isDirectory: false)
+        fileURL = directory.appendingPathComponent("sync-node-v1.json", isDirectory: false)
+        legacyURL = directory.appendingPathComponent("sync-v1.json", isDirectory: false)
     }
 
     func load() throws -> ProfileSyncMetadata {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return ProfileSyncMetadata() }
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            guard FileManager.default.fileExists(atPath: legacyURL.path) else { return ProfileSyncMetadata() }
+            let legacyData = try Data(contentsOf: legacyURL)
+            guard legacyData.count <= 524_288 else { throw ProfileError.damagedFile }
+            let old = try JSONDecoder().decode(ProfileSyncMetadata.self, from: legacyData)
+            // A legacy fingerprint belongs to a different API and cannot be used
+            // as the new backend's optimistic write precondition.
+            return ProfileSyncMetadata(profileID: old.profileID, remoteUpdatedAt: nil,
+                                       remoteFingerprint: nil, pendingProfile: old.pendingProfile,
+                                       pendingUpload: old.pendingUpload, conflict: old.pendingUpload)
+        }
         let data = try Data(contentsOf: fileURL)
         guard data.count <= 524_288 else { throw ProfileError.damagedFile }
         let value = try JSONDecoder().decode(ProfileSyncMetadata.self, from: data)

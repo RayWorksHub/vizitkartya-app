@@ -43,6 +43,8 @@
 	<string>Az általad jóváhagyott névjegy Kontaktokba mentéséhez szükséges.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>A QR-kódot csak akkor mentjük a Fotók közé, amikor megnyomod a Mentés gombot.</string>
+	<key>VIZITBackendURL</key>
+	<string>$(VIZIT_BACKEND_URL)</string>
 	<key>VIZITAuthScheme</key>
 	<string>$(VIZIT_AUTH_SCHEME)</string>
 	<key>VIZITGoogleSignInEnabled</key>

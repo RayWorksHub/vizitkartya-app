@@ -189,6 +189,11 @@ struct AuthScreen: View {
                 }
             }
 
+            Text("Korábbi VIZIT-fiókod van? Az új rendszerhez egyszer állíts be új jelszót.")
+                .font(VizitFont.caption)
+                .foregroundStyle(VizitColor.textMuted)
+                .multilineTextAlignment(.center)
+
             Button("Elfelejtettem a jelszavam") {
                 passwordResetSent = false
                 forgotPassword = true

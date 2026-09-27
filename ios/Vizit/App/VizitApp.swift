@@ -492,96 +492,50 @@ final class AppStore: ObservableObject {
             }
 
             if metadata.pendingUpload {
-                if let remoteBundle {
-                    let uploadProfile = localProfile.preparedForUpload(
-                        existingRemoteSlug: remoteBundle.0.slug
-                    )
-                    guard ProfileRevisionPolicy.mayUpload(
-                        localID: metadata.profileID,
-                        localRevision: metadata.remoteUpdatedAt,
-                        localFingerprint: metadata.remoteFingerprint,
-                        remoteID: remoteBundle.0.id,
-                        remoteRevision: remoteBundle.0.updatedAt,
-                        remoteFingerprint: remoteBundle.0.fingerprint
-                    ) else {
-                        metadata.conflict = true
-                        try metadataStore.save(metadata)
-                        syncStatus = .conflict
-                        return
-                    }
-                    guard var remote = try await cloud.updateProfile(ownerID: id, profileID: remoteBundle.0.id,
-                                                                     profile: uploadProfile,
-                                                                     expectedUpdatedAt: remoteBundle.0.updatedAt) else {
-                        metadata.conflict = true
-                        try metadataStore.save(metadata)
-                        syncStatus = .conflict
-                        return
-                    }
-                    remote.copySocialProfiles(from: remoteBundle.0)
-                    metadata = try metadataStore.load()
-                    metadata.profileID = remote.id
-                    metadata.remoteUpdatedAt = remote.updatedAt
-                    metadata.remoteFingerprint = remote.fingerprint
-                    if profileRevision == revision {
-                        metadata.pendingProfile = uploadProfile
-                    }
-                    try metadataStore.save(metadata)
-                    guard userID == id else { return }
-                    guard profileRevision == revision else {
-                        metadata.pendingUpload = true
-                        try metadataStore.save(metadata)
-                        syncAgain = true
-                        syncStatus = .pending
-                        return
-                    }
-                    try await cloud.syncSocialProfiles(profileID: remote.id, value: uploadProfile,
-                                                       expected: remoteBundle.1)
-                } else {
-                    let reservedID = metadata.profileID ?? UUID()
-                    metadata.profileID = reservedID
-                    metadata.remoteUpdatedAt = nil
-                    try metadataStore.save(metadata)
-                    let remote = try await cloud.createProfile(ownerID: id, profileID: reservedID,
-                                                               profile: localProfile)
-                    guard remote.id == reservedID else { throw CloudError.emptyResponse }
-                    metadata = try metadataStore.load()
-                    metadata.profileID = remote.id
-                    metadata.remoteUpdatedAt = remote.updatedAt
-                    metadata.remoteFingerprint = remote.fingerprint
-                    try metadataStore.save(metadata)
-                    guard userID == id else { return }
-                    guard profileRevision == revision else {
-                        var latest = profile
-                        if latest.publicSlug == localProfile.publicSlug {
-                            latest.publicSlug = remote.slug
-                            latest.customDomain = remote.customDomain ?? ""
-                            latest.customDomainVerified = remote.customDomainVerified == true
-                            try storage.save(latest)
-                            profile = latest
+                let uploadProfile = localProfile.preparedForUpload(
+                    existingRemoteSlug: remoteBundle?.0.slug ?? ""
+                )
+                let remote: RemoteProfile
+                if let (existing, _) = remoteBundle {
+                    if existing.matches(uploadProfile) {
+                        // An earlier PUT succeeded but the response was lost.
+                        remote = existing
+                    } else {
+                        guard ProfileRevisionPolicy.mayUpload(
+                            localID: metadata.profileID,
+                            localRevision: metadata.remoteUpdatedAt,
+                            localFingerprint: metadata.remoteFingerprint,
+                            remoteID: existing.id,
+                            remoteRevision: existing.updatedAt,
+                            remoteFingerprint: existing.fingerprint
+                        ) else {
+                            metadata.conflict = true
+                            try metadataStore.save(metadata)
+                            syncStatus = .conflict
+                            return
                         }
-                        metadata.pendingUpload = true
-                        try metadataStore.save(metadata)
-                        syncAgain = true
-                        syncStatus = .pending
-                        return
+                        remote = try await cloud.saveProfile(ownerID: id, profile: uploadProfile,
+                                                             previous: existing)
                     }
-                    var local = localProfile
+                } else {
+                    remote = try await cloud.saveProfile(ownerID: id, profile: uploadProfile, previous: nil)
+                }
+                guard userID == id else { return }
+                metadata = try metadataStore.load()
+                metadata.profileID = remote.id
+                metadata.remoteUpdatedAt = remote.updatedAt
+                metadata.remoteFingerprint = remote.fingerprint
+                if profileRevision == revision {
+                    var local = uploadProfile
                     local.publicSlug = remote.slug
                     local.customDomain = remote.customDomain ?? ""
                     local.customDomainVerified = remote.customDomainVerified == true
                     try storage.save(local)
                     profile = local
-                    metadata = try metadataStore.load()
                     metadata.pendingProfile = local
-                    try metadataStore.save(metadata)
-                    try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
-                                                       expected: ContactProfile())
                 }
-                guard userID == id else { return }
-                metadata = try metadataStore.load()
+                try metadataStore.save(metadata)
                 guard profileRevision == revision else {
-                    metadata.pendingUpload = true
-                    try metadataStore.save(metadata)
                     syncAgain = true
                     syncStatus = .pending
                     return
@@ -654,7 +608,7 @@ final class AppStore: ObservableObject {
         } catch {
             guard userID == id else { return }
             syncStatus = .failed
-            let text = "A névjegy mentve. A szinkron később folytatódik."
+            let text = "A szinkron nem sikerült: \(error.localizedDescription)"
             syncFailureMessage = text
             message = text
         }

@@ -21,20 +21,18 @@ struct RemoteProfile: Decodable, Sendable {
     let customDomainVerified: Bool?
     let updatedAt: String
     let avatarURL: String?
+    var serverFingerprint = ""
+    var socialLinks: [RemoteLink] = []
+    var bio = ""
+    var theme = "midnight"
+    var accentColor = "#0b5ce8"
     var linkedIn = ""
     var facebook = ""
     var instagram = ""
     var tiktok = ""
     var youtube = ""
 
-    var fingerprint: String {
-        let values = [id.uuidString, ownerID.uuidString, slug, displayName, jobTitle, company,
-                      publicEmail, phone, website, address, String(isPublic), customDomain ?? "",
-                      String(customDomainVerified == true), avatarURL ?? ""]
-            + SocialPlatform.allCases.map { socialURL(for: $0) }
-        let bytes = (try? JSONEncoder().encode(values)) ?? Data()
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
-    }
+    var fingerprint: String { serverFingerprint }
 
     func matches(_ value: ContactProfile) -> Bool {
         let p = value.normalized
@@ -84,13 +82,29 @@ struct RemoteProfile: Decodable, Sendable {
         case customDomainVerified = "custom_domain_verified"
         case avatarURL = "avatar_url"
         case updatedAt = "updated_at"
+        case socialLinks = "social_links"
+        case bio, theme
+        case accentColor = "accent_color"
     }
 }
 
-private struct RemoteLink: Decodable {
+struct RemoteLink: Decodable, Sendable {
     let id: UUID
     let platform: String
+    let label: String
     let url: String
+    let enabled: Bool
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, platform, label, url, enabled
+        case sortOrder = "sort_order"
+    }
+}
+
+private struct NodeProfileEnvelope: Decodable {
+    let profile: RemoteProfile?
+    let fingerprint: String?
 }
 
 private struct ProfileWrite: Encodable {
@@ -158,7 +172,7 @@ enum RESTURLBuilder {
 
 final class CloudService: @unchecked Sendable {
     private static let authStorageService = "hu.rayworks.vizit.ios.session"
-    private static let authStorageKey = "vizit-auth-session"
+    private static let authStorageKey = "vizit-auth-session-node-v1"
     private static let passwordResetRequestedAtKey = "vizit-password-reset-requested-at"
 
     let configuration: AppConfiguration
@@ -202,20 +216,13 @@ final class CloudService: @unchecked Sendable {
     }
 
     func register(name: String, email: String, password: String) async throws {
-        let response = try await client.auth.signUp(
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-            password: password,
-            data: [
-                "display_name": .string(name.trimmingCharacters(in: .whitespacesAndNewlines)),
-                "privacy_version": .string(configuration.privacyPolicyVersion),
-                "terms_version": .string(configuration.termsVersion)
-            ],
-            redirectTo: configuration.callbackURL
-        )
-        // DEV is required to enforce email confirmation. A session here means
-        // the backend was weakened, so discard it instead of silently signing in.
-        if response.session != nil {
-            try? await client.auth.signOut()
+        let response = try await publicNodeRequest(path: ["api", "auth", "register"], body: [
+            "name": name.trimmingCharacters(in: .whitespacesAndNewlines),
+            "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
+            "password": password, "consent": true
+        ])
+        guard let json = try? JSONSerialization.jsonObject(with: response) as? [String: Any],
+              json["requires_email_confirmation"] as? Bool == true else {
             throw CloudError.emailConfirmationDisabled
         }
     }
@@ -276,27 +283,10 @@ final class CloudService: @unchecked Sendable {
     func requestPasswordReset(email: String) async throws {
         let remaining = PasswordResetPolicy.remainingSeconds(since: lastPasswordResetRequest())
         guard remaining == 0 else { throw CloudError.passwordResetCooldown(remaining) }
-
-        var parts = URLComponents(url: configuration.callbackURL, resolvingAgainstBaseURL: false)
-        parts?.queryItems = [URLQueryItem(name: "flow", value: "recovery")]
-        guard let redirect = parts?.url else { throw CloudError.invalidCallback }
-        let verifierKey = "\(Self.authStorageKey)-code-verifier"
-        let previousVerifier = try? authStorage.retrieve(key: verifierKey)
-        do {
-            try await client.auth.resetPasswordForEmail(email.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                        redirectTo: redirect)
-            recordPasswordResetRequest()
-        } catch {
-            // Supabase prepares a new PKCE verifier before the network request.
-            // Restore the previous verifier if the request itself was rejected,
-            // otherwise an already-delivered recovery link would be invalidated.
-            if let previousVerifier {
-                try? authStorage.store(key: verifierKey, value: previousVerifier)
-            } else {
-                try? authStorage.remove(key: verifierKey)
-            }
-            throw error
-        }
+        _ = try await publicNodeRequest(path: ["api", "auth", "reset-password"], body: [
+            "email": email.trimmingCharacters(in: .whitespacesAndNewlines)
+        ])
+        recordPasswordResetRequest()
     }
 
     func changePassword(_ password: String) async throws {
@@ -330,21 +320,16 @@ final class CloudService: @unchecked Sendable {
     func logout() async throws { try await client.auth.signOut() }
 
     func deleteAccount() async throws {
-        try await client.functions.invoke("delete-account")
+        let _: EmptyResponse = try await nodeRequest(path: ["api", "account"], method: "DELETE")
     }
 
     func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
-        let query = [
-            URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url"),
-            URLQueryItem(name: "limit", value: "1")
-        ]
-        let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
-        guard var remote = rows.first else { return nil }
-        let links: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query: [
-            URLQueryItem(name: "profile_id", value: "eq.\(remote.id.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,platform,url")
-        ])
+        let envelope: NodeProfileEnvelope = try await nodeRequest(path: ["api", "profile"])
+        guard var remote = envelope.profile else { return nil }
+        guard remote.ownerID == ownerID, let fingerprint = envelope.fingerprint,
+              fingerprint.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
+        else { throw CloudError.invalidResponse }
+        remote.serverFingerprint = fingerprint
         var profile = local
         profile.fullName = remote.displayName
         profile.jobTitle = remote.jobTitle
@@ -354,7 +339,7 @@ final class CloudService: @unchecked Sendable {
         profile.website = remote.website
         profile.address = remote.address
         for platform in SocialPlatform.allCases {
-            let url = links.first(where: { $0.platform == platform.rawValue })?.url ?? ""
+            let url = remote.socialLinks.first(where: { $0.platform == platform.rawValue })?.url ?? ""
             remote.setSocialURL(url, for: platform)
             profile.setSocialURL(url, for: platform)
         }
@@ -366,96 +351,75 @@ final class CloudService: @unchecked Sendable {
             profile.photoBase64 = try await readProfilePhoto(avatar)
             profile.photoSyncInitialized = true
         } else if loadPhoto && local.photoSyncInitialized {
-            // A later deletion from the web must not resurrect an old local image.
             profile.photoBase64 = ""
         }
         return (remote, profile)
     }
 
-    func createProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile) async throws -> RemoteProfile {
-        let candidates = ProfileSlug.creationCandidates(
-            requested: profile.publicSlug,
-            displayName: profile.displayName,
-            ownerID: ownerID
+    func saveProfile(ownerID: UUID, profile: ContactProfile,
+                     previous: RemoteProfile?) async throws -> RemoteProfile {
+        let candidates = previous.map { [$0.slug] } ?? ProfileSlug.creationCandidates(
+            requested: profile.publicSlug, displayName: profile.displayName, ownerID: ownerID
         )
         for (index, slug) in candidates.enumerated() {
             do {
-                return try await insertProfile(ownerID: ownerID, profileID: profileID,
-                                               profile: profile, slug: slug)
+                return try await writeProfile(ownerID: ownerID, profile: profile, previous: previous, slug: slug)
             } catch let error as CloudError {
-                guard error.isUniqueConstraintViolation, index < candidates.count - 1 else { throw error }
+                guard previous == nil, case .server(let status, _) = error,
+                      status == 409, index < candidates.count - 1 else { throw error }
             }
         }
         throw CloudError.emptyResponse
     }
 
-    private func insertProfile(ownerID: UUID, profileID: UUID,
-                               profile: ContactProfile, slug: String) async throws -> RemoteProfile {
-        let payload = try write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
-        let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
-            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")],
-            body: payload, prefer: "return=representation")
-        guard let remote = rows.first else { throw CloudError.emptyResponse }
-        return remote
-    }
-
-    func updateProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile,
-                       expectedUpdatedAt: String) async throws -> RemoteProfile? {
-        let payload = try write(profile, profileID: nil, ownerID: nil, slug: profile.publicSlug)
-        let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "PATCH", query: [
-            URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
-            URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "updated_at", value: "eq.\(expectedUpdatedAt)"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url")
-        ], body: payload, prefer: "return=representation")
-        guard let remote = rows.first else { return nil }
-        return remote
-    }
-
-    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String) throws -> ProfileWrite {
-        let p = profile.normalized
-        return ProfileWrite(id: profileID, ownerID: ownerID, slug: slug, displayName: p.displayName,
-                            jobTitle: p.jobTitle, company: p.company, publicEmail: p.email,
-                            phone: p.phone, website: p.website, address: p.address,
-                            isPublic: p.isPublic,
-                            customDomain: p.customDomain.isEmpty ? nil : p.customDomain,
-                            avatarURL: try ProfilePhoto.inlineURL(p.photoBase64))
-    }
-
-    func syncSocialProfiles(profileID: UUID, value: ContactProfile, expected: ContactProfile) async throws {
-        let existing: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query: [
-            URLQueryItem(name: "profile_id", value: "eq.\(profileID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,platform,url")
-        ])
-        for platform in SocialPlatform.allCases {
-            let current = existing.first(where: { $0.platform == platform.rawValue })?.url ?? ""
-            guard current == expected.socialURL(for: platform) else { throw CloudError.profileConflict }
+    private func writeProfile(ownerID: UUID, profile: ContactProfile,
+                              previous: RemoteProfile?, slug: String) async throws -> RemoteProfile {
+        let value = profile.normalized
+        let savedLinks = previous?.socialLinks ?? []
+        var links = savedLinks.filter { link in
+            !SocialPlatform.allCases.contains(where: { $0.rawValue == link.platform })
+        }.map { link -> [String: Any] in
+            ["id": link.id.uuidString.lowercased(), "platform": link.platform,
+             "label": link.label, "url": link.url, "enabled": link.enabled]
         }
-
         for platform in SocialPlatform.allCases {
-            let current = existing.first(where: { $0.platform == platform.rawValue })
-            let desiredURL = value.socialURL(for: platform)
-            let expectedURL = expected.socialURL(for: platform)
-            if current?.url == desiredURL { continue }
-            if desiredURL.isEmpty {
-                if let id = current?.id {
-                    let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "DELETE",
-                        query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
-                                URLQueryItem(name: "url", value: "eq.\(expectedURL)")], prefer: "return=minimal")
-                }
-            } else if let id = current?.id {
-                let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "PATCH",
-                    query: [URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
-                            URLQueryItem(name: "url", value: "eq.\(expectedURL)")],
-                    body: ["url": desiredURL], prefer: "return=minimal")
-            } else {
-                let payload = LinkWrite(profileID: profileID, platform: platform.rawValue,
-                                        label: platform.label, url: desiredURL,
-                                        sortOrder: platform.sortOrder)
-                let _: EmptyResponse = try await request(path: ["rest", "v1", "social_links"], method: "POST",
-                    body: payload, prefer: "return=minimal")
-            }
+            let url = value.socialURL(for: platform)
+            guard !url.isEmpty else { continue }
+            let old = savedLinks.first(where: { $0.platform == platform.rawValue })
+            var item: [String: Any] = ["platform": platform.rawValue,
+                                       "label": old?.label ?? platform.label,
+                                       "url": url, "enabled": old?.enabled ?? true]
+            if let old { item["id"] = old.id.uuidString.lowercased() }
+            links.append(item)
         }
+        for index in links.indices { links[index]["sort_order"] = index }
+        let photo = try ProfilePhoto.inlineURL(value.photoBase64)
+        let body: [String: Any] = [
+            "slug": slug, "display_name": value.displayName, "job_title": value.jobTitle,
+            "company": value.company, "bio": previous?.bio ?? "",
+            "public_email": value.email, "phone": value.phone, "website": value.website,
+            "address": value.address, "avatar_url": photo,
+            "theme": previous?.theme ?? "midnight",
+            "accent_color": previous?.accentColor ?? "#0b5ce8",
+            "is_public": value.isPublic, "custom_domain": value.customDomain,
+            "social_links": links, "base_fingerprint": (previous?.fingerprint as Any?) ?? NSNull(),
+            "base_updated_at": (previous?.updatedAt as Any?) ?? NSNull()
+        ]
+        guard JSONSerialization.isValidJSONObject(body) else { throw CloudError.invalidRequest }
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let envelope: NodeProfileEnvelope = try await nodeRequest(
+            path: ["api", "profile"], method: "PUT", body: data
+        )
+        guard var remote = envelope.profile, remote.ownerID == ownerID,
+              let fingerprint = envelope.fingerprint,
+              fingerprint.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
+        else { throw CloudError.invalidResponse }
+        remote.serverFingerprint = fingerprint
+        for platform in SocialPlatform.allCases {
+            remote.setSocialURL(remote.socialLinks.first(where: { $0.platform == platform.rawValue })?.url ?? "",
+                                for: platform)
+        }
+        return remote
     }
 
     private func readProfilePhoto(_ avatar: String) async throws -> String {
@@ -505,43 +469,74 @@ final class CloudService: @unchecked Sendable {
         return jpeg.base64EncodedString()
     }
 
-    private func request<Response: Decodable>(path: [String], method: String = "GET",
-                                              query: [URLQueryItem] = [], body: Encodable? = nil,
-                                              prefer: String? = nil) async throws -> Response {
+    private func publicNodeRequest(path: [String], body: [String: Any]) async throws -> Data {
+        guard path == ["api", "auth", "register"] || path == ["api", "auth", "reset-password"],
+              JSONSerialization.isValidJSONObject(body),
+              let url = RESTURLBuilder.make(baseURL: configuration.backendURL, path: path, query: [])
+        else { throw CloudError.invalidRequest }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let result: (Data, URLResponse)
+        do {
+            result = try await http.data(for: request, delegate: PhotoRedirectBlocker())
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw CloudError.networkUnavailable
+        }
+        guard let response = result.1 as? HTTPURLResponse,
+              result.0.count <= 2 * 1024 * 1024 else { throw CloudError.invalidResponse }
+        guard (200..<300).contains(response.statusCode) else {
+            let payload = try? JSONDecoder().decode(PostgRESTErrorPayload.self, from: result.0)
+            throw CloudError.server(status: response.statusCode, code: payload?.code)
+        }
+        return result.0
+    }
+
+    private func nodeRequest<Response: Decodable>(
+        path: [String], method: String = "GET", body: Data? = nil
+    ) async throws -> Response {
         let session: Session
         do {
             session = try await validSession()
         } catch {
             throw CloudError.authenticationRequired
         }
-        guard let finalURL = RESTURLBuilder.make(baseURL: configuration.supabaseURL,
-                                                 path: path, query: query) else {
-            throw CloudError.invalidRequest
-        }
-        var request = URLRequest(url: finalURL)
+        guard path == ["api", "profile"] || path == ["api", "account"],
+              let url = RESTURLBuilder.make(baseURL: configuration.backendURL, path: path, query: [])
+        else { throw CloudError.invalidRequest }
+        var request = URLRequest(url: url)
         request.httpMethod = method
-        request.setValue(configuration.publishableKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         if let body {
+            guard body.count <= 768 * 1024 else { throw CloudError.invalidRequest }
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(AnyEncodable(body))
+            request.httpBody = body
         }
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await http.data(for: request)
+            (data, response) = try await http.data(for: request, delegate: PhotoRedirectBlocker())
         } catch is CancellationError {
             throw CancellationError()
         } catch {
             throw CloudError.networkUnavailable
         }
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else { throw CloudError.invalidResponse }
+        guard data.count <= 2 * 1024 * 1024 else { throw CloudError.invalidResponse }
+        if httpResponse.statusCode == 409 {
+            let conflict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            if conflict?["conflict"] as? Bool == true { throw CloudError.profileConflict }
+        }
+        if httpResponse.statusCode == 401 { throw CloudError.authenticationRequired }
+        guard (200..<300).contains(httpResponse.statusCode) else {
             let payload = try? JSONDecoder().decode(PostgRESTErrorPayload.self, from: data)
-            throw CloudError.server(status: (response as? HTTPURLResponse)?.statusCode ?? 0,
-                                    code: payload?.code)
+            throw CloudError.server(status: httpResponse.statusCode, code: payload?.code)
         }
         if Response.self == EmptyResponse.self, data.isEmpty {
             return EmptyResponse() as! Response
