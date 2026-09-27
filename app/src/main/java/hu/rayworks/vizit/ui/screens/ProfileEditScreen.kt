@@ -290,10 +290,18 @@ fun ProfileEditScreen(
                         )
                         Text(
                             text = draft.publicSlug.takeIf(String::isNotBlank)
-                                ?.let { "e-nevjegy.vercel.app/p/$it" }
+                                ?.let { "www.vizitkartyam.hu/p/$it" }
                                 ?: "Az egyedi azonosítót az első mentéskor a nevedből hozzuk létre.",
                             style = Vizit.type.bodySmall,
                             color = colors.textMuted,
+                        )
+                        VizitTextField(
+                            value = draft.publicSlug,
+                            onValueChange = { draft = draft.copy(publicSlug = it.trim().lowercase()) },
+                            label = "Egyedi profilcím",
+                            placeholder = "vezeteknev-keresztnev",
+                            keyboardType = KeyboardType.Uri,
+                            helper = "Kisbetű, szám és kötőjel. A korábban megosztott cím megváltozhat.",
                         )
                         VizitTextField(
                             value = draft.customDomain,

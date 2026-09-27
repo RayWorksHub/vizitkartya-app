@@ -1,5 +1,7 @@
 package hu.rayworks.vizit.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -34,12 +36,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -49,12 +55,15 @@ import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.VizitViewModel
 import hu.rayworks.vizit.auth.AuthViewModel
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
+import hu.rayworks.vizit.data.remote.NodeBackendApi
+import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.ui.design.Vizit
 import hu.rayworks.vizit.ui.design.VizitMinTouchTarget
 import hu.rayworks.vizit.ui.design.components.VizitBanner
 import hu.rayworks.vizit.ui.design.components.VizitTone
 import hu.rayworks.vizit.ui.design.components.vizitReduceMotion
 import hu.rayworks.vizit.ui.screens.BusinessHubScreen
+import hu.rayworks.vizit.ui.screens.AnalyticsScreen
 import hu.rayworks.vizit.ui.screens.CardAppearanceScreen
 import hu.rayworks.vizit.ui.screens.CardScreen
 import hu.rayworks.vizit.ui.screens.DataVisibilityScreen
@@ -63,6 +72,9 @@ import hu.rayworks.vizit.ui.screens.NfcShareScreen
 import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Four primary destinations. Everything that is not a top-level task — the
@@ -84,10 +96,47 @@ fun VizitApp(
 ) {
     var selectedSection by rememberSaveable { mutableStateOf(AppSection.HOME) }
     var showKnowledgeHub by rememberSaveable { mutableStateOf(false) }
+    var showAnalytics by rememberSaveable { mutableStateOf(false) }
     var showCardAppearance by rememberSaveable { mutableStateOf(false) }
     var showDataVisibility by rememberSaveable { mutableStateOf(false) }
     var showScanner by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var exportError by remember { mutableStateOf(false) }
+    var pendingExport by remember { mutableStateOf<ByteArray?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { destination ->
+        val data = pendingExport
+        pendingExport = null
+        if (destination != null && data != null) scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(destination, "w")?.use { it.write(data) }
+                        ?: error("A kiválasztott fájl nem írható.")
+                }
+                exportError = false
+                exportMessage = "Az adataidat sikeresen exportáltuk."
+            } catch (failure: Exception) {
+                exportError = true
+                exportMessage = failure.localizedMessage ?: "Az exportálás nem sikerült."
+            }
+        }
+    }
+    fun exportAccount() {
+        scope.launch {
+            exportMessage = null
+            try {
+                val payload = NodeBackendApi(SupabaseProvider.getOrNull()).request("GET", "/api/account")
+                pendingExport = payload.toString().toByteArray(Charsets.UTF_8)
+                exportLauncher.launch("vizit-adataim.json")
+            } catch (failure: Exception) {
+                exportError = true
+                exportMessage = failure.localizedMessage ?: "Az exportálás nem sikerült."
+            }
+        }
+    }
 
     // Full-screen NFC hand-off takes over the whole app while it is running.
     if (viewModel.isNfcShareActive) {
@@ -103,6 +152,11 @@ fun VizitApp(
 
     if (showKnowledgeHub) {
         BusinessHubScreen(onBack = { showKnowledgeHub = false })
+        return
+    }
+
+    if (showAnalytics) {
+        AnalyticsScreen(onBack = { showAnalytics = false })
         return
     }
 
@@ -165,6 +219,9 @@ fun VizitApp(
                         onOpenCard = { selectedSection = AppSection.CARD },
                         onOpenShare = { selectedSection = AppSection.SHARE },
                         onOpenKnowledgeHub = { showKnowledgeHub = true },
+                        onOpenAnalytics = { showAnalytics = true },
+                        onOpenCRM = { uriHandler.openUri("https://www.vizitkartyam.hu/dashboard/crm") },
+                        onOpenOnlineEditor = { uriHandler.openUri("https://www.vizitkartyam.hu/dashboard/profile") },
                         onOpenScanner = { showScanner = true },
                         onShareAsText = viewModel::shareAsText,
                     )
@@ -208,6 +265,9 @@ fun VizitApp(
                         onClearAuthAction = authViewModel::clearActionState,
                         onLogout = authViewModel::logout,
                         onDeleteAccount = authViewModel::deleteAccount,
+                        onExportAccount = ::exportAccount,
+                        exportMessage = exportMessage,
+                        exportError = exportError,
                     )
                 }
             }

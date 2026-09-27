@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Palette
@@ -82,6 +83,9 @@ fun SettingsScreen(
     onClearAuthAction: () -> Unit,
     onLogout: () -> Unit,
     onDeleteAccount: (String) -> Unit,
+    onExportAccount: () -> Unit,
+    exportMessage: String? = null,
+    exportError: Boolean = false,
     modifier: Modifier = Modifier,
     cardPresentation: CardPresentation = CardPresentation(),
     onOpenCardAppearance: () -> Unit = {},
@@ -244,6 +248,19 @@ fun SettingsScreen(
 
         // ---------- Account / danger zone
         if (cloudAccountAvailable) {
+            VizitSectionHeader("Saját adatok")
+            VizitGroup {
+                VizitRow(
+                    label = "Adataim exportálása",
+                    supporting = "Profil, névjegy és hozzájárulások JSON-fájlban",
+                    icon = Icons.Outlined.Download,
+                    onClick = onExportAccount,
+                )
+            }
+            if (exportMessage != null) VizitBanner(
+                text = exportMessage,
+                tone = if (exportError) VizitTone.Error else VizitTone.Success,
+            )
             VizitSectionHeader("Fiók", tone = colors.error)
             VizitGroup(danger = true) {
                 VizitRow(
