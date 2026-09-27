@@ -220,8 +220,8 @@ fun VizitApp(
                         onOpenShare = { selectedSection = AppSection.SHARE },
                         onOpenKnowledgeHub = { showKnowledgeHub = true },
                         onOpenAnalytics = { showAnalytics = true },
-                        onOpenCRM = { uriHandler.openUri("https://www.vizitkartyam.hu/dashboard/crm") },
-                        onOpenOnlineEditor = { uriHandler.openUri("https://www.vizitkartyam.hu/dashboard/profile") },
+                        onOpenCRM = { uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fcrm") },
+                        onOpenOnlineEditor = { uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fprofile") },
                         onOpenScanner = { showScanner = true },
                         onShareAsText = viewModel::shareAsText,
                     )
