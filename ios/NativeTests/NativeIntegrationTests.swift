@@ -220,7 +220,7 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertThrowsError(try ProfileSyncStore(directory: directory).save(journal))
     }
     func testRemoteNodeProfileMatchesLocalContactOnlyWithSameFields() throws {
-        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null,"custom_domain":null,"custom_domain_verified":false,"social_links":[],"bio":"","theme":"midnight","accent_color":"#0b5ce8"}"#
+        let raw = ##"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null,"custom_domain":null,"custom_domain_verified":false,"social_links":[],"bio":"","theme":"midnight","accent_color":"#0b5ce8"}"##
         let remote = try JSONDecoder().decode(RemoteProfile.self, from: Data(raw.utf8))
         var local = ContactProfile()
         local.fullName = "Teszt Elek"
