@@ -18,7 +18,7 @@ class NodeBackendApi(private val client: SupabaseClient?) {
     suspend fun request(method: String, path: String, body: JsonObject? = null,
                         authenticated: Boolean = true): JsonObject {
         require(method in setOf("GET", "POST", "PUT", "DELETE"))
-        require(path in setOf("/api/profile", "/api/account", "/api/auth/sign-in"))
+        require(path in setOf("/api/profile", "/api/account", "/api/auth/sign-in", "/api/analytics/summary"))
         val owner = if (authenticated) userId() ?: throw NodeBackendException(401, "session_unavailable", "Jelentkezz be újra.") else null
         suspend fun send(): Pair<Int, JsonObject> {
             val token = if (authenticated) {

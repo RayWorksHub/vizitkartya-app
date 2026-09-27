@@ -27,6 +27,9 @@ import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.BusinessCenter
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -72,6 +75,9 @@ fun HomeScreen(
     onOpenCard: () -> Unit,
     onOpenShare: () -> Unit,
     onOpenKnowledgeHub: () -> Unit,
+    onOpenAnalytics: () -> Unit,
+    onOpenCRM: () -> Unit,
+    onOpenOnlineEditor: () -> Unit,
     onShareAsText: (Context) -> Unit,
     modifier: Modifier = Modifier,
     onOpenScanner: () -> Unit = {},
@@ -178,6 +184,24 @@ fun HomeScreen(
                     supporting = "VOSZ, edukáció, digitális segítség és eszköztár",
                     icon = Icons.AutoMirrored.Outlined.MenuBook,
                     onClick = onOpenKnowledgeHub,
+                )
+                VizitRow(
+                    label = "Statisztikák",
+                    supporting = "Profilmegtekintés, mentések és kattintások · 30 nap",
+                    icon = Icons.Outlined.BarChart,
+                    onClick = onOpenAnalytics,
+                )
+                VizitRow(
+                    label = "CRM",
+                    supporting = "Partnerek, ügyletek, feladatok és ajánlatok a webes munkatérben",
+                    icon = Icons.Outlined.BusinessCenter,
+                    onClick = onOpenCRM,
+                )
+                VizitRow(
+                    label = "Online névjegy szerkesztése",
+                    supporting = "A nyilvános profil színei, logója és közösségi hivatkozásai",
+                    icon = Icons.Outlined.Edit,
+                    onClick = onOpenOnlineEditor,
                 )
             }
 

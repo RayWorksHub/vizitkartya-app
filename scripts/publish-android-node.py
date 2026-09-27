@@ -47,10 +47,10 @@ try:
     aab=next(pathlib.Path('release-output').glob('*.aab'))
     bundle=request('https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/hu.rayworks.vizit/edits/'+edit+'/bundles?uploadType=media',token=token,binary=aab.read_bytes())
     version=str(bundle['versionCode'])
-    assert version=='7030002'
+    assert version=='7030003'
     request(root+'/edits/'+edit+'/tracks/production',method='PUT',token=token,payload={
-        'track':'production','releases':[{'name':'7.3.2','versionCodes':[version],'status':'completed',
-        'releaseNotes':[{'language':'hu-HU','text':'Új VIZIT ikon és továbbfejlesztett névjegymegosztás.'}]}]})
+        'track':'production','releases':[{'name':'7.3.3','versionCodes':[version],'status':'completed',
+        'releaseNotes':[{'language':'hu-HU','text':'Új statisztikák, adatexport és webes CRM-hozzáférés.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
     report('SUBMITTED','Google Play accepted the production release submission; Google review/publication state is managed by Play Console.')
 except urllib.error.HTTPError as error:
