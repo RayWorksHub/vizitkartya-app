@@ -35,6 +35,16 @@ jobs:
           curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/api/auth/config > "$RUNNER_TEMP/vizit-auth-config.json"
           python3 -c 'import json, sys; config=json.load(open(sys.argv[1])); assert config.get("supabase_url")=="https://zlrrmkbbyfkbjeqozzde.supabase.co"; assert config.get("publishable_key")=="sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS"' "$RUNNER_TEMP/vizit-auth-config.json"
           curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/health/database > /dev/null
+      - name: Resolve exact Swift dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_26.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          fi
+          xcodebuild -resolvePackageDependencies -project ios/VIZIT.xcodeproj -scheme VIZIT \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"
+
       - name: Test native contact and QR integration
         shell: bash
         run: |
@@ -46,8 +56,10 @@ jobs:
           simulator_id="$(python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/simulators.json"))["devices"]; print(next(device["udid"] for runtime, devices in sorted(d.items(),reverse=True) if ".iOS-" in runtime for device in devices if device.get("isAvailable") and device["name"].startswith("iPhone")))')"
           xcodebuild -project ios/VIZIT.xcodeproj -scheme VIZIT \
             -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
+            -derivedDataPath "$RUNNER_TEMP/vizit" -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            -disableAutomaticPackageResolution -jobs 2 \
             -only-testing:VizitNativeTests -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
             VIZIT_BACKEND_URL=https://vizitkartyam-backend.vercel.app \
             VIZIT_SUPABASE_URL=https://zlrrmkbbyfkbjeqozzde.supabase.co \
             VIZIT_SUPABASE_KEY=sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS \
