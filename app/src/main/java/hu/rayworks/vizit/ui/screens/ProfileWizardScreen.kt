@@ -64,7 +64,7 @@ fun ProfileWizardScreen(
     val scope = rememberCoroutineScope()
     var type by rememberSaveable { mutableStateOf("") }
     var step by rememberSaveable { mutableStateOf(0) }
-    var draft by remember { mutableStateOf(ContactProfile()) }
+    var draft by remember { mutableStateOf(ContactProfile(isPublic = true)) }
     var style by remember { mutableStateOf(CardColorway.INK) }
     var slugEdited by rememberSaveable { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
