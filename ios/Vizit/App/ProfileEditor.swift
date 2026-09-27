@@ -397,7 +397,11 @@ struct ProfileWizard: View {
     var onFinished: () -> Void = {}
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
-    @State private var draft = ContactProfile()
+    @State private var draft: ContactProfile = {
+        var value = ContactProfile()
+        value.isPublic = true
+        return value
+    }()
     @State private var kind: String? = nil
     @State private var index = 0
     @State private var selectedStyle: CardColorway = .ink
