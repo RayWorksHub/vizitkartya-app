@@ -24,6 +24,7 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     public var photoBase64 = ""
     public var logoBase64 = ""
     public var photoSyncInitialized = false
+    public var logoSyncInitialized = false
     public var publicSlug = ""
     public var isPublic = false
     public var customDomain = ""
@@ -34,7 +35,7 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case fullName, firstName, lastName, jobTitle, company, bio, phone, email
         case website, address, linkedIn, facebook, instagram, tiktok, youtube, x, github, customSocial
-        case photoBase64, logoBase64, photoSyncInitialized, publicSlug, isPublic
+        case photoBase64, logoBase64, photoSyncInitialized, logoSyncInitialized, publicSlug, isPublic
         case customDomain, customDomainVerified
     }
 
@@ -63,6 +64,7 @@ public struct ContactProfile: Codable, Equatable, Hashable, Sendable {
         photoBase64 = try values.decodeIfPresent(String.self, forKey: .photoBase64) ?? ""
         logoBase64 = try values.decodeIfPresent(String.self, forKey: .logoBase64) ?? ""
         photoSyncInitialized = try values.decodeIfPresent(Bool.self, forKey: .photoSyncInitialized) ?? false
+        logoSyncInitialized = try values.decodeIfPresent(Bool.self, forKey: .logoSyncInitialized) ?? false
         publicSlug = try values.decodeIfPresent(String.self, forKey: .publicSlug) ?? ""
         isPublic = try values.decodeIfPresent(Bool.self, forKey: .isPublic) ?? false
         customDomain = try values.decodeIfPresent(String.self, forKey: .customDomain) ?? ""

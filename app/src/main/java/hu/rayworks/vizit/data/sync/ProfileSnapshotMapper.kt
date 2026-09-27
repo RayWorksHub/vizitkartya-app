@@ -145,7 +145,7 @@ object ProfileSnapshotMapper {
                 displayImagePath = if (canonical.photoBase64 == previous?.profile?.localContactPhotoBase64)
                     previous?.profile?.displayImagePath else null,
                 contactImagePath = previous?.profile?.contactImagePath,
-                logoPath = canonical.logoBase64.takeIf(String::isNotBlank)?.let { "data:image/jpeg;base64,$it" },
+                logoPath = if (canonical.logoBase64.isEmpty()) "" else "data:image/jpeg;base64,${canonical.logoBase64}",
                 publicSlug = canonical.publicSlug.ifBlank { null },
                 customDomain = canonical.customDomain.ifBlank { null },
                 customDomainVerified = previous?.profile?.let {

@@ -6,7 +6,7 @@ import io.github.jan.supabase.SupabaseClient
 import kotlinx.serialization.json.*
 
 /** Retains Room/outbox behaviour; profile reads and writes use the Node API. */
-class NodeProfileRemoteDataSource(client: SupabaseClient?) : ProfileRemoteDataSource {
+class NodeProfileRemoteDataSource(private val client: SupabaseClient?) : ProfileRemoteDataSource {
     private val api = NodeBackendApi(client)
     private val json = Json { ignoreUnknownKeys = true }
     private val editableSocial = setOf("linkedin", "facebook", "instagram", "tiktok", "youtube", "x", "github", "custom")
@@ -24,7 +24,10 @@ class NodeProfileRemoteDataSource(client: SupabaseClient?) : ProfileRemoteDataSo
         return Record(raw, row, fingerprint)
     }
     private suspend fun snapshot(record: Record) = RemoteProfileSnapshot(record.row.version,
-        record.row.payload(RemoteContactPhoto.load(record.row.avatarUrl, BuildConfig.SUPABASE_URL)))
+        record.row.payload(
+            RemoteContactPhoto.load(record.row.avatarUrl, BuildConfig.SUPABASE_URL),
+            RemoteContactPhoto.load(RemoteProfileLogo.url(record.row.appearance), BuildConfig.SUPABASE_URL),
+        ))
     override suspend fun pull(userId: String): RemoteProfileSnapshot? {
         if (authenticatedUserId() != userId) return null
         return record(userId)?.let { snapshot(it) }
@@ -44,6 +47,9 @@ class NodeProfileRemoteDataSource(client: SupabaseClient?) : ProfileRemoteDataSo
                 ?.let { it != current?.row?.avatarUrl } == true
             if (sourceChanged && current != null) return conflict(mutation.userId)
             val values = LegacyProfileCodec.write(mutation.payload, current?.row, mutation.userId)
+            val remoteLogo = if (mutation.payload.logoPath != null && current != null)
+                RemoteContactPhoto.load(RemoteProfileLogo.url(current.row.appearance), BuildConfig.SUPABASE_URL)
+            else ""
             val oldLinks = current?.raw?.get("social_links")?.jsonArray.orEmpty().map { it.jsonObject }
             // Preserve custom/unknown links, their visibility and the existing order.
             val links = oldLinks.filter { it["platform"]?.jsonPrimitive?.contentOrNull !in editableSocial }.toMutableList()
@@ -63,7 +69,7 @@ class NodeProfileRemoteDataSource(client: SupabaseClient?) : ProfileRemoteDataSo
                 for (key in listOf("id", "platform", "label", "url", "enabled")) link[key]?.let { put(key, it) }
                 put("sort_order", index)
             } })
-            val body = buildJsonObject {
+            val baseBody = buildJsonObject {
                 for ((key, value) in values) if (key !in setOf("id", "owner_id")) put(key, value)
                 put("avatar_url", values["avatar_url"] ?: current?.raw?.get("avatar_url") ?: JsonNull)
                 put("theme", current?.raw?.get("theme") ?: JsonPrimitive("midnight"))
@@ -74,14 +80,21 @@ class NodeProfileRemoteDataSource(client: SupabaseClient?) : ProfileRemoteDataSo
             }
             val expected = mutation.payload.copy(publicSlug = values["slug"]?.jsonPrimitive?.content,
                 customDomainVerified = current?.row?.customDomainVerified ?: false,
-                displayImagePath = body["avatar_url"]?.jsonPrimitive?.contentOrNull.orEmpty())
-            if (current != null && !LegacyProfileCodec.canApply(mutation.baseServerVersion, mutation.payload.baseFingerprint, current.row)) {
+                displayImagePath = baseBody["avatar_url"]?.jsonPrimitive?.contentOrNull.orEmpty())
+            if (current != null && !LegacyProfileCodec.canApply(mutation.baseServerVersion, mutation.payload.baseFingerprint, current.row, remoteLogo)) {
                 // An offline retry can see its own already-committed profile.
-                if (LegacyProfileCodec.fingerprint(expected) == LegacyProfileCodec.fingerprint(current.row.payload())) {
+                if (LegacyProfileCodec.fingerprint(expected) == LegacyProfileCodec.fingerprint(current.row.payload(logo = remoteLogo))) {
                     val saved = snapshot(current)
                     return RemoteProfileSyncResult.Applied(saved.serverVersion, saved.payload)
                 }
                 return conflict(mutation.userId)
+            }
+            val appearance = RemoteProfileLogo.prepare(requireNotNull(client), mutation.userId,
+                current?.row?.appearance, remoteLogo, mutation.payload.logoPath,
+                current?.raw?.get("theme")?.jsonPrimitive?.contentOrNull ?: "midnight")
+            val body = buildJsonObject {
+                for ((key, value) in baseBody) put(key, value)
+                if (appearance != null) put("appearance", appearance)
             }
             val response = api.request("PUT", "/api/profile", body)
             val raw = requireNotNull(response["profile"]?.jsonObject)

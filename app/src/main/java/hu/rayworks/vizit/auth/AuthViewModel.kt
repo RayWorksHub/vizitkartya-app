@@ -77,7 +77,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         if (validation != null) return setError(validation)
         runAction(
             operation = AuthOperation.REGISTER,
-            successMessage = "Megerősítő e-mailt küldtünk. Ellenőrizd a postafiókodat.",
+            successMessage = "Új fiók esetén ellenőrizd a megerősítő levelet. Ha már van fiókod, lépj be vagy kérj jelszó-visszaállítást; új regisztrációs levél ilyenkor nem érkezik.",
         ) {
             repositoryOrThrow().register(
                 name = name,

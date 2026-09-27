@@ -69,6 +69,7 @@ class ProfileSnapshotMapperTest {
         // public-profile access are separate codec/backend tests, not omission.
         assertEquals("local-photo", payload.photoBase64)
         assertTrue(ProfilePayloadCodec.encode(payload).contains("\"photoBase64\":\"local-photo\""))
+        assertEquals("data:image/jpeg;base64,local-logo", payload.logoPath)
     }
 
     @Test

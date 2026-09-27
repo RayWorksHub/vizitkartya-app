@@ -46,7 +46,7 @@ struct AuthScreen: View {
 
                         if let address = verificationAddress {
                             VizitBanner(
-                                text: "Megerősítő linket küldtünk ide: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót.",
+                                text: "Új fiók esetén a megerősítő link erre a címre érkezik: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót; ilyenkor új regisztrációs levél nem érkezik.",
                                 tone: .info
                             )
                         }
