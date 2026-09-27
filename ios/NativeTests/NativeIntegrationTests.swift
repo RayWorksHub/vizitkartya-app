@@ -118,7 +118,8 @@ final class NativeIntegrationTests: XCTestCase {
         let key = "session"
         defer { try? storage.remove(key: key) }
         do {
-            XCTAssertNil(try storage.retrieve(key: key))
+            let initial = try storage.retrieve(key: key)
+            XCTAssertNil(initial)
         } catch KeychainError.status(-34018) {
             throw XCTSkip("The simulator test host has no Keychain entitlement; verify on a signed device.")
         }
@@ -218,16 +219,18 @@ final class NativeIntegrationTests: XCTestCase {
         var journal = ProfileSyncMetadata(); journal.pendingProfile = profile()
         XCTAssertThrowsError(try ProfileSyncStore(directory: directory).save(journal))
     }
-    func testRemoteFingerprintTracksContentNotAnalyticsTimestamp() throws {
-        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null,"social_links":[]}"#
-        let decode = { (text: String) throws in try JSONDecoder().decode(RemoteProfile.self, from: Data(text.utf8)) }
-        var first = try decode(raw)
-        XCTAssertEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "first", with: "later")).fingerprint)
-        XCTAssertNotEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: "Teszt Elek", with: "Másik Név")).fingerprint)
-        XCTAssertNotEqual(first.fingerprint, try decode(raw.replacingOccurrences(of: #""avatar_url":null"#, with: #""avatar_url":"data:image/jpeg;base64,/9j/""#)).fingerprint)
-        let originalFingerprint = first.fingerprint
-        first.facebook = "https://facebook.com/teszt"
-        XCTAssertNotEqual(first.fingerprint, originalFingerprint)
+    func testRemoteNodeProfileMatchesLocalContactOnlyWithSameFields() throws {
+        let raw = #"{"id":"11111111-1111-4111-8111-111111111111","owner_id":"22222222-2222-4222-8222-222222222222","slug":"teszt-elek","display_name":"Teszt Elek","job_title":"","company":"","public_email":"a@b.test","phone":"123","website":"","address":"","is_public":true,"updated_at":"first","avatar_url":null,"custom_domain":null,"custom_domain_verified":false,"social_links":[],"bio":"","theme":"midnight","accent_color":"#0b5ce8"}"#
+        let remote = try JSONDecoder().decode(RemoteProfile.self, from: Data(raw.utf8))
+        var local = ContactProfile()
+        local.fullName = "Teszt Elek"
+        local.publicSlug = "teszt-elek"
+        local.email = "a@b.test"
+        local.phone = "123"
+        local.isPublic = true
+        XCTAssertTrue(remote.matches(local))
+        local.facebook = "https://facebook.com/teszt"
+        XCTAssertFalse(remote.matches(local))
     }
 
     func testHiddenFieldsNeverReachTheSharedVCard() throws {
