@@ -48,11 +48,9 @@ final class VizitCoreTests: XCTestCase {
     }
     func testSocialProfilesRoundTripAndVCardExport() throws {
         var p = sample()
-        p.linkedIn = "https://linkedin.com/in/teszt"
-        p.facebook = "https://facebook.com/teszt"
-        p.instagram = "https://instagram.com/teszt"
-        p.tiktok = "https://tiktok.com/@teszt"
-        p.youtube = "https://youtube.com/@teszt"
+        for platform in SocialPlatform.allCases {
+            p.setSocialURL("https://example.com/\(platform.rawValue)", for: platform)
+        }
         let restored = try JSONDecoder().decode(ContactProfile.self, from: JSONEncoder().encode(p))
         XCTAssertEqual(restored, p)
         let card = try VCard.encode(restored)
