@@ -35,30 +35,15 @@ jobs:
           curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/api/auth/config > "$RUNNER_TEMP/vizit-auth-config.json"
           python3 -c 'import json, sys; config=json.load(open(sys.argv[1])); assert config.get("supabase_url")=="https://zlrrmkbbyfkbjeqozzde.supabase.co"; assert config.get("publishable_key")=="sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS"' "$RUNNER_TEMP/vizit-auth-config.json"
           curl --fail --silent --show-error --retry 3 --max-time 20 https://vizitkartyam-backend.vercel.app/health/database > /dev/null
-      - name: Compile iOS simulator app
+      - name: Test native contact and QR integration
         shell: bash
         run: |
           set -euo pipefail
           if [ -d /Applications/Xcode_26.3.app ]; then
             sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
           fi
-          xcodebuild -project ios/VIZIT.xcodeproj -scheme VIZIT \
-            -configuration Debug -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO \
-            VIZIT_BACKEND_URL=https://vizitkartyam-backend.vercel.app \
-            VIZIT_SUPABASE_URL=https://zlrrmkbbyfkbjeqozzde.supabase.co \
-            VIZIT_SUPABASE_KEY=sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS \
-            VIZIT_AUTH_SCHEME=hu.rayworks.vizit.ios.dev.auth \
-            VIZIT_GOOGLE_SIGN_IN_ENABLED=NO \
-            VIZIT_PUBLIC_PROFILE_BASE_URL=https://www.vizitkartyam.hu/p \
-            build
-
-      - name: Test native contact and QR integration
-        shell: bash
-        run: |
-          set -euo pipefail
           xcrun simctl list devices available --json > "$RUNNER_TEMP/simulators.json"
-          simulator_id="$(python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/simulators.json"))["devices"]; print(next(device["udid"] for runtime, devices in sorted(d.items(),reverse=True) if ".iOS-" in runtime for device in devices if device.get("isAvailable") and device["name"].startswith("iPhone"))')"
+          simulator_id="$(python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/simulators.json"))["devices"]; print(next(device["udid"] for runtime, devices in sorted(d.items(),reverse=True) if ".iOS-" in runtime for device in devices if device.get("isAvailable") and device["name"].startswith("iPhone")))')"
           xcodebuild -project ios/VIZIT.xcodeproj -scheme VIZIT \
             -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" \
             -only-testing:VizitNativeTests -parallel-testing-enabled NO \
