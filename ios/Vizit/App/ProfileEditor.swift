@@ -458,6 +458,7 @@ struct ProfileWizard: View {
                             "A névjegyed elmentve. A nyilvános profilt később is bekapcsolhatod.")
                         .foregroundStyle(VizitColor.textSecondary)
                     VizitButton(title: "Tovább az áttekintéshez") { onFinished() }
+                        .accessibilityIdentifier("wizard.finish")
                 }
                 .frame(maxWidth: 560).frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(VizitSpace.md)
@@ -495,8 +496,10 @@ struct ProfileWizard: View {
                                 isLoading: processing, isEnabled: valid && (!optional.contains(step) || hasValue)) {
                         if step == "done" { save() } else { advance(skip: false) }
                     }
+                    .accessibilityIdentifier("wizard.primary")
                     if optional.contains(step) {
                         VizitButton(title: "Később állítom be", kind: .tertiary) { advance(skip: true) }
+                            .accessibilityIdentifier("wizard.skip")
                     }
                 }
                 .padding(VizitSpace.md)
@@ -515,12 +518,15 @@ struct ProfileWizard: View {
             choice("Vállalkozói névjegy", detail: "Vállalkozás, beosztás, logó és bemutatkozás", selected: kind == "business") {
                 kind = "business"
             }
+            .accessibilityIdentifier("wizard.business")
             choice("Magánszemély", detail: "Személyes kapcsolatokhoz, csak a lényeg", selected: kind == "private") {
                 kind = "private"; draft.company = ""; draft.jobTitle = ""; draft.bio = ""; draft.logoBase64 = ""
             }
+            .accessibilityIdentifier("wizard.private")
         case "identity":
             Text(kind == "business" ? "Mutatkozz be" : "Hogy hívnak?").font(VizitFont.title)
-            VizitTextField(label: "Teljes név *", text: $draft.fullName, contentType: .name)
+            VizitTextField(label: "Teljes név *", text: $draft.fullName, contentType: .name,
+                           identifier: "wizard.fullName")
             if kind == "business" {
                 VizitTextField(label: "Vállalkozás / szervezet *", text: $draft.company, contentType: .organizationName)
                 VizitTextField(label: "Beosztás · nem kötelező", text: $draft.jobTitle, contentType: .jobTitle)
