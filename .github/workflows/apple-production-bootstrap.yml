@@ -57,7 +57,12 @@ jobs:
 
       - name: Register production App ID and create provisioning profile
         run: |
-          python3 scripts/apple-production-bootstrap.py             --bundle-id hu.rayworks.vizit             --bundle-name VIZIT             --profile-name "VIZIT App Store Production"             --certificate-serial "$APPLE_CERTIFICATE_SERIAL"             --output "$RUNNER_TEMP/VIZIT-App-Store-Production.mobileprovision"
+          "$APPLE_BOOTSTRAP_PYTHON" scripts/apple-production-bootstrap.py \
+            --bundle-id hu.rayworks.vizit \
+            --bundle-name VIZIT \
+            --profile-name "VIZIT App Store Production" \
+            --certificate-serial "$APPLE_CERTIFICATE_SERIAL" \
+            --output "$RUNNER_TEMP/VIZIT-App-Store-Production.mobileprovision"
 
       - name: Validate generated provisioning profile
         shell: bash
