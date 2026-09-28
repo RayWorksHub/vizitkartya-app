@@ -44,3 +44,17 @@ for i,b in enumerate(builds,1):
     print(f"BUILD_{i}_PROCESSING_STATE={a.get('processingState','')}")
     print(f"BUILD_{i}_UPLOADED_DATE={a.get('uploadedDate','')}")
     print(f"BUILD_{i}_EXPIRED={a.get('expired','')}")
+
+
+groups=get("/betaGroups",{
+    "filter[app]":app["id"],
+    "limit":"100",
+    "fields[betaGroups]":"name,isInternalGroup,publicLinkEnabled,publicLink",
+}).get("data",[])
+print("BETA_GROUP_COUNT="+str(len(groups)))
+for i,g in enumerate(groups,1):
+    a=g.get("attributes",{})
+    print(f"BETA_GROUP_{i}_ID={g.get('id','')}")
+    print(f"BETA_GROUP_{i}_NAME={a.get('name','')}")
+    print(f"BETA_GROUP_{i}_INTERNAL={a.get('isInternalGroup','')}")
+    print(f"BETA_GROUP_{i}_PUBLIC_LINK_ENABLED={a.get('publicLinkEnabled','')}")
