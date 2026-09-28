@@ -91,6 +91,20 @@ jobs:
           app_id = apps[0]['id']
           versions = get('apps/' + app_id + '/appStoreVersions', {'filter[platform]': 'IOS', 'limit': '200'})
           print('Existing iOS App Store versions:', [(version['attributes'].get('versionString'), version['attributes'].get('appStoreState')) for version in versions[:10]])
+          for version in versions[:2]:
+              localizations = get('appStoreVersions/' + version['id'] + '/appStoreVersionLocalizations')
+              print('Store listing localization count:', len(localizations))
+              for localization in localizations:
+                  attrs = localization['attributes']
+                  print('Listing fields:', attrs.get('locale'), 'description=', bool(attrs.get('description')), 'keywords=', bool(attrs.get('keywords')), 'support=', bool(attrs.get('supportUrl')))
+                  sets = get('appStoreVersionLocalizations/' + localization['id'] + '/appScreenshotSets')
+                  for screenshot_set in sets:
+                      screenshots = get('appScreenshotSets/' + screenshot_set['id'] + '/appScreenshots')
+                      print('Screenshot set:', screenshot_set['attributes'].get('screenshotDisplayType'), len(screenshots))
+                  if not sets:
+                      print('Screenshot sets: absent')
+              review = get('appStoreVersions/' + version['id'] + '/appStoreReviewDetail')
+              print('App review contact details:', bool(review))
           for version in versions:
               attrs = version['attributes']
               if attrs.get('versionString') == '7.3.4':
