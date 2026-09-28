@@ -58,3 +58,37 @@ for i,g in enumerate(groups,1):
     print(f"BETA_GROUP_{i}_NAME={a.get('name','')}")
     print(f"BETA_GROUP_{i}_INTERNAL={a.get('isInternalGroup','')}")
     print(f"BETA_GROUP_{i}_PUBLIC_LINK_ENABLED={a.get('publicLinkEnabled','')}")
+
+
+OLD_BUNDLE_ID="hu.rayworks.vizit.ios.dev"
+old_apps=get("/apps",{"filter[bundleId]":OLD_BUNDLE_ID,"limit":"10"}).get("data",[])
+print("OLD_APP_COUNT="+str(len(old_apps)))
+if old_apps:
+    old_app=old_apps[0]
+    print("OLD_APP_ID="+old_app["id"])
+    old_groups=get("/betaGroups",{
+        "filter[app]":old_app["id"],
+        "limit":"100",
+        "fields[betaGroups]":"name,isInternalGroup,publicLinkEnabled,publicLink",
+    }).get("data",[])
+    print("OLD_BETA_GROUP_COUNT="+str(len(old_groups)))
+    for i,g in enumerate(old_groups,1):
+        a=g.get("attributes",{})
+        print(f"OLD_BETA_GROUP_{i}_ID={g.get('id','')}")
+        print(f"OLD_BETA_GROUP_{i}_NAME={a.get('name','')}")
+        print(f"OLD_BETA_GROUP_{i}_INTERNAL={a.get('isInternalGroup','')}")
+        testers=get(f"/betaGroups/{g['id']}/betaTesters",{
+            "limit":"200",
+            "fields[betaTesters]":"email,firstName,lastName,state",
+        }).get("data",[])
+        print(f"OLD_BETA_GROUP_{i}_TESTER_COUNT={len(testers)}")
+        for j,t in enumerate(testers,1):
+            ta=t.get("attributes",{})
+            email=str(ta.get("email",""))
+            masked=email
+            if "@" in email:
+                local,domain=email.split("@",1)
+                masked=(local[:2]+"***@"+domain) if local else "***@"+domain
+            print(f"OLD_BETA_GROUP_{i}_TESTER_{j}_ID={t.get('id','')}")
+            print(f"OLD_BETA_GROUP_{i}_TESTER_{j}_EMAIL_MASKED={masked}")
+            print(f"OLD_BETA_GROUP_{i}_TESTER_{j}_STATE={ta.get('state','')}")
