@@ -92,3 +92,31 @@ if old_apps:
             print(f"OLD_BETA_GROUP_{i}_TESTER_{j}_ID={t.get('id','')}")
             print(f"OLD_BETA_GROUP_{i}_TESTER_{j}_EMAIL_MASKED={masked}")
             print(f"OLD_BETA_GROUP_{i}_TESTER_{j}_STATE={ta.get('state','')}")
+
+
+if old_apps and old_groups:
+    legacy_tester_ids=[]
+    for g in old_groups:
+        rel=get(f"/betaGroups/{g['id']}/relationships/betaTesters",{"limit":"200"}).get("data",[])
+        legacy_tester_ids.extend(t["id"] for t in rel)
+    legacy_tester_ids=sorted(set(legacy_tester_ids))
+    if len(legacy_tester_ids)==1:
+        tester=get(f"/betaTesters/{legacy_tester_ids[0]}",{
+            "fields[betaTesters]":"email,firstName,lastName,state"
+        }).get("data",{})
+        email=str(tester.get("attributes",{}).get("email",""))
+        users=get("/users",{
+            "filter[username]":email,
+            "limit":"50",
+            "fields[users]":"username,firstName,lastName,roles,allAppsVisible,provisioningAllowed",
+        }).get("data",[])
+        exact_users=[u for u in users if u.get("attributes",{}).get("username")==email]
+        print("MATCHING_ASC_USER_COUNT="+str(len(exact_users)))
+        for i,u in enumerate(exact_users,1):
+            ua=u.get("attributes",{})
+            print(f"ASC_USER_{i}_ID={u.get('id','')}")
+            print(f"ASC_USER_{i}_ALL_APPS_VISIBLE={ua.get('allAppsVisible','')}")
+            print(f"ASC_USER_{i}_ROLES={','.join(ua.get('roles',[]) or [])}")
+            visible=get(f"/users/{u['id']}/relationships/visibleApps",{"limit":"200"}).get("data",[])
+            visible_ids={x["id"] for x in visible}
+            print(f"ASC_USER_{i}_PROD_APP_VISIBLE={app['id'] in visible_ids}")
