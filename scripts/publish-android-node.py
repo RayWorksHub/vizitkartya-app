@@ -4,6 +4,17 @@ Credentials are read from the repository's authorized encrypted secret, never lo
 import base64, json, os, pathlib, subprocess, tempfile, time
 import urllib.error, urllib.parse, urllib.request
 out = pathlib.Path('release-output/play-upload.json')
+
+version_props = {}
+for raw_line in pathlib.Path('config/version.properties').read_text(encoding='utf-8').splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith('#'):
+        continue
+    key, value = line.split('=', 1)
+    version_props[key.strip()] = value.strip()
+release_name = version_props['versionName']
+major, minor, patch = map(int, release_name.split('.'))
+expected_version_code = major * 1_000_000 + minor * 10_000 + patch
 def report(status, detail):
     value = {'status':status,'detail':detail,'package':'hu.rayworks.vizit','track':'production'}
     out.write_text(json.dumps(value,ensure_ascii=False,indent=2))
@@ -47,9 +58,9 @@ try:
     aab=next(pathlib.Path('release-output').glob('*.aab'))
     bundle=request('https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/hu.rayworks.vizit/edits/'+edit+'/bundles?uploadType=media',token=token,binary=aab.read_bytes())
     version=str(bundle['versionCode'])
-    assert version=='7030004'
+    assert version == str(expected_version_code)
     request(root+'/edits/'+edit+'/tracks/production',method='PUT',token=token,payload={
-        'track':'production','releases':[{'name':'7.3.4','versionCodes':[version],'status':'completed',
+        'track':'production','releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
         'releaseNotes':[{'language':'hu-HU','text':'Vezetett névjegy-létrehozás és javított e-mailes megerősítés.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
     report('SUBMITTED','Google Play accepted the production release submission; Google review/publication state is managed by Play Console.')

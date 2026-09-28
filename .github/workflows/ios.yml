@@ -36,6 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify unified app version
+        run: python3 scripts/sync-version.py --check
+
       - name: Verify shared public endpoint configuration
         run: |
           python3 - <<'PYCONFIG'
@@ -316,6 +319,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify unified app version
+        run: python3 scripts/sync-version.py --check
+
       - name: Select App Store-compatible Xcode
         shell: bash
         run: |
@@ -435,14 +441,16 @@ jobs:
           test -d "$app"
           codesign --verify --deep --strict "$app"
           test "$(plutil -extract CFBundleIdentifier raw "$app/Info.plist")" = "$APPLE_BUNDLE_ID"
-          python3 - "$app/Info.plist" <<'PY'
+          expected_version="$(python3 scripts/sync-version.py --print-version)"
+          python3 - "$app/Info.plist" "$expected_version" <<'PY'
           import plistlib
           import sys
 
           with open(sys.argv[1], 'rb') as plist_file:
               version = plistlib.load(plist_file)['CFBundleShortVersionString']
-          if tuple(map(int, version.split('.'))) < (8, 7, 1):
-              raise SystemExit(f'iOS version regression: {version} < 8.7.1')
+          expected = sys.argv[2]
+          if version != expected:
+              raise SystemExit(f'iOS version mismatch: built {version}, expected {expected}')
           print('Validated iOS version:', version)
           PY
           test "$(plutil -extract VIZITSupabaseURL raw "$app/Info.plist")" = "$VIZIT_SUPABASE_URL"

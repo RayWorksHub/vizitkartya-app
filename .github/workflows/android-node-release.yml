@@ -14,6 +14,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Verify unified app version
+        id: version
+        run: |
+          python3 scripts/sync-version.py --check
+          echo "name=$(python3 scripts/sync-version.py --print-version)" >> "$GITHUB_OUTPUT"
+          echo "code=$(python3 scripts/sync-version.py --print-android-code)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -49,6 +55,8 @@ jobs:
       - name: Collect production packages
         env:
           SIGNED: ${{ steps.signing.outputs.configured }}
+          VIZIT_VERSION: ${{ steps.version.outputs.name }}
+          VIZIT_VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           cp app/build/outputs/bundle/prodRelease/*.aab release-output/
           cp app/build/outputs/apk/prod/release/*.apk release-output/
@@ -57,7 +65,8 @@ jobs:
           python3 - <<'PY'
           import json,os,pathlib
           pathlib.Path('release-output/build.json').write_text(json.dumps({
-            'commit':os.environ['GITHUB_SHA'],'version':'7.3.4','versionCode':7030004,
+            'commit':os.environ['GITHUB_SHA'],'version':os.environ['VIZIT_VERSION'],
+            'versionCode':int(os.environ['VIZIT_VERSION_CODE']),
             'package':'hu.rayworks.vizit','backend':'https://vizitkartyam-backend.vercel.app',
             'testsRun':False,'productionSigned':os.environ['SIGNED']=='true'
           },indent=2))
@@ -70,7 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VIZIT-7.3.4-Node-production
+          name: VIZIT-${{ steps.version.outputs.name }}-Node-production
           path: release-output/
           retention-days: 14
           if-no-files-found: warn
