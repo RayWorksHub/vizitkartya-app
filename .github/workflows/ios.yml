@@ -29,7 +29,7 @@ jobs:
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
-      VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
+      VIZIT_AUTH_SCHEME: vizit
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
 
@@ -74,7 +74,7 @@ jobs:
           for name in VIZIT_SUPABASE_URL VIZIT_SUPABASE_KEY VIZIT_AUTH_SCHEME VIZIT_PRIVACY_POLICY_URL VIZIT_PRIVACY_POLICY_VERSION VIZIT_TERMS_URL VIZIT_TERMS_VERSION; do
             test -n "${!name}" || { echo "Missing required configuration: $name"; exit 1; }
           done
-          test "$VIZIT_AUTH_SCHEME" = 'hu.rayworks.vizit.ios.dev.auth' || { echo 'Unsafe or stale auth callback scheme'; exit 1; }
+          test "$VIZIT_AUTH_SCHEME" = 'vizit' || { echo 'Unsafe or stale auth callback scheme'; exit 1; }
           node - <<'NODE'
           const values = [
             process.env.VIZIT_SUPABASE_URL,
@@ -207,9 +207,9 @@ jobs:
           app="$RUNNER_TEMP/vizit/Build/Products/Debug-iphonesimulator/VIZIT.app"
           test -d "$app"
           xcrun simctl install "$IPAD_ID" "$app"
-          xcrun simctl launch "$IPAD_ID" hu.rayworks.vizit.ios.dev --ui-testing --reset-test-profile
+          xcrun simctl launch "$IPAD_ID" hu.rayworks.vizit --ui-testing --reset-test-profile
           sleep 3
-          xcrun simctl spawn "$IPAD_ID" launchctl list | grep -F hu.rayworks.vizit.ios.dev
+          xcrun simctl spawn "$IPAD_ID" launchctl list | grep -F hu.rayworks.vizit
           xcrun simctl io "$IPAD_ID" screenshot "$RUNNER_TEMP/VIZIT-iPad.png"
           echo 'iPad launch smoke check: PASS'
 
@@ -255,22 +255,22 @@ jobs:
           ditto "$app" "$package/Payload/VIZIT.app"
           (
             cd "$package"
-            ditto -c -k --sequesterRsrc --keepParent Payload "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa"
+            ditto -c -k --sequesterRsrc --keepParent Payload "$RUNNER_TEMP/VIZIT-iOS-unsigned.ipa"
           )
-          unzip -t "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa" > "$RUNNER_TEMP/VIZIT-ipa-verify.txt"
-          unzip -l "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa" | grep -F 'Payload/VIZIT.app/VIZIT'
-          shasum -a 256 "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa" | tee "$RUNNER_TEMP/VIZIT-iOS-DEV-unsigned.ipa.sha256"
+          unzip -t "$RUNNER_TEMP/VIZIT-iOS-unsigned.ipa" > "$RUNNER_TEMP/VIZIT-ipa-verify.txt"
+          unzip -l "$RUNNER_TEMP/VIZIT-iOS-unsigned.ipa" | grep -F 'Payload/VIZIT.app/VIZIT'
+          shasum -a 256 "$RUNNER_TEMP/VIZIT-iOS-unsigned.ipa" | tee "$RUNNER_TEMP/VIZIT-iOS-unsigned.ipa.sha256"
           echo 'Unsigned physical-device IPA: PASS'
 
       - name: Upload verified IPA
         uses: actions/upload-artifact@v4
         with:
-          name: VIZIT-iOS-DEV-unsigned-IPA
+          name: VIZIT-iOS-unsigned-IPA
           retention-days: 14
           if-no-files-found: error
           path: |
-            ${{ runner.temp }}/VIZIT-iOS-DEV-unsigned.ipa
-            ${{ runner.temp }}/VIZIT-iOS-DEV-unsigned.ipa.sha256
+            ${{ runner.temp }}/VIZIT-iOS-unsigned.ipa
+            ${{ runner.temp }}/VIZIT-iOS-unsigned.ipa.sha256
 
       - name: Upload test evidence
         if: always()
@@ -303,11 +303,11 @@ jobs:
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
       VIZIT_TERMS_VERSION: ${{ secrets.VIZIT_TERMS_VERSION }}
-      VIZIT_AUTH_SCHEME: hu.rayworks.vizit.ios.dev.auth
+      VIZIT_AUTH_SCHEME: vizit
       VIZIT_GOOGLE_SIGN_IN_ENABLED: "NO"
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
       APPLE_TEAM_ID: K7BC6R47KA
-      APPLE_BUNDLE_ID: hu.rayworks.vizit.ios.dev
+      APPLE_BUNDLE_ID: hu.rayworks.vizit
       APPLE_PROFILE_NAME: VIZIT App Store
       APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
