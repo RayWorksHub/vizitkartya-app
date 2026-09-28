@@ -1,0 +1,106 @@
+name: Inspect App Store submission readiness
+
+on:
+  push:
+    branches: [release/asc-inspect-20260928]
+    paths: ['.github/workflows/asc-inspect.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+    steps:
+      - name: Read App Store Connect state without changing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import subprocess
+          import tempfile
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          def b64url(value):
+              return base64.urlsafe_b64encode(value).rstrip(b'=').decode()
+
+          def der_length(value, index):
+              length = value[index]
+              index += 1
+              if length < 128:
+                  return length, index
+              count = length & 127
+              return int.from_bytes(value[index:index + count], 'big'), index + count
+
+          def jwt_signature(value):
+              index = 1
+              length, index = der_length(value, index)
+              assert value[0] == 0x30 and index + length == len(value)
+              integers = []
+              for _ in range(2):
+                  assert value[index] == 0x02
+                  length, index = der_length(value, index + 1)
+                  integers.append(int.from_bytes(value[index:index + length], 'big'))
+                  index += length
+              assert index == len(value)
+              return b''.join(number.to_bytes(32, 'big') for number in integers)
+
+          needed = ['APP_STORE_CONNECT_API_KEY_ID', 'APP_STORE_CONNECT_API_ISSUER_ID', 'APP_STORE_CONNECT_API_KEY_BASE64']
+          for name in needed:
+              if not os.environ.get(name):
+                  raise SystemExit('Missing App Store Connect credential: ' + name)
+
+          now = int(time.time())
+          header = {'alg': 'ES256', 'kid': os.environ['APP_STORE_CONNECT_API_KEY_ID'], 'typ': 'JWT'}
+          claims = {'iss': os.environ['APP_STORE_CONNECT_API_ISSUER_ID'], 'iat': now, 'exp': now + 300, 'aud': 'appstoreconnect-v1'}
+          message = '.'.join(b64url(json.dumps(part, separators=(',', ':')).encode()) for part in (header, claims))
+          with tempfile.TemporaryDirectory() as directory:
+              key = Path(directory) / 'AuthKey.p8'
+              key.write_bytes(base64.b64decode(os.environ['APP_STORE_CONNECT_API_KEY_BASE64'], validate=True))
+              key.chmod(0o600)
+              der = subprocess.run(['openssl', 'dgst', '-sha256', '-sign', str(key)], input=message.encode(), capture_output=True, check=True).stdout
+          token = message + '.' + b64url(jwt_signature(der))
+
+          def get(path, params=None):
+              url = 'https://api.appstoreconnect.apple.com/v1/' + path
+              if params:
+                  url += '?' + urllib.parse.urlencode(params)
+              request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'})
+              try:
+                  with urllib.request.urlopen(request, timeout=25) as response:
+                      return json.load(response)['data']
+              except urllib.error.HTTPError as error:
+                  raise SystemExit('App Store Connect read failed: HTTP ' + str(error.code)) from None
+
+          apps = get('apps', {'filter[bundleId]': 'hu.rayworks.vizit.ios.dev', 'limit': '2'})
+          print('Registered App Store app count:', len(apps))
+          if len(apps) != 1:
+              raise SystemExit('Expected exactly one registered app for the signed bundle ID')
+          app_id = apps[0]['id']
+          versions = get('apps/' + app_id + '/appStoreVersions', {'filter[platform]': 'IOS', 'limit': '200'})
+          for version in versions:
+              attrs = version['attributes']
+              if attrs.get('versionString') == '7.3.4':
+                  print('App Store 7.3.4 state:', attrs.get('appStoreState'))
+                  attached = get('appStoreVersions/' + version['id'] + '/build')
+                  print('App Store 7.3.4 attached build:', attached.get('attributes', {}).get('version') if isinstance(attached, dict) else None)
+          if not any(version['attributes'].get('versionString') == '7.3.4' for version in versions):
+              print('App Store 7.3.4 version record: absent')
+          builds = get('builds', {'filter[app]': app_id, 'sort': '-uploadedDate', 'limit': '5'})
+          for build in builds:
+              attrs = build['attributes']
+              print('Recent build:', attrs.get('version'), attrs.get('processingState'))
+          print('App Store state inspection complete; no changes submitted')
+          PY
