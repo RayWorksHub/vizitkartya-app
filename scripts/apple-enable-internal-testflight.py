@@ -38,10 +38,11 @@ def get(path,query=None): return request("GET",path,query=query)
 def post(path,payload): return request("POST",path,payload=payload)
 
 def app_by_bundle(bundle):
-    rows=get("/apps",{"filter[bundleId]":bundle,"limit":"10"}).get("data",[])
-    if len(rows)!=1:
-        raise SystemExit(f"Expected exactly one app for {bundle}, found {len(rows)}")
-    return rows[0]
+    rows=get("/apps",{"filter[bundleId]":bundle,"limit":"50"}).get("data",[])
+    exact=[row for row in rows if row.get("attributes",{}).get("bundleId")==bundle]
+    if len(exact)!=1:
+        raise SystemExit(f"Expected exactly one exact app for {bundle}, found {len(exact)}")
+    return exact[0]
 
 prod=app_by_bundle(PROD_BUNDLE)
 old=app_by_bundle(OLD_BUNDLE)
