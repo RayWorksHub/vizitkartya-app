@@ -2,7 +2,7 @@ name: Apple TestFlight status
 
 on:
   push:
-    branches: [chore/testflight-status-20260928]
+    branches: [main, chore/testflight-status-20260928]
     paths:
       - scripts/apple-testflight-status.py
       - .github/workflows/apple-testflight-status.yml
