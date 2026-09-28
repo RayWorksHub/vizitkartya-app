@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>hu</string>
 	<key>CFBundleDisplayName</key>
-	<string>VIZIT DEV</string>
+	<string>VIZIT</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

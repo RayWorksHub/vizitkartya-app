@@ -10,7 +10,7 @@
 	<string>app-store-connect</string>
 	<key>provisioningProfiles</key>
 	<dict>
-		<key>hu.rayworks.vizit.ios.dev</key>
+		<key>hu.rayworks.vizit</key>
 		<string>VIZIT App Store</string>
 	</dict>
 	<key>signingStyle</key>
