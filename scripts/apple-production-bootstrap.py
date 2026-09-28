@@ -26,9 +26,9 @@ def normalize_serial(value: str) -> str:
 
 
 def token() -> str:
-    key_id = os.environ["APP_STORE_CONNECT_API_KEY_ID"].strip()
-    issuer_id = os.environ["APP_STORE_CONNECT_API_ISSUER_ID"].strip()
-    key_b64 = os.environ["APP_STORE_CONNECT_API_KEY_BASE64"].strip()
+    key_id = os.environ["APPLE_PROVISIONING_API_KEY_ID"].strip()
+    issuer_id = os.environ["APPLE_PROVISIONING_API_ISSUER_ID"].strip()
+    key_b64 = os.environ["APPLE_PROVISIONING_API_KEY_BASE64"].strip()
     key = base64.b64decode(key_b64).decode("utf-8")
     now = int(dt.datetime.now(dt.timezone.utc).timestamp())
     return jwt.encode(
