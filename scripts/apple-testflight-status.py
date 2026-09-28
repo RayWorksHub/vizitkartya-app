@@ -120,3 +120,21 @@ if old_apps and old_groups:
             visible=get(f"/users/{u['id']}/relationships/visibleApps",{"limit":"200"}).get("data",[])
             visible_ids={x["id"] for x in visible}
             print(f"ASC_USER_{i}_PROD_APP_VISIBLE={app['id'] in visible_ids}")
+
+
+if old_apps and old_groups and 'email' in locals() and email:
+    all_testers=get("/betaTesters",{
+        "filter[email]":email,
+        "limit":"200",
+        "fields[betaTesters]":"email,firstName,lastName,state,apps,betaGroups,builds",
+    }).get("data",[])
+    exact_testers=[t for t in all_testers if t.get("attributes",{}).get("email")==email]
+    print("MATCHING_BETA_TESTER_COUNT="+str(len(exact_testers)))
+    for i,t in enumerate(exact_testers,1):
+        print(f"MATCHING_BETA_TESTER_{i}_ID={t.get('id','')}")
+        print(f"MATCHING_BETA_TESTER_{i}_STATE={t.get('attributes',{}).get('state','')}")
+        apps_rel=get(f"/betaTesters/{t['id']}/relationships/apps",{"limit":"200"}).get("data",[])
+        app_ids={x["id"] for x in apps_rel}
+        print(f"MATCHING_BETA_TESTER_{i}_HAS_PROD_APP={app['id'] in app_ids}")
+        if old_apps:
+            print(f"MATCHING_BETA_TESTER_{i}_HAS_OLD_APP={old_apps[0]['id'] in app_ids}")
