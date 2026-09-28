@@ -20,6 +20,28 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Require Play Alpha release credentials
+        env:
+          KEYSTORE: ${{ secrets.VIZIT_PROD_SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.VIZIT_PROD_SIGNING_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VIZIT_PROD_SIGNING_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VIZIT_PROD_SIGNING_KEY_PASSWORD }}
+          PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          missing=()
+          [ -n "$KEYSTORE" ] || missing+=(VIZIT_PROD_SIGNING_KEYSTORE_BASE64)
+          [ -n "$STORE_PASSWORD" ] || missing+=(VIZIT_PROD_SIGNING_PASSWORD)
+          [ -n "$KEY_ALIAS" ] || missing+=(VIZIT_PROD_SIGNING_ALIAS)
+          [ -n "$KEY_PASSWORD" ] || missing+=(VIZIT_PROD_SIGNING_KEY_PASSWORD)
+          [ -n "$PLAY_JSON" ] || missing+=(GOOGLE_PLAY_SERVICE_ACCOUNT_JSON)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf 'Missing release secrets: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+          if ! printf '%s' "$PLAY_JSON" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("type")=="service_account" and x.get("client_email","").endswith(".gserviceaccount.com")'; then
+            echo 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON is not a service account key' >&2
+            exit 1
+          fi
       - name: Verify unified app version
         id: version
         run: |
@@ -36,8 +58,7 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Use existing production upload key when configured
-        id: signing
+      - name: Verify and use existing production upload key
         env:
           KEYSTORE: ${{ secrets.VIZIT_PROD_SIGNING_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.VIZIT_PROD_SIGNING_PASSWORD }}
@@ -45,22 +66,21 @@ jobs:
           KEY_PASSWORD: ${{ secrets.VIZIT_PROD_SIGNING_KEY_PASSWORD }}
         run: |
           mkdir -p release-output
-          if [ -n "$KEYSTORE" ] && [ -n "$STORE_PASSWORD" ]; then
-            umask 077
-            printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/vizit-production.jks"
-            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_STORE_FILE=$RUNNER_TEMP/vizit-production.jks" >> "$GITHUB_ENV"
-            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_ALIAS=${KEY_ALIAS:-vizit-upload}" >> "$GITHUB_ENV"
-            echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_KEY_PASSWORD=${KEY_PASSWORD:-$STORE_PASSWORD}" >> "$GITHUB_ENV"
-            echo 'configured=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'configured=false' >> "$GITHUB_OUTPUT"
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/vizit-production.jks"
+          fingerprint="$(keytool -exportcert -keystore "$RUNNER_TEMP/vizit-production.jks" -alias "$KEY_ALIAS" -storepass:env STORE_PASSWORD | openssl x509 -inform DER -noout -fingerprint -sha256)"
+          if [ "$fingerprint" != 'sha256 Fingerprint=9F:F2:DB:8B:71:52:19:55:8D:9D:24:F4:93:EF:5B:76:E9:3A:33:EC:27:4A:0E:08:53:8E:72:E9:30:C1:18:B6' ]; then
+            echo 'Upload key differs from the verified VIZIT 7.3.1 release certificate' >&2
+            exit 1
           fi
+          echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_STORE_FILE=$RUNNER_TEMP/vizit-production.jks" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_VIZIT_PROD_SIGNING_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
       - name: Build production AAB and APK
         run: ./gradlew :app:bundleProdRelease :app:assembleProdRelease --no-daemon
       - name: Collect production packages
         env:
-          SIGNED: ${{ steps.signing.outputs.configured }}
           VIZIT_VERSION: ${{ steps.version.outputs.name }}
           VIZIT_VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
@@ -74,14 +94,14 @@ jobs:
             'commit':os.environ['GITHUB_SHA'],'version':os.environ['VIZIT_VERSION'],
             'versionCode':int(os.environ['VIZIT_VERSION_CODE']),
             'package':'hu.rayworks.vizit','backend':'https://vizitkartyam-backend.vercel.app',
-            'testsRun':False,'productionSigned':os.environ['SIGNED']=='true'
+            'testsRun':False,'productionSigned':True
           },indent=2))
           PY
       - name: Submit the signed package to Google Play Alpha closed testing
         env:
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           GOOGLE_PLAY_TRACK: alpha
-          SIGNED: ${{ steps.signing.outputs.configured }}
+          SIGNED: 'true'
         run: python3 scripts/publish-android-node.py
       - uses: actions/upload-artifact@v4
         if: always()
