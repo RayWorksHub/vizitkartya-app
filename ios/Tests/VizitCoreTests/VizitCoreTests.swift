@@ -298,11 +298,11 @@ final class VizitCoreTests: XCTestCase {
     }
 
     func testCallbackMustMatchExactRoute() {
-        let expected = URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback")!
-        XCTAssertTrue(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback?code=abc")!, expected: expected))
-        XCTAssertFalse(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://evil?code=abc")!, expected: expected))
-        XCTAssertFalse(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback:443?code=abc")!, expected: expected))
-        XCTAssertFalse(AuthCallback.accepts(URL(string: "hu.rayworks.vizit.ios.dev.auth://auth-callback/other?code=abc")!, expected: expected))
+        let expected = URL(string: "vizit://auth-callback")!
+        XCTAssertTrue(AuthCallback.accepts(URL(string: "vizit://auth-callback?code=abc")!, expected: expected))
+        XCTAssertFalse(AuthCallback.accepts(URL(string: "vizit://evil?code=abc")!, expected: expected))
+        XCTAssertFalse(AuthCallback.accepts(URL(string: "vizit://auth-callback:443?code=abc")!, expected: expected))
+        XCTAssertFalse(AuthCallback.accepts(URL(string: "vizit://auth-callback/other?code=abc")!, expected: expected))
         XCTAssertFalse(AuthCallback.accepts(URL(string: "https://auth-callback?code=abc")!, expected: expected))
     }
 }
