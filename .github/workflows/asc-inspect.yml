@@ -113,9 +113,23 @@ jobs:
                   print('App Store 7.3.4 attached build:', attached.get('attributes', {}).get('version') if isinstance(attached, dict) else None)
           if not any(version['attributes'].get('versionString') == '7.3.4' for version in versions):
               print('App Store 7.3.4 version record: absent')
-          builds = get('builds', {'filter[app]': app_id, 'sort': '-uploadedDate', 'limit': '5'})
+          builds = get('builds', {'filter[app]': app_id, 'sort': '-uploadedDate', 'limit': '200'})
           for build in builds:
               attrs = build['attributes']
               print('Recent build:', attrs.get('version'), attrs.get('processingState'))
+          for build in builds:
+              if build['attributes'].get('version') not in ('143', '156'):
+                  continue
+              version = build['attributes'].get('version')
+              prerelease = get('builds/' + build['id'] + '/preReleaseVersion')
+              detail = get('builds/' + build['id'] + '/buildBetaDetail')
+              print('Build marketing version:', version, prerelease['attributes'].get('version') if prerelease else None)
+              print('Build beta state:', version, detail['attributes'] if detail else None)
+          groups = get('apps/' + app_id + '/betaGroups', {'limit': '200'})
+          print('Beta group count:', len(groups))
+          for group in groups:
+              attrs = group['attributes']
+              members = get('betaGroups/' + group['id'] + '/builds', {'limit': '200'})
+              print('Beta group:', attrs.get('name'), 'internal=', attrs.get('isInternalGroup'), 'all-builds=', attrs.get('hasAccessToAllBuilds'), 'builds=', [member['attributes'].get('version') for member in members])
           print('App Store state inspection complete; no changes submitted')
           PY
