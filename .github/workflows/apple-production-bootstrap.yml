@@ -2,7 +2,7 @@ name: Apple production bootstrap
 
 on:
   push:
-    branches: [chore/apple-production-bootstrap-20260928]
+    branches: [main, chore/apple-production-bootstrap-20260928]
     paths:
       - scripts/apple-production-bootstrap.py
       - .github/workflows/apple-production-bootstrap.yml
