@@ -64,3 +64,8 @@ Kiadásra jelölés előtt valódi iPhone-on külön ellenőrizendő:
 - csak erre létrehozott tesztfiókkal a végleges fióktörlés.
 
 Sikert csak a ténylegesen lefutott, bizonyítékkal rendelkező ellenőrzés után szabad rögzíteni.
+
+
+## Production App Store Connect
+
+A production iOS app rekord Bundle ID-ja: `hu.rayworks.vizit`. A TestFlight kiadás a `VIZIT App Store Production` provisioning profile-t használja.
