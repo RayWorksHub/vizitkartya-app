@@ -118,7 +118,7 @@ jobs:
               attrs = build['attributes']
               print('Recent build:', attrs.get('version'), attrs.get('processingState'))
           for build in builds:
-              if build['attributes'].get('version') not in ('143', '156'):
+              if build['attributes'].get('version') not in ('143', '156', '158'):
                   continue
               version = build['attributes'].get('version')
               prerelease = get('builds/' + build['id'] + '/preReleaseVersion')
@@ -131,5 +131,6 @@ jobs:
               attrs = group['attributes']
               members = get('betaGroups/' + group['id'] + '/builds', {'limit': '200'})
               print('Beta group:', attrs.get('name'), 'internal=', attrs.get('isInternalGroup'), 'all-builds=', attrs.get('hasAccessToAllBuilds'), 'builds=', [member['attributes'].get('version') for member in members])
+          print('Expected 8.7.1 build 158 present:', any(build['attributes'].get('version') == '158' for build in builds))
           print('App Store state inspection complete; no changes submitted')
           PY
