@@ -34,7 +34,12 @@ jobs:
           done
 
       - name: Install JWT dependency
-        run: python3 -m pip install --user 'PyJWT[crypto]>=2.8,<3'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/apple-bootstrap-venv"
+          "$RUNNER_TEMP/apple-bootstrap-venv/bin/python" -m pip install 'PyJWT[crypto]>=2.8,<3'
+          echo "APPLE_BOOTSTRAP_PYTHON=$RUNNER_TEMP/apple-bootstrap-venv/bin/python" >> "$GITHUB_ENV"
 
       - name: Read distribution certificate serial
         shell: bash
