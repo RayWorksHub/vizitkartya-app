@@ -90,6 +90,7 @@ jobs:
               raise SystemExit('Expected exactly one registered app for the signed bundle ID')
           app_id = apps[0]['id']
           versions = get('apps/' + app_id + '/appStoreVersions', {'filter[platform]': 'IOS', 'limit': '200'})
+          print('Existing iOS App Store versions:', [(version['attributes'].get('versionString'), version['attributes'].get('appStoreState')) for version in versions[:10]])
           for version in versions:
               attrs = version['attributes']
               if attrs.get('versionString') == '7.3.4':
