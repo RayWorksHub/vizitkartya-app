@@ -74,7 +74,14 @@ tester_ids=sorted(set(tester_ids))
 if len(tester_ids)!=1:
     raise SystemExit(f"Expected exactly one legacy internal tester, found {len(tester_ids)}")
 tester_id=tester_ids[0]
-print("Reusing one legacy internal tester:", tester_id)
+legacy_tester=get(f"/betaTesters/{tester_id}",{
+    "fields[betaTesters]":"email,firstName,lastName,state"
+}).get("data",{})
+legacy_attrs=legacy_tester.get("attributes",{})
+tester_email=str(legacy_attrs.get("email","")).strip()
+if not tester_email:
+    raise SystemExit("Legacy internal tester has no email")
+print("Reusing one legacy internal tester identity:", tester_id)
 
 groups=get("/betaGroups",{
     "filter[app]":prod["id"],
@@ -99,16 +106,34 @@ post(f"/builds/{build['id']}/relationships/betaGroups",{
 })
 print("Build assigned to production beta group")
 
-post(f"/betaGroups/{group['id']}/relationships/betaTesters",{
-    "data":[{"type":"betaTesters","id":tester_id}]
-})
-print("Legacy internal tester assigned to production beta group")
+# A betaTester resource can be app-scoped. The legacy tester belongs only to
+# the old DEV app, so create the production TestFlight assignment using the
+# same App Store Connect account email and the production beta group.
+created_tester=post("/betaTesters",{
+    "data":{
+        "type":"betaTesters",
+        "attributes":{
+            "email":tester_email,
+            "firstName":legacy_attrs.get("firstName") or "",
+            "lastName":legacy_attrs.get("lastName") or "",
+        },
+        "relationships":{
+            "betaGroups":{
+                "data":[{"type":"betaGroups","id":group["id"]}]
+            }
+        }
+    }
+}).get("data",{})
+production_tester_id=created_tester.get("id")
+if not production_tester_id:
+    raise SystemExit("Apple created no production beta tester resource")
+print("Production internal tester assignment created:", production_tester_id)
 
 linked_builds=get(f"/betaGroups/{group['id']}/relationships/builds",{"limit":"200"}).get("data",[])
 linked_testers=get(f"/betaGroups/{group['id']}/relationships/betaTesters",{"limit":"200"}).get("data",[])
 if build["id"] not in {x["id"] for x in linked_builds}:
     raise SystemExit("Build relationship verification failed")
-if tester_id not in {x["id"] for x in linked_testers}:
+if production_tester_id not in {x["id"] for x in linked_testers}:
     raise SystemExit("Tester relationship verification failed")
 
 print("PRODUCTION_INTERNAL_TESTFLIGHT=ENABLED")
