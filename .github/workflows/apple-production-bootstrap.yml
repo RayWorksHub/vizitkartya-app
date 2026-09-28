@@ -1,0 +1,64 @@
+name: Apple production bootstrap
+
+on:
+  push:
+    branches: [chore/apple-production-bootstrap-20260928]
+    paths:
+      - scripts/apple-production-bootstrap.py
+      - .github/workflows/apple-production-bootstrap.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Apple credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_API_ISSUER_ID APP_STORE_CONNECT_API_KEY_BASE64 APPLE_DISTRIBUTION_CERTIFICATE_BASE64 APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD; do
+            test -n "${!name}" || { echo "Missing required Apple credential: $name"; exit 1; }
+          done
+
+      - name: Install JWT dependency
+        run: python3 -m pip install --user 'PyJWT[crypto]>=2.8,<3'
+
+      - name: Read distribution certificate serial
+        shell: bash
+        run: |
+          set -euo pipefail
+          cert="$RUNNER_TEMP/VIZIT-distribution.p12"
+          printf '%s' "$APPLE_DISTRIBUTION_CERTIFICATE_BASE64" | base64 -D > "$cert"
+          serial="$(
+            openssl pkcs12 -in "$cert" -clcerts -nokeys -passin env:APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD 2>/dev/null |
+            openssl x509 -noout -serial |
+            sed 's/^serial=//'
+          )"
+          test -n "$serial"
+          echo "APPLE_CERTIFICATE_SERIAL=$serial" >> "$GITHUB_ENV"
+
+      - name: Register production App ID and create provisioning profile
+        run: |
+          python3 scripts/apple-production-bootstrap.py             --bundle-id hu.rayworks.vizit             --bundle-name VIZIT             --profile-name "VIZIT App Store Production"             --certificate-serial "$APPLE_CERTIFICATE_SERIAL"             --output "$RUNNER_TEMP/VIZIT-App-Store-Production.mobileprovision"
+
+      - name: Validate generated provisioning profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          security cms -D -i "$RUNNER_TEMP/VIZIT-App-Store-Production.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          test "$(plutil -extract Name raw "$RUNNER_TEMP/profile.plist")" = "VIZIT App Store Production"
+          test "$(plutil -extract Entitlements.application-identifier raw "$RUNNER_TEMP/profile.plist")" = "K7BC6R47KA.hu.rayworks.vizit"
+          echo "Production Apple App ID and provisioning profile: PASS"
