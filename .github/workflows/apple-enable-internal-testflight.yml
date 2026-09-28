@@ -2,7 +2,7 @@ name: Enable production internal TestFlight
 
 on:
   push:
-    branches: [chore/enable-production-internal-testflight]
+    branches: [main, chore/enable-production-internal-testflight]
     paths:
       - scripts/apple-enable-internal-testflight.py
       - .github/workflows/apple-enable-internal-testflight.yml
