@@ -4,6 +4,9 @@ Credentials are read from the repository's authorized encrypted secret, never lo
 import base64, json, os, pathlib, subprocess, tempfile, time
 import urllib.error, urllib.parse, urllib.request
 out = pathlib.Path('release-output/play-upload.json')
+track = os.environ.get('GOOGLE_PLAY_TRACK','alpha').strip() or 'alpha'
+if track not in {'internal','alpha','beta','production'}:
+    raise SystemExit('Unsupported Google Play track: '+track)
 
 version_props = {}
 for raw_line in pathlib.Path('config/version.properties').read_text(encoding='utf-8').splitlines():
@@ -16,7 +19,7 @@ release_name = version_props['versionName']
 major, minor, patch = map(int, release_name.split('.'))
 expected_version_code = major * 1_000_000 + minor * 10_000 + patch
 def report(status, detail):
-    value = {'status':status,'detail':detail,'package':'hu.rayworks.vizit','track':'production'}
+    value = {'status':status,'detail':detail,'package':'hu.rayworks.vizit','track':track}
     out.write_text(json.dumps(value,ensure_ascii=False,indent=2))
     print(status + ': ' + detail)
 raw = os.environ.get('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON','')
@@ -59,11 +62,11 @@ try:
     bundle=request('https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/hu.rayworks.vizit/edits/'+edit+'/bundles?uploadType=media',token=token,binary=aab.read_bytes())
     version=str(bundle['versionCode'])
     assert version == str(expected_version_code)
-    request(root+'/edits/'+edit+'/tracks/production',method='PUT',token=token,payload={
-        'track':'production','releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
+    request(root+'/edits/'+edit+'/tracks/'+track,method='PUT',token=token,payload={
+        'track':track,'releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
         'releaseNotes':[{'language':'hu-HU','text':'Vezetett névjegy-létrehozás és javított e-mailes megerősítés.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
-    report('SUBMITTED','Google Play accepted the production release submission; Google review/publication state is managed by Play Console.')
+    report('SUBMITTED',f'Google Play accepted the {track} release submission; Google review/publication state is managed by Play Console.')
 except urllib.error.HTTPError as error:
     # Only the provider's bounded human-readable message is recorded, never credentials.
     try: detail=json.loads(error.read(8192)).get('error',{})
