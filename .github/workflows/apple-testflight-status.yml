@@ -1,0 +1,27 @@
+name: Apple TestFlight status
+
+on:
+  push:
+    branches: [chore/testflight-status-20260928]
+    paths:
+      - scripts/apple-testflight-status.py
+      - .github/workflows/apple-testflight-status.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install 'PyJWT[crypto]>=2.8,<3'
+      - run: "$RUNNER_TEMP/venv/bin/python scripts/apple-testflight-status.py"
