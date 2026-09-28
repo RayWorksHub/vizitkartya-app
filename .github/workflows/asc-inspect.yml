@@ -1,4 +1,4 @@
-name: Inspect App Store submission readiness
+name: Prepare App Store version draft
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
     steps:
-      - name: Read App Store Connect state without changing it
+      - name: Attach validated build to the editable App Store draft
         shell: bash
         run: |
           set -euo pipefail
@@ -84,10 +84,23 @@ jobs:
               except urllib.error.HTTPError as error:
                   raise SystemExit('App Store Connect read failed: HTTP ' + str(error.code)) from None
 
+          def patch(path, payload):
+              url = 'https://api.appstoreconnect.apple.com/v1/' + path
+              body = json.dumps(payload, separators=(',', ':')).encode()
+              request = urllib.request.Request(url, data=body, method='PATCH', headers={
+                  'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'Content-Type': 'application/json'})
+              try:
+                  with urllib.request.urlopen(request, timeout=25) as response:
+                      return response.status
+              except urllib.error.HTTPError as error:
+                  raise SystemExit('App Store Connect draft update failed: HTTP ' + str(error.code)) from None
+
           apps = get('apps', {'filter[bundleId]': 'hu.rayworks.vizit.ios.dev', 'limit': '2'})
           print('Registered App Store app count:', len(apps))
           if len(apps) != 1:
               raise SystemExit('Expected exactly one registered app for the signed bundle ID')
+          if not apps[0]['attributes']['name'].upper().startswith('VIZIT'):
+              raise SystemExit('Unexpected App Store app name; draft was not changed')
           app_id = apps[0]['id']
           versions = get('apps/' + app_id + '/appStoreVersions', {'filter[platform]': 'IOS', 'limit': '200'})
           print('Existing iOS App Store versions:', [(version['attributes'].get('versionString'), version['attributes'].get('appStoreState')) for version in versions[:10]])
@@ -117,5 +130,27 @@ jobs:
           for build in builds:
               attrs = build['attributes']
               print('Recent build:', attrs.get('version'), attrs.get('processingState'))
-          print('App Store state inspection complete; no changes submitted')
+          if len(versions) != 1 or versions[0]['attributes'].get('appStoreState') != 'PREPARE_FOR_SUBMISSION':
+              raise SystemExit('Unexpected draft version state; no changes submitted')
+          draft = versions[0]
+          current_version = draft['attributes'].get('versionString')
+          if current_version not in ('1.0', '7.3.4'):
+              raise SystemExit('Unexpected draft version number; no changes submitted')
+          candidate = next((build for build in builds if build['attributes'].get('version') == '156' and build['attributes'].get('processingState') == 'VALID'), None)
+          if candidate is None:
+              raise SystemExit('The validated 7.3.4 build 156 is unavailable; no changes submitted')
+          attached = get('appStoreVersions/' + draft['id'] + '/build')
+          if attached is not None and attached['id'] != candidate['id']:
+              raise SystemExit('Draft already has a different build; no changes submitted')
+          if current_version == '1.0':
+              patch('appStoreVersions/' + draft['id'], {'data': {'type': 'appStoreVersions', 'id': draft['id'], 'attributes': {'versionString': '7.3.4'}}})
+              print('Updated App Store draft version: 7.3.4')
+          if attached is None:
+              patch('appStoreVersions/' + draft['id'] + '/relationships/build', {'data': {'type': 'builds', 'id': candidate['id']}})
+              print('Attached validated App Store build: 156')
+          confirmed = get('appStoreVersions/' + draft['id'])
+          linked = get('appStoreVersions/' + draft['id'] + '/build')
+          assert confirmed['attributes']['versionString'] == '7.3.4'
+          assert linked['id'] == candidate['id']
+          print('App Store draft prepared and verified; not submitted for review')
           PY
