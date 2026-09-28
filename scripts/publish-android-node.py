@@ -14,7 +14,7 @@ if not raw or os.environ.get('SIGNED') != 'true':
     if not raw: missing.append('Google Play API authorization is not configured')
     if os.environ.get('SIGNED') != 'true': missing.append('production signing credentials are not configured')
     report('BLOCKED', '; '.join(missing))
-    raise SystemExit(0)
+    raise SystemExit(1)
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, hdrs, newurl): return None
 opener = urllib.request.build_opener(NoRedirect)
@@ -47,10 +47,10 @@ try:
     aab=next(pathlib.Path('release-output').glob('*.aab'))
     bundle=request('https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/hu.rayworks.vizit/edits/'+edit+'/bundles?uploadType=media',token=token,binary=aab.read_bytes())
     version=str(bundle['versionCode'])
-    assert version=='7030003'
+    assert version=='7030004'
     request(root+'/edits/'+edit+'/tracks/production',method='PUT',token=token,payload={
-        'track':'production','releases':[{'name':'7.3.3','versionCodes':[version],'status':'completed',
-        'releaseNotes':[{'language':'hu-HU','text':'Új statisztikák, adatexport és webes CRM-hozzáférés.'}]}]})
+        'track':'production','releases':[{'name':'7.3.4','versionCodes':[version],'status':'completed',
+        'releaseNotes':[{'language':'hu-HU','text':'Vezetett névjegy-létrehozás és javított e-mailes megerősítés.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
     report('SUBMITTED','Google Play accepted the production release submission; Google review/publication state is managed by Play Console.')
 except urllib.error.HTTPError as error:
