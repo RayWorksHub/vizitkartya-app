@@ -268,7 +268,7 @@ final class CloudService: @unchecked Sendable {
             ],
             redirectTo: configuration.callbackURL
         )
-        // DEV is required to enforce email confirmation. A session here means
+        // Email confirmation is required by the active Auth policy. A session here means
         // the backend was weakened, so discard it instead of silently signing in.
         if response.session != nil {
             try? await client.auth.signOut()
