@@ -11,7 +11,7 @@
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>hu.rayworks.vizit</key>
-		<string>VIZIT App Store</string>
+		<string>VIZIT App Store Production</string>
 	</dict>
 	<key>signingStyle</key>
 	<string>manual</string>

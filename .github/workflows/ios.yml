@@ -308,10 +308,9 @@ jobs:
       VIZIT_PUBLIC_PROFILE_BASE_URL: https://www.vizitkartyam.hu/p
       APPLE_TEAM_ID: K7BC6R47KA
       APPLE_BUNDLE_ID: hu.rayworks.vizit
-      APPLE_PROFILE_NAME: VIZIT App Store
+      APPLE_PROFILE_NAME: VIZIT App Store Production
       APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
-      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
       APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
@@ -341,7 +340,6 @@ jobs:
           required=(
             APPLE_DISTRIBUTION_CERTIFICATE_BASE64
             APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD
-            APPLE_PROVISIONING_PROFILE_BASE64
             APP_STORE_CONNECT_API_KEY_ID
             APP_STORE_CONNECT_API_ISSUER_ID
             APP_STORE_CONNECT_API_KEY_BASE64
@@ -365,13 +363,12 @@ jobs:
         run: |
           set -euo pipefail
           certificate="$RUNNER_TEMP/VIZIT-distribution.p12"
-          profile="$RUNNER_TEMP/VIZIT-App-Store.mobileprovision"
-          profile_plist="$RUNNER_TEMP/VIZIT-App-Store.plist"
+          profile="$RUNNER_TEMP/VIZIT-App-Store-Production.mobileprovision"
+          profile_plist="$RUNNER_TEMP/VIZIT-App-Store-Production.plist"
           keychain="$RUNNER_TEMP/VIZIT-signing.keychain-db"
           keychain_password="$(openssl rand -hex 32)"
 
           printf '%s' "$APPLE_DISTRIBUTION_CERTIFICATE_BASE64" | base64 -D > "$certificate"
-          printf '%s' "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 -D > "$profile"
 
           security create-keychain -p "$keychain_password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
@@ -381,6 +378,24 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           security find-identity -v -p codesigning "$keychain" | grep -F 'Apple Distribution'
 
+          api_key_dir="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$api_key_dir"
+          api_key_path="$api_key_dir/AuthKey_$APP_STORE_CONNECT_API_KEY_ID.p8"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 -D > "$api_key_path"
+          chmod 600 "$api_key_path"
+
+          python3 -m venv "$RUNNER_TEMP/apple-signing-venv"
+          "$RUNNER_TEMP/apple-signing-venv/bin/python" -m pip install 'PyJWT[crypto]>=2.8,<3'
+
+          serial="$(
+            openssl pkcs12 -in "$certificate" -clcerts -nokeys -passin env:APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD 2>/dev/null |
+            openssl x509 -noout -serial |
+            sed 's/^serial=//'
+          )"
+          test -n "$serial"
+
+          "$RUNNER_TEMP/apple-signing-venv/bin/python" scripts/apple-production-bootstrap.py             --bundle-id "$APPLE_BUNDLE_ID"             --bundle-name VIZIT             --profile-name "$APPLE_PROFILE_NAME"             --certificate-serial "$serial"             --output "$profile"
+
           security cms -D -i "$profile" > "$profile_plist"
           profile_uuid="$(plutil -extract UUID raw "$profile_plist")"
           test "$(plutil -extract Name raw "$profile_plist")" = "$APPLE_PROFILE_NAME"
@@ -389,12 +404,6 @@ jobs:
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           installed_profile="$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
           cp "$profile" "$installed_profile"
-
-          api_key_dir="$HOME/.appstoreconnect/private_keys"
-          mkdir -p "$api_key_dir"
-          api_key_path="$api_key_dir/AuthKey_$APP_STORE_CONNECT_API_KEY_ID.p8"
-          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 -D > "$api_key_path"
-          chmod 600 "$api_key_path"
 
           {
             echo "VIZIT_SIGNING_KEYCHAIN=$keychain"
