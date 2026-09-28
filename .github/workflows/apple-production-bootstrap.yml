@@ -1,11 +1,6 @@
 name: Apple production bootstrap
 
 on:
-  push:
-    branches: [main, chore/apple-production-bootstrap-20260928]
-    paths:
-      - scripts/apple-production-bootstrap.py
-      - .github/workflows/apple-production-bootstrap.yml
   workflow_dispatch:
 
 permissions:
@@ -16,9 +11,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 15
     env:
-      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      APPLE_PROVISIONING_API_KEY_ID: ${{ secrets.APPLE_PROVISIONING_API_KEY_ID }}
+      APPLE_PROVISIONING_API_ISSUER_ID: ${{ secrets.APPLE_PROVISIONING_API_ISSUER_ID }}
+      APPLE_PROVISIONING_API_KEY_BASE64: ${{ secrets.APPLE_PROVISIONING_API_KEY_BASE64 }}
       APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
 
@@ -29,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_API_ISSUER_ID APP_STORE_CONNECT_API_KEY_BASE64 APPLE_DISTRIBUTION_CERTIFICATE_BASE64 APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD; do
+          for name in APPLE_PROVISIONING_API_KEY_ID APPLE_PROVISIONING_API_ISSUER_ID APPLE_PROVISIONING_API_KEY_BASE64 APPLE_DISTRIBUTION_CERTIFICATE_BASE64 APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD; do
             test -n "${!name}" || { echo "Missing required Apple credential: $name"; exit 1; }
           done
 
