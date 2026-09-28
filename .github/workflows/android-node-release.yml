@@ -1,15 +1,21 @@
-name: Android production release
+name: Android closed test release
 on:
   push:
-    branches: [release/android-node-20260926]
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'config/**'
+      - 'scripts/publish-android-node.py'
+      - '.github/workflows/android-node-release.yml'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: android-node-production-package
+  group: android-closed-test-release
   cancel-in-progress: false
 jobs:
   package:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[play-alpha]')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -71,15 +77,16 @@ jobs:
             'testsRun':False,'productionSigned':os.environ['SIGNED']=='true'
           },indent=2))
           PY
-      - name: Submit the signed package to Google Play production when authorized
+      - name: Submit the signed package to Google Play Alpha closed testing
         env:
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_PLAY_TRACK: alpha
           SIGNED: ${{ steps.signing.outputs.configured }}
         run: python3 scripts/publish-android-node.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VIZIT-${{ steps.version.outputs.name }}-Node-production
+          name: VIZIT-${{ steps.version.outputs.name }}-Android-Alpha
           path: release-output/
           retention-days: 14
           if-no-files-found: warn
