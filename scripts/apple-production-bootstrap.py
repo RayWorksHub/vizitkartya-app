@@ -217,6 +217,26 @@ def main() -> int:
     print("Production provisioning profile ready:", output)
     print("Bundle resource id:", bundle["id"])
     print("Profile resource id:", profile["id"])
+
+    apps = request(
+        "GET",
+        "/apps",
+        query={"limit": "200", "fields[apps]": "name,bundleId,sku"},
+    ).get("data", [])
+    matching_apps = [
+        item for item in apps
+        if item.get("attributes", {}).get("bundleId") == args.bundle_id
+    ]
+    if matching_apps:
+        app = matching_apps[0]
+        attrs = app.get("attributes", {})
+        print("App Store Connect app record: PRESENT")
+        print("App Store Connect app name:", attrs.get("name") or "")
+        print("App Store Connect SKU:", attrs.get("sku") or "")
+        print("App Store Connect app resource id:", app.get("id") or "")
+    else:
+        print("App Store Connect app record: MISSING")
+
     return 0
 
 
