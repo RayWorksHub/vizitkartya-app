@@ -1,4 +1,5 @@
 name: Apple production bootstrap
+# Also reports whether the App Store Connect app record already exists.
 
 on:
   workflow_dispatch:
