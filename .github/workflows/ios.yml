@@ -13,14 +13,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ios-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+  group: ios-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   test-and-build:
-    if: >-
-      github.event_name != 'push' ||
-      !contains(github.event.head_commit.message, '[testflight]')
     runs-on: macos-15
     timeout-minutes: 40
     env:
@@ -156,7 +153,7 @@ jobs:
           set -o pipefail
           args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Debug)
           args+=(-destination "platform=iOS Simulator,id=$IPHONE_ID" -derivedDataPath "$RUNNER_TEMP/vizit")
-          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm")
+          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
           args+=(-resultBundlePath "$RUNNER_TEMP/VIZIT-iPhone.xcresult" -parallel-testing-enabled NO)
           args+=(ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
           args+=(VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
@@ -296,6 +293,7 @@ jobs:
       vars.VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED == 'true' &&
       (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]')))
+    needs: test-and-build
     runs-on: macos-15
     timeout-minutes: 45
     env:
@@ -351,6 +349,14 @@ jobs:
           done
           grep -Fxq "authUrl=$VIZIT_SUPABASE_URL" config/android-node.properties
           grep -Fxq "authPublishableKey=$VIZIT_SUPABASE_KEY" config/android-node.properties
+
+      - name: Resolve exact Swift dependencies
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project ios/VIZIT.xcodeproj \
+            -scheme VIZIT \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"
 
       - name: Install isolated Apple signing credentials
         shell: bash
@@ -412,7 +418,7 @@ jobs:
           set -o pipefail
           args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Release)
           args+=(-destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/VIZIT.xcarchive")
-          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm")
+          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
           # Signing settings live on the VIZIT Release target so they are not
           # inherited by Swift package targets that cannot use provisioning profiles.
           args+=(CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
