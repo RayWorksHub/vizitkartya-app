@@ -352,14 +352,6 @@ jobs:
           grep -Fxq "authUrl=$VIZIT_SUPABASE_URL" config/android-node.properties
           grep -Fxq "authPublishableKey=$VIZIT_SUPABASE_KEY" config/android-node.properties
 
-      - name: Resolve exact Swift dependencies
-        run: |
-          set -euo pipefail
-          xcodebuild -resolvePackageDependencies \
-            -project ios/VIZIT.xcodeproj \
-            -scheme VIZIT \
-            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"
-
       - name: Install isolated Apple signing credentials
         shell: bash
         run: |
