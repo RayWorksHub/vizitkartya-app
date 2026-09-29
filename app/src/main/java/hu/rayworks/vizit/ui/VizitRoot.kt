@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import hu.rayworks.vizit.VizitViewModel
+import hu.rayworks.vizit.ProfileLoadStatus
 import hu.rayworks.vizit.auth.AuthSessionState
 import hu.rayworks.vizit.auth.AuthViewModel
 import hu.rayworks.vizit.ui.design.Vizit
@@ -65,6 +66,11 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
         return
     }
 
+    if (authViewModel.registrationConfirmationInProgress) {
+        Booting("E-mail-cím megerősítése…")
+        return
+    }
+
     if (
         authViewModel.passwordRecovery &&
         (
@@ -78,12 +84,18 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
     }
 
     when (currentSession) {
-        is AuthSessionState.Authenticated ->
-            if (vizitViewModel.hasOfflineProfileSession) {
-                VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
-            } else {
-                Booting("Névjegy betöltése…")
+        is AuthSessionState.Authenticated -> when (vizitViewModel.profileLoadStatus) {
+            ProfileLoadStatus.READY -> VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
+            ProfileLoadStatus.UNAVAILABLE -> Screen {
+                VizitErrorState(
+                    title = "A névjegy most nem tölthető be",
+                    message = "Nem nyitjuk meg az újprofil-varázslót, amíg nem derül ki biztosan, hogy ehhez a fiókhoz még nincs névjegy.",
+                    onRetry = vizitViewModel::retryProfileLoad,
+                )
             }
+            ProfileLoadStatus.IDLE,
+            ProfileLoadStatus.LOADING -> Booting("Névjegy ellenőrzése…")
+        }
 
         AuthSessionState.Initializing -> Booting("Betöltés…")
 

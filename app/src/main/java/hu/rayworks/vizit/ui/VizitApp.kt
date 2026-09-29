@@ -166,17 +166,17 @@ fun VizitApp(
         return
     }
 
-    if (showKnowledgeHub) {
+    if (showKnowledgeHub && viewModel.featureFlags.businessPortal) {
         BusinessHubScreen(onBack = { showKnowledgeHub = false })
         return
     }
 
-    if (showAnalytics) {
+    if (showAnalytics && viewModel.featureFlags.analytics) {
         AnalyticsScreen(onBack = { showAnalytics = false })
         return
     }
 
-    if (showScanner) {
+    if (showScanner && viewModel.featureFlags.qrScanner) {
         QrScanScreen(onClose = { showScanner = false })
         return
     }
@@ -239,6 +239,7 @@ fun VizitApp(
                         onOpenCRM = { uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fcrm") },
                         onOpenOnlineEditor = { uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fprofile") },
                         onOpenScanner = { showScanner = true },
+                        featureFlags = viewModel.featureFlags,
                         onShareAsText = viewModel::shareAsText,
                     )
 
