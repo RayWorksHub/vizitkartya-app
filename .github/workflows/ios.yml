@@ -295,7 +295,7 @@ jobs:
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]')))
     needs: test-and-build
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       VIZIT_SUPABASE_URL: https://zlrrmkbbyfkbjeqozzde.supabase.co
       VIZIT_SUPABASE_KEY: sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS
@@ -506,6 +506,22 @@ jobs:
             ${{ runner.temp }}/VIZIT-archive.log
             ${{ runner.temp }}/VIZIT-export.log
             ${{ runner.temp }}/VIZIT-signed-ipa-verify.txt
+
+      - name: Enable build for internal TestFlight testers
+        shell: bash
+        env:
+          VIZIT_TARGET_BUILD_VERSION: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..40}; do
+            if "$RUNNER_TEMP/apple-signing-venv/bin/python" scripts/apple-enable-internal-testflight.py; then
+              exit 0
+            fi
+            echo "Build $VIZIT_TARGET_BUILD_VERSION is still processing; retry $attempt/40"
+            sleep 30
+          done
+          echo "Build $VIZIT_TARGET_BUILD_VERSION was not enabled for internal testers in time" >&2
+          exit 1
 
       - name: Remove temporary signing material
         if: always()
