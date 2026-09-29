@@ -514,7 +514,10 @@ struct ProfileWizard: View {
     @ViewBuilder private var content: some View {
         switch step {
         case "type":
-            Text("Milyen névjegyet készítesz?").font(VizitFont.title)
+            Text("Hozzuk létre az első profilodat").font(VizitFont.title)
+            Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.")
+                .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
+            Text("Milyen névjegyet készítesz?").font(VizitFont.h3)
             choice("Vállalkozói névjegy", detail: "Vállalkozás, beosztás, logó és bemutatkozás", selected: kind == "business") {
                 kind = "business"
             }

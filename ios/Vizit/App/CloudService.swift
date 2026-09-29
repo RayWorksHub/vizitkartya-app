@@ -5,6 +5,28 @@ import UIKit
 import ImageIO
 import CryptoKit
 
+struct AppFeatureFlags: Equatable, Sendable {
+    var businessPortal = true
+    var analytics = true
+    var crm = true
+    var qrScanner = true
+    var onlineEditor = true
+
+    init(rows: [RemoteFeatureFlag] = []) {
+        let values = Dictionary(uniqueKeysWithValues: rows.map { ($0.key, $0.enabled) })
+        businessPortal = values["business_portal"] ?? true
+        analytics = values["analytics"] ?? true
+        crm = values["crm"] ?? true
+        qrScanner = values["qr_scanner"] ?? true
+        onlineEditor = values["online_editor"] ?? true
+    }
+}
+
+struct RemoteFeatureFlag: Decodable, Sendable {
+    let key: String
+    let enabled: Bool
+}
+
 struct ProfileAppearance: Codable, Sendable {
     let version: Int
     let mode: String
@@ -258,6 +280,9 @@ final class CloudService: @unchecked Sendable {
     }
 
     func register(name: String, email: String, password: String) async throws {
+        var callback = URLComponents(url: configuration.callbackURL, resolvingAgainstBaseURL: false)
+        callback?.queryItems = [URLQueryItem(name: "flow", value: "signup")]
+        guard let signupCallback = callback?.url else { throw CloudError.invalidCallback }
         let response = try await client.auth.signUp(
             email: email.trimmingCharacters(in: .whitespacesAndNewlines),
             password: password,
@@ -266,7 +291,7 @@ final class CloudService: @unchecked Sendable {
                 "privacy_version": .string(configuration.privacyPolicyVersion),
                 "terms_version": .string(configuration.termsVersion)
             ],
-            redirectTo: configuration.callbackURL
+            redirectTo: signupCallback
         )
         // Email confirmation is required by the active Auth policy. A session here means
         // the backend was weakened, so discard it instead of silently signing in.
@@ -343,6 +368,17 @@ final class CloudService: @unchecked Sendable {
     }
 
     func logout() async throws { try await client.auth.signOut() }
+
+    func fetchFeatureFlags() async throws -> AppFeatureFlags {
+        let rows: [RemoteFeatureFlag] = try await request(
+            path: ["rest", "v1", "app_feature_flags"],
+            query: [
+                URLQueryItem(name: "select", value: "key,enabled"),
+                URLQueryItem(name: "order", value: "key.asc")
+            ]
+        )
+        return AppFeatureFlags(rows: rows)
+    }
 
     func deleteAccount() async throws {
         try await client.functions.invoke("delete-account")

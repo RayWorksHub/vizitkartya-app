@@ -12,6 +12,7 @@ import WebKit
 struct HomeScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
+    @Environment(\.openURL) private var openURL
     @Binding var selectedTab: RootTab
     @State private var editing = false
     @State private var showScanner = false
@@ -43,8 +44,10 @@ struct HomeScreen: View {
                             QuickTile(systemImage: "qrcode", title: "QR-kód", subtitle: "Mutatás") {
                                 selectedTab = .share
                             }
-                            QuickTile(systemImage: "qrcode.viewfinder", title: "Beolvasás", subtitle: "Új kapcsolat") {
-                                showScanner = true
+                            if store.featureFlags.qrScanner {
+                                QuickTile(systemImage: "qrcode.viewfinder", title: "Beolvasás", subtitle: "Új kapcsolat") {
+                                    showScanner = true
+                                }
                             }
                             QuickTile(systemImage: "pencil", title: "Szerkesztés", subtitle: "Adataim") {
                                 editing = true
@@ -59,11 +62,31 @@ struct HomeScreen: View {
                         }
 
                         VizitGroup {
-                            VizitRow(
-                                label: "Vállalkozói Portál",
-                                systemImage: "book.closed",
-                                supporting: "VOSZ, edukáció, digitális segítség és eszköztár"
-                            ) { showKnowledgeHub = true }
+                            if store.featureFlags.businessPortal {
+                                VizitRow(
+                                    label: "Vállalkozói Portál",
+                                    systemImage: "book.closed",
+                                    supporting: "VOSZ, edukáció, digitális segítség és eszköztár"
+                                ) { showKnowledgeHub = true }
+                            }
+                            if store.featureFlags.analytics {
+                                VizitRow(label: "Statisztikák", systemImage: "chart.bar",
+                                         supporting: "Profilmegtekintések, mentések és kattintások") {
+                                    openDashboard("analytics")
+                                }
+                            }
+                            if store.featureFlags.crm {
+                                VizitRow(label: "CRM", systemImage: "briefcase",
+                                         supporting: "Partnerek, ügyletek, feladatok és ajánlatok") {
+                                    openDashboard("crm")
+                                }
+                            }
+                            if store.featureFlags.onlineEditor {
+                                VizitRow(label: "Online névjegy szerkesztése", systemImage: "rectangle.and.pencil.and.ellipsis",
+                                         supporting: "Színek, logó és közösségi hivatkozások") {
+                                    openDashboard("profile")
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, VizitSpace.md)
@@ -76,6 +99,12 @@ struct HomeScreen: View {
             .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
             .sheet(isPresented: $showKnowledgeHub) { BusinessHubScreen() }
             .fullScreenCover(isPresented: $showScanner) { ScanFlow() }
+        }
+    }
+
+    private func openDashboard(_ destination: String) {
+        if let url = URL(string: "https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2F\(destination)") {
+            openURL(url)
         }
     }
 

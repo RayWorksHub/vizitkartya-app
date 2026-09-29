@@ -42,11 +42,17 @@ enum SyncStatus: Equatable {
     }
 }
 
+enum ProfileLoadStatus: Equatable {
+    case loading, ready, unavailable
+}
+
 @MainActor
 final class AppStore: ObservableObject {
     @Published private(set) var profile = ContactProfile()
     @Published private(set) var authStatus: AuthStatus = .launching
     @Published private(set) var syncStatus: SyncStatus = .localOnly
+    @Published private(set) var profileLoadStatus: ProfileLoadStatus = .loading
+    @Published private(set) var featureFlags = AppFeatureFlags()
     @Published private(set) var storageError: String?
     @Published private(set) var message: String?
     @Published private(set) var busy = false
@@ -82,6 +88,7 @@ final class AppStore: ObservableObject {
                 profile = try storage.load()
                 authStatus = .authenticated
                 syncStatus = .localOnly
+                profileLoadStatus = .ready
             } catch {
                 storageError = error.localizedDescription
                 authStatus = .authenticated
@@ -110,6 +117,7 @@ final class AppStore: ObservableObject {
     }
 
     private func configureStorage(for id: UUID) throws {
+        profileLoadStatus = .loading
         let directory = try Self.applicationDirectory()
             .appendingPathComponent("users", isDirectory: true)
             .appendingPathComponent(id.uuidString.lowercased(), isDirectory: true)
@@ -143,10 +151,11 @@ final class AppStore: ObservableObject {
             let current = try await cloud.validSession()
             userEmail = current.user.email ?? ""
             authStatus = .authenticated
-            await synchronize()
+            await completeInitialProfileLoad()
         } catch {
             authStatus = .offline
             syncStatus = .pending
+            profileLoadStatus = hasProfile ? .ready : .unavailable
             message = "Nincs hálózati kapcsolat. A helyi névjegyed olvasható és szerkeszthető; a feltöltés később újrapróbálható."
         }
     }
@@ -160,7 +169,7 @@ final class AppStore: ObservableObject {
             try self.configureStorage(for: session.user.id)
             self.userEmail = session.user.email ?? ""
             self.authStatus = .authenticated
-            await self.synchronize()
+            await self.completeInitialProfileLoad()
         }
     }
 
@@ -188,7 +197,7 @@ final class AppStore: ObservableObject {
             try self.configureStorage(for: session.user.id)
             self.userEmail = session.user.email ?? ""
             self.authStatus = .authenticated
-            await self.synchronize()
+            await self.completeInitialProfileLoad()
         }
     }
 
@@ -205,13 +214,20 @@ final class AppStore: ObservableObject {
         await performAuth(operation: .callback,
                           defaultError: "A bejelentkezési hivatkozás lejárt vagy érvénytelen. Kérj új hivatkozást.") {
             guard let cloud = self.cloud else { return }
-            let recovery = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
-                .contains(where: { $0.name == "flow" && $0.value == "recovery" }) == true
+            let flow = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                .first(where: { $0.name == "flow" })?.value
             let session = try await cloud.handleCallback(url)
+            if flow == "signup" {
+                try? await cloud.logout()
+                self.clearUser()
+                self.authStatus = .signedOut
+                self.message = "Az e-mail-címed megerősítve. Most jelentkezz be, és utána létrehozhatod az első profilodat."
+                return
+            }
             try self.configureStorage(for: session.user.id)
             self.userEmail = session.user.email ?? ""
-            self.authStatus = recovery ? .passwordRecovery : .authenticated
-            if !recovery { await self.synchronize() }
+            self.authStatus = flow == "recovery" ? .passwordRecovery : .authenticated
+            if flow != "recovery" { await self.completeInitialProfileLoad() }
         }
     }
 
@@ -222,7 +238,7 @@ final class AppStore: ObservableObject {
             try await self.cloud?.changePassword(password)
             self.authStatus = .authenticated
             self.message = "A jelszavad megváltozott."
-            await self.synchronize()
+            await self.completeInitialProfileLoad()
         }
     }
 
@@ -287,6 +303,8 @@ final class AppStore: ObservableObject {
                 }
             }
             await synchronize()
+            await refreshFeatureFlags()
+            profileLoadStatus = hasProfile || syncStatus != .failed ? .ready : .unavailable
         }
     }
 
@@ -554,6 +572,17 @@ final class AppStore: ObservableObject {
 
     func dismissMessage() { message = nil }
 
+    private func completeInitialProfileLoad() async {
+        await synchronize()
+        await refreshFeatureFlags()
+        profileLoadStatus = hasProfile || syncStatus != .failed ? .ready : .unavailable
+    }
+
+    private func refreshFeatureFlags() async {
+        guard let cloud, let flags = try? await cloud.fetchFeatureFlags() else { return }
+        featureFlags = flags
+    }
+
     private func clearUser() {
         profile = ContactProfile()
         profileRevision &+= 1
@@ -563,6 +592,8 @@ final class AppStore: ObservableObject {
         userEmail = ""
         storageError = nil
         syncStatus = .localOnly
+        profileLoadStatus = .loading
+        featureFlags = AppFeatureFlags()
     }
 
     @discardableResult
@@ -637,12 +668,27 @@ struct AppGate: View {
                 }
 
             case .authenticated, .offline:
-                if store.hasProfile && !finishingWizard {
-                    RootView(themeMode: $themeMode)
-                } else {
-                    ProfileWizard(onSaving: { finishingWizard = true },
-                                  onSaveFailed: { finishingWizard = false },
-                                  onFinished: { finishingWizard = false })
+                switch store.profileLoadStatus {
+                case .loading:
+                    LaunchScreen()
+                case .unavailable:
+                    VizitScreen {
+                        VizitErrorState(
+                            title: "A névjegy most nem tölthető be",
+                            message: "Nem nyitjuk meg az újprofil-varázslót, amíg nem derül ki biztosan, hogy ehhez a fiókhoz még nincs névjegy.",
+                            retryTitle: "Újrapróbálás",
+                            onRetry: store.retrySync
+                        )
+                        .padding(.horizontal, VizitSpace.md)
+                    }
+                case .ready:
+                    if store.hasProfile && !finishingWizard {
+                        RootView(themeMode: $themeMode)
+                    } else {
+                        ProfileWizard(onSaving: { finishingWizard = true },
+                                      onSaveFailed: { finishingWizard = false },
+                                      onFinished: { finishingWizard = false })
+                    }
                 }
             }
         }
