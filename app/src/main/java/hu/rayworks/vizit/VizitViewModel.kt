@@ -13,7 +13,6 @@ import androidx.lifecycle.viewModelScope
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.ContactProfileValidator
 import hu.rayworks.vizit.data.AppFeatureFlags
-import hu.rayworks.vizit.data.settings.NavigationLayoutMode
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncRunResult
 import hu.rayworks.vizit.nfc.HcePayloadStore
@@ -51,9 +50,6 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     var automaticSyncEnabled by mutableStateOf(true)
         private set
 
-    var navigationLayoutMode by mutableStateOf(NavigationLayoutMode.ONE_SCREEN)
-        private set
-
     var featureFlags by mutableStateOf(AppFeatureFlags())
         private set
 
@@ -87,7 +83,6 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             settingsStore.settings.collect { settings ->
                 automaticSyncEnabled = settings.automaticSyncEnabled
-                navigationLayoutMode = settings.navigationLayoutMode
                 themeMode = ThemeMode.fromStorage(settings.appearance)
             }
         }
@@ -208,11 +203,6 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     fun updateThemeMode(mode: ThemeMode) {
         themeMode = mode
         viewModelScope.launch { settingsStore.setAppearance(mode.storageValue) }
-    }
-
-    fun updateNavigationLayoutMode(mode: NavigationLayoutMode) {
-        navigationLayoutMode = mode
-        viewModelScope.launch { settingsStore.setNavigationLayoutMode(mode) }
     }
 
     fun updateAutomaticSyncEnabled(enabled: Boolean) {

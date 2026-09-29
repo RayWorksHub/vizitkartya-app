@@ -54,8 +54,8 @@ android {
         applicationId = "hu.rayworks.vizit"
         minSdk = 29
         targetSdk = 36
-        versionCode = 9000000
-        versionName = "9.0.0"
+        versionCode = 8070004
+        versionName = "8.7.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders["profileHost"] = profileHost

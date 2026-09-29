@@ -18,8 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.CloudSync
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.BusinessCenter
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Download
@@ -45,7 +43,6 @@ import hu.rayworks.vizit.auth.AuthActionState
 import hu.rayworks.vizit.auth.AuthOperation
 import hu.rayworks.vizit.auth.AuthValidator
 import hu.rayworks.vizit.data.card.CardPresentation
-import hu.rayworks.vizit.data.settings.NavigationLayoutMode
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.ThemeMode
@@ -73,14 +70,8 @@ fun SettingsScreen(
     syncState: ProfileSyncState,
     automaticSyncEnabled: Boolean,
     themeMode: ThemeMode,
-    navigationLayoutMode: NavigationLayoutMode,
     onThemeModeChange: (ThemeMode) -> Unit,
-    onNavigationLayoutModeChange: (NavigationLayoutMode) -> Unit,
     onAutomaticSyncChanged: (Boolean) -> Unit,
-    analyticsEnabled: Boolean = false,
-    businessPortalEnabled: Boolean = false,
-    onOpenAnalytics: () -> Unit = {},
-    onOpenBusinessHub: () -> Unit = {},
     onRetrySync: () -> Unit,
     onResolveConflict: (Boolean) -> Unit,
     resolutionMessage: String?,
@@ -122,34 +113,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(Vizit.space.md),
     ) {
         Spacer(Modifier.height(Vizit.space.xs))
-        VizitLargeTitle(title = if (navigationLayoutMode == NavigationLayoutMode.THREE_TABS) "Továbbiak" else "Beállítások")
-
-        if (navigationLayoutMode == NavigationLayoutMode.THREE_TABS &&
-            (analyticsEnabled || businessPortalEnabled)
-        ) {
-            VizitSectionHeader("Funkciók")
-            VizitGroup {
-                var needsDivider = false
-                if (analyticsEnabled) {
-                    VizitRow(
-                        label = "Statisztikák",
-                        supporting = "Megtekintések, mentések és kattintások",
-                        icon = Icons.Outlined.BarChart,
-                        onClick = onOpenAnalytics,
-                    )
-                    needsDivider = true
-                }
-                if (businessPortalEnabled) {
-                    if (needsDivider) VizitDivider()
-                    VizitRow(
-                        label = "Vállalkozói Portál",
-                        supporting = "VOSZ, edukáció, digitális segítség és eszköztár",
-                        icon = Icons.Outlined.BusinessCenter,
-                        onClick = onOpenBusinessHub,
-                    )
-                }
-            }
-        }
+        VizitLargeTitle(title = "Beállítások")
 
         // ---------- The card itself
         VizitSectionHeader("Névjegy")
@@ -210,28 +174,6 @@ fun SettingsScreen(
                 icon = Icons.Outlined.Nfc,
                 showChevron = false,
             )
-        }
-
-        VizitSectionHeader("Felület")
-        VizitGroup {
-            VizitRow(
-                label = "Navigáció",
-                supporting = "Választhatsz a háromfüles és az egyképernyős VIZIT között.",
-                icon = Icons.Outlined.Description,
-                showChevron = false,
-            )
-            VizitDivider()
-            Column(modifier = Modifier.padding(Vizit.space.md)) {
-                VizitSegmentedControl(
-                    options = listOf("Három fül", "Egy képernyő"),
-                    selectedIndex = if (navigationLayoutMode == NavigationLayoutMode.THREE_TABS) 0 else 1,
-                    onSelect = {
-                        onNavigationLayoutModeChange(
-                            if (it == 0) NavigationLayoutMode.THREE_TABS else NavigationLayoutMode.ONE_SCREEN,
-                        )
-                    },
-                )
-            }
         }
 
         // ---------- Sync

@@ -56,7 +56,7 @@ final class VizitUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["auth.forgotPassword"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["auth.version"].exists)
-        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 9.0.0"))
+        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 8.7.3"))
         app.buttons["auth.forgotPassword"].tap()
         XCTAssertTrue(app.textFields["auth.reset.email"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
@@ -76,16 +76,17 @@ final class VizitUITests: XCTestCase {
         app.buttons["wizard.primary"].tap()
         XCTAssertTrue(app.buttons["wizard.finish"].waitForExistence(timeout: 5))
         app.buttons["wizard.finish"].tap()
-        XCTAssertTrue(app.staticTexts["v9.profileName"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["v9.profileName"].label, "Teszt Elek")
+        XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["card.name"].label, "Teszt Elek")
         app.terminate()
         app.launchArguments = ["--ui-testing"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["v9.profileName"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["v9.profileName"].label, "Teszt Elek")
-        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["card.name"].label, "Teszt Elek")
+        app.tabBars.buttons["Megosztás"].tap()
+        XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "VIZIT-v9-one-screen"
+        screenshot.name = "VIZIT-contact-QR"
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
@@ -117,6 +118,6 @@ final class VizitUITests: XCTestCase {
         app.launchArguments = ["--ui-testing"]
         app.launch()
         XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["v9.profileName"].exists)
+        XCTAssertFalse(app.staticTexts["card.name"].exists)
     }
 }
