@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,13 +83,13 @@ fun VizitTextField(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 52.dp)
+                .height(52.dp)
                 .background(
                     if (enabled) colors.surface else colors.controlDisabled,
                     RoundedCornerShape(Vizit.radius.md),
                 )
                 .border(borderWidth, borderColor, RoundedCornerShape(Vizit.radius.md))
-                .padding(horizontal = Vizit.space.md, vertical = Vizit.space.sm),
+                .padding(horizontal = Vizit.space.md),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
         ) {
@@ -171,7 +171,6 @@ fun VizitPasswordField(
                 contentDescription = if (revealed) "Jelszó elrejtése" else "Jelszó megjelenítése",
                 onClick = { revealed = !revealed },
                 enabled = enabled,
-                modifier = Modifier.size(40.dp),
             )
         },
     )

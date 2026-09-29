@@ -266,31 +266,43 @@ struct VizitBrandLockup: View {
     var maxHeight: CGFloat = 132
 
     private static let image: UIImage? = {
-        guard let url = Bundle.main.url(forResource: "VizitLogo", withExtension: "png") else { return nil }
+        guard let url = Bundle.main.url(forResource: "VizitLogoMark", withExtension: "png") else { return nil }
         return UIImage(contentsOfFile: url.path)
     }()
 
     var body: some View {
-        Group {
+        HStack(spacing: VizitSpace.md) {
             if let image = Self.image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxHeight: maxHeight)
-                    .padding(VizitSpace.lg)
+                    .frame(height: min(maxHeight, 64))
             } else {
-                VStack(spacing: 4) {
-                    Text("VIZIT")
-                        .font(.system(size: 32, weight: .black))
-                        .tracking(7)
-                        .foregroundStyle(VizitColor.ink)
-                    Text("EGY ÉRINTÉS. EGY KAPCSOLAT.")
-                        .vizitOverline()
-                        .foregroundStyle(Color(uiColor: UIColor(hex: 0x0B5CE8)))
-                }
-                .padding(VizitSpace.lg)
+                Text("V")
+                    .font(.system(size: 56, weight: .black))
+                    .foregroundStyle(VizitColor.primary)
+                    .frame(height: min(maxHeight, 64))
             }
+
+            VStack(alignment: .leading, spacing: VizitSpace.xxs) {
+                Text("VIZIT")
+                    .font(.system(size: 32, weight: .bold))
+                    .tracking(5)
+                    .foregroundStyle(VizitColor.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text("Egy érintés. Egy kapcsolat.")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundStyle(VizitColor.ink.opacity(0.72))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, VizitSpace.lg)
+        .padding(.vertical, VizitSpace.md)
         .frame(maxWidth: .infinity)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))

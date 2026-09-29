@@ -30,4 +30,4 @@ A szinkronizáló script:
 
 Az iOS `CURRENT_PROJECT_VERSION` külön buildszám. A TestFlight CI ezt a GitHub Actions futásszámából állítja elő, ezért nem kell megegyeznie az Android `versionCode` értékével.
 
-Jelenlegi közös publikus verzió: **8.7.1**. Android `versionCode`: **8070001**.
+Jelenlegi közös publikus verzió: **8.7.2**. Android `versionCode`: **8070002**.
