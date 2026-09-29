@@ -246,23 +246,62 @@ fun VizitApp(
 
         Box(modifier = Modifier.weight(1f)) {
             if (viewModel.navigationLayoutMode == NavigationLayoutMode.ONE_SCREEN) {
-                V9ShareHomeScreen(
-                    profile = viewModel.profile,
-                    presentation = viewModel.cardPresentation,
-                    synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
-                        !viewModel.profileSyncState.pendingChanges,
-                    nfcStatus = viewModel.nfcStatus,
-                    onStartNfcShare = viewModel::startNfcShare,
-                    onOpenProfile = { selectedSection = AppSection.CARD; viewModel.updateNavigationLayoutMode(NavigationLayoutMode.THREE_TABS) },
-                    onOpenScanner = { showScanner = true },
-                    onOpenAnalytics = { showAnalytics = true },
-                    onOpenBusinessHub = { showKnowledgeHub = true },
-                    onOpenSettings = { selectedSection = AppSection.SETTINGS; viewModel.updateNavigationLayoutMode(NavigationLayoutMode.THREE_TABS) },
-                    singleScreen = true,
-                    analyticsEnabled = viewModel.featureFlags.analytics,
-                    businessPortalEnabled = viewModel.featureFlags.businessPortal,
-                    scannerEnabled = viewModel.featureFlags.qrScanner,
-                )
+                when (selectedSection) {
+                    AppSection.CARD -> CardScreen(
+                        profile = viewModel.profile,
+                        presentation = viewModel.cardPresentation,
+                        onSave = viewModel::saveProfile,
+                        onShare = { selectedSection = AppSection.SHARE },
+                        onOpenCardAppearance = { showCardAppearance = true },
+                        onOpenDataVisibility = { showDataVisibility = true },
+                    )
+
+                    AppSection.SETTINGS -> SettingsScreen(
+                        nfcStatus = viewModel.nfcStatus,
+                        cardPresentation = viewModel.cardPresentation,
+                        onOpenCardAppearance = { showCardAppearance = true },
+                        onOpenDataVisibility = { showDataVisibility = true },
+                        syncState = viewModel.profileSyncState,
+                        automaticSyncEnabled = viewModel.automaticSyncEnabled,
+                        themeMode = viewModel.themeMode,
+                        navigationLayoutMode = viewModel.navigationLayoutMode,
+                        onThemeModeChange = viewModel::updateThemeMode,
+                        onNavigationLayoutModeChange = viewModel::updateNavigationLayoutMode,
+                        onAutomaticSyncChanged = viewModel::updateAutomaticSyncEnabled,
+                        onRetrySync = viewModel::retryProfileSync,
+                        onResolveConflict = viewModel::resolveProfileConflict,
+                        resolutionMessage = viewModel.conflictResolutionMessage,
+                        authActionState = authViewModel.actionState,
+                        googleSignInEnabled = authViewModel.googleSignInEnabled,
+                        cloudAccountAvailable = authViewModel.cloudAccountAvailable,
+                        privacyPolicyUrl = authViewModel.privacyPolicyUrl,
+                        termsUrl = authViewModel.termsUrl,
+                        onClearAuthAction = authViewModel::clearActionState,
+                        onLogout = authViewModel::logout,
+                        onDeleteAccount = authViewModel::deleteAccount,
+                        onExportAccount = ::exportAccount,
+                        exportMessage = exportMessage,
+                        exportError = exportError,
+                    )
+
+                    else -> V9ShareHomeScreen(
+                        profile = viewModel.profile,
+                        presentation = viewModel.cardPresentation,
+                        synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
+                            !viewModel.profileSyncState.pendingChanges,
+                        nfcStatus = viewModel.nfcStatus,
+                        onStartNfcShare = viewModel::startNfcShare,
+                        onOpenProfile = { selectedSection = AppSection.CARD },
+                        onOpenScanner = { showScanner = true },
+                        onOpenAnalytics = { showAnalytics = true },
+                        onOpenBusinessHub = { showKnowledgeHub = true },
+                        onOpenSettings = { selectedSection = AppSection.SETTINGS },
+                        singleScreen = true,
+                        analyticsEnabled = viewModel.featureFlags.analytics,
+                        businessPortalEnabled = viewModel.featureFlags.businessPortal,
+                        scannerEnabled = viewModel.featureFlags.qrScanner,
+                    )
+                }
             } else {
                 AnimatedContent(
                     targetState = selectedSection,
