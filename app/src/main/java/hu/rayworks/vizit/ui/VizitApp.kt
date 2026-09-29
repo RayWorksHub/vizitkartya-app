@@ -1,5 +1,6 @@
 package hu.rayworks.vizit.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -31,6 +32,9 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -138,6 +142,26 @@ fun VizitApp(
                 exportError = true
                 exportMessage = failure.localizedMessage ?: "Az exportálás nem sikerült."
             }
+        }
+    }
+
+    BackHandler(
+        enabled = viewModel.isNfcShareActive ||
+            showKnowledgeHub ||
+            showAnalytics ||
+            showCardAppearance ||
+            showDataVisibility ||
+            showScanner ||
+            selectedSection != AppSection.HOME,
+    ) {
+        when {
+            viewModel.isNfcShareActive -> viewModel.stopNfcShare()
+            showScanner -> showScanner = false
+            showDataVisibility -> showDataVisibility = false
+            showCardAppearance -> showCardAppearance = false
+            showAnalytics -> showAnalytics = false
+            showKnowledgeHub -> showKnowledgeHub = false
+            selectedSection != AppSection.HOME -> selectedSection = AppSection.HOME
         }
     }
 
@@ -303,77 +327,39 @@ private fun VizitBottomBar(
     onSelect: (AppSection) -> Unit,
 ) {
     val colors = Vizit.colors
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.surface),
+    NavigationBar(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = colors.surface,
+        contentColor = colors.textSecondary,
+        tonalElevation = 0.dp,
+        windowInsets = WindowInsets.navigationBars,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(colors.divider),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = Vizit.space.xs, vertical = Vizit.space.xs),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppSection.entries.forEach { section ->
-                val isSelected = section == selected
-                val interaction = remember { MutableInteractionSource() }
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(
-                            interactionSource = interaction,
-                            indication = null,
-                            role = Role.Tab,
-                            onClick = { onSelect(section) },
-                        )
-                        .semantics {
-                            this.selected = isSelected
-                            contentDescription = section.label
-                        }
-                        .padding(vertical = Vizit.space.xxs),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(Vizit.space.xxs),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .height(30.dp)
-                            .then(
-                                if (isSelected) {
-                                    Modifier
-                                        .background(
-                                            colors.primarySubtle,
-                                            RoundedCornerShape(Vizit.radius.full),
-                                        )
-                                        .padding(horizontal = 14.dp)
-                                } else {
-                                    Modifier.padding(horizontal = 14.dp)
-                                },
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = section.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = if (isSelected) colors.primary else colors.textMuted,
-                        )
-                    }
+        AppSection.entries.forEach { section ->
+            val isSelected = section == selected
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = { onSelect(section) },
+                icon = {
+                    Icon(
+                        imageVector = section.icon,
+                        contentDescription = section.label,
+                        modifier = Modifier.size(24.dp),
+                    )
+                },
+                label = {
                     Text(
                         text = section.label,
                         style = Vizit.type.caption,
-                        color = if (isSelected) colors.primary else colors.textMuted,
-                        modifier = Modifier.clearAndSetSemantics { },
                     )
-                }
-            }
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = colors.primary,
+                    selectedTextColor = colors.primary,
+                    indicatorColor = colors.primarySubtle,
+                    unselectedIconColor = colors.textMuted,
+                    unselectedTextColor = colors.textMuted,
+                ),
+            )
         }
     }
 }
