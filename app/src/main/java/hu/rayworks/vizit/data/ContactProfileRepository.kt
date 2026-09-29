@@ -6,6 +6,7 @@ import hu.rayworks.vizit.data.settings.AppSettingsStore
 import hu.rayworks.vizit.data.sync.EpochClock
 import hu.rayworks.vizit.data.sync.OperationIdFactory
 import hu.rayworks.vizit.data.sync.ProfileRepositoryState
+import hu.rayworks.vizit.data.sync.ProfileSyncRunResult
 import hu.rayworks.vizit.data.sync.ProfileSyncScheduler
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +16,9 @@ class ContactProfileRepository(
     private val settingsStore: AppSettingsStore,
     private val legacyStore: LegacyContactProfileStore,
     private val syncScheduler: ProfileSyncScheduler,
+    private val initialSynchronizer: suspend () -> ProfileSyncRunResult = {
+        ProfileSyncRunResult.COMPLETE
+    },
     private val clock: EpochClock = EpochClock(System::currentTimeMillis),
     private val operationIdFactory: OperationIdFactory = OperationIdFactory { UUID.randomUUID().toString() },
 ) {
@@ -23,7 +27,7 @@ class ContactProfileRepository(
     suspend fun prepare(
         userId: String,
         cloudSyncEnabled: Boolean,
-    ) {
+    ): ProfileSyncRunResult {
         val settings = settingsStore.current()
         if (!settings.legacyProfileMigrated) {
             legacyStore.loadOrNull()?.let { legacyProfile ->
@@ -46,7 +50,16 @@ class ContactProfileRepository(
             )
         }
         settingsStore.setActiveProfileOwnerId(userId)
-        if (cloudSyncEnabled && settings.automaticSyncEnabled) syncScheduler.enqueue()
+        if (!cloudSyncEnabled) return ProfileSyncRunResult.COMPLETE
+
+        // The first remote pull is deliberately awaited. Otherwise Room emits an
+        // empty local snapshot first and the UI briefly opens the new-profile wizard
+        // even when the account already has a server-side profile.
+        val initialResult = initialSynchronizer()
+        if (settings.automaticSyncEnabled && initialResult == ProfileSyncRunResult.RETRY) {
+            syncScheduler.enqueue()
+        }
+        return initialResult
     }
 
     suspend fun save(
