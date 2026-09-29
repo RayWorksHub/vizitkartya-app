@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
         val actualIntent = intent ?: return
         val rawUrl = actualIntent.dataString.orEmpty()
         val callback = when (val parsed = AuthCallbackParser.parse(rawUrl, BuildConfig.AUTH_SCHEME)) {
-            AuthCallback.PasswordRecovery, AuthCallback.Generic -> parsed
+            AuthCallback.PasswordRecovery, AuthCallback.SignupConfirmation, AuthCallback.Generic -> parsed
 
             is AuthCallback.Error -> {
                 authViewModel.reportDeepLinkErrorCode(parsed.code)
@@ -65,14 +65,13 @@ class MainActivity : ComponentActivity() {
             )
             return
         }
+        authViewModel.beginDeepLink(callback)
         client.handleDeeplinks(
             actualIntent,
             onSessionSuccess = {
                 // A PKCE code is single-use. Enter recovery mode only after
                 // Supabase exchanged it for a real session successfully.
-                authViewModel.reportDeepLinkSuccess(
-                    isPasswordRecovery = callback == AuthCallback.PasswordRecovery,
-                )
+                authViewModel.reportDeepLinkSuccess(callback)
             },
             onError = authViewModel::reportDeepLinkError,
         )

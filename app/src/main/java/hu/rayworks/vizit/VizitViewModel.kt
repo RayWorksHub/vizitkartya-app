@@ -12,7 +12,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.ContactProfileValidator
+import hu.rayworks.vizit.data.AppFeatureFlags
 import hu.rayworks.vizit.data.sync.ProfileSyncState
+import hu.rayworks.vizit.data.sync.ProfileSyncRunResult
 import hu.rayworks.vizit.nfc.HcePayloadStore
 import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.data.card.visibleThrough
@@ -31,6 +33,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = container.profileRepository
     private val settingsStore = container.settingsStore
     private val cardPresentationStore = container.cardPresentationStore
+    private val featureFlagRepository = container.featureFlagRepository
     private val hcePayloadStore = HcePayloadStore()
     private var profileObservationJob: Job? = null
     private var nfcTimeoutJob: Job? = null
@@ -47,6 +50,9 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     var automaticSyncEnabled by mutableStateOf(true)
         private set
 
+    var featureFlags by mutableStateOf(AppFeatureFlags())
+        private set
+
     /** User-selected appearance. Light is the product default. */
     var themeMode by mutableStateOf(ThemeMode.LIGHT)
         private set
@@ -56,6 +62,9 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var hasOfflineProfileSession by mutableStateOf(false)
+        private set
+
+    var profileLoadStatus by mutableStateOf(ProfileLoadStatus.IDLE)
         private set
 
     var nfcStatus by mutableStateOf(readNfcStatus(application))
@@ -96,6 +105,9 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun bindProfileOwner(userId: String, enableCloudSync: Boolean) {
+        if (enableCloudSync) {
+            viewModelScope.launch { featureFlags = featureFlagRepository.fetch() }
+        }
         if (activeProfileOwnerId == userId && cloudSyncEnabled == enableCloudSync) {
             viewModelScope.launch {
                 repository.prepare(
@@ -110,9 +122,10 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         profile = ContactProfile()
         profileSyncState = ProfileSyncState()
         hasOfflineProfileSession = false
+        profileLoadStatus = ProfileLoadStatus.LOADING
         profileObservationJob?.cancel()
         profileObservationJob = viewModelScope.launch {
-            repository.prepare(
+            val initialResult = repository.prepare(
                 userId = userId,
                 cloudSyncEnabled = enableCloudSync,
             )
@@ -120,6 +133,26 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
                 profile = state.profile
                 profileSyncState = state.sync
                 hasOfflineProfileSession = true
+                profileLoadStatus = when {
+                    state.profile.resolvedDisplayName.isNotBlank() -> ProfileLoadStatus.READY
+                    initialResult == ProfileSyncRunResult.RETRY ||
+                        initialResult == ProfileSyncRunResult.WAITING_FOR_SESSION -> ProfileLoadStatus.UNAVAILABLE
+                    else -> ProfileLoadStatus.READY
+                }
+            }
+        }
+    }
+
+    fun retryProfileLoad() {
+        val userId = activeProfileOwnerId ?: return
+        profileLoadStatus = ProfileLoadStatus.LOADING
+        viewModelScope.launch {
+            val result = repository.prepare(userId = userId, cloudSyncEnabled = cloudSyncEnabled)
+            profileLoadStatus = when {
+                profile.resolvedDisplayName.isNotBlank() -> ProfileLoadStatus.READY
+                result == ProfileSyncRunResult.RETRY ||
+                    result == ProfileSyncRunResult.WAITING_FOR_SESSION -> ProfileLoadStatus.UNAVAILABLE
+                else -> ProfileLoadStatus.READY
             }
         }
     }
@@ -300,4 +333,11 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val NFC_SHARE_TIMEOUT_MILLIS = 60_000L
     }
+}
+
+enum class ProfileLoadStatus {
+    IDLE,
+    LOADING,
+    READY,
+    UNAVAILABLE,
 }

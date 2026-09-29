@@ -2,6 +2,7 @@ package hu.rayworks.vizit
 
 import android.app.Application
 import hu.rayworks.vizit.data.ContactProfileRepository
+import hu.rayworks.vizit.data.FeatureFlagRepository
 import hu.rayworks.vizit.data.local.LegacyContactProfileStore
 import hu.rayworks.vizit.data.local.RoomProfileStore
 import hu.rayworks.vizit.data.local.VizitDatabase
@@ -25,15 +26,17 @@ class VizitApplication : Application() {
 class VizitAppContainer(application: Application) {
     val settingsStore = AppSettingsStore(application)
     val cardPresentationStore = CardPresentationStore(application)
+    val featureFlagRepository = FeatureFlagRepository(SupabaseProvider.getOrNull())
     private val database = VizitDatabase.get(application)
     private val localStore = RoomProfileStore(database.profileDao())
     private val syncScheduler = WorkManagerProfileSyncScheduler(application)
     private val remoteDataSource = NodeProfileRemoteDataSource(SupabaseProvider.getOrNull())
+    val profileSyncEngine = ProfileSyncEngine(localStore = localStore, remoteDataSource = remoteDataSource)
     val profileRepository = ContactProfileRepository(
         localStore = localStore,
         settingsStore = settingsStore,
         legacyStore = LegacyContactProfileStore(application),
         syncScheduler = syncScheduler,
+        initialSynchronizer = { profileSyncEngine.run() },
     )
-    val profileSyncEngine = ProfileSyncEngine(localStore = localStore, remoteDataSource = remoteDataSource)
 }
