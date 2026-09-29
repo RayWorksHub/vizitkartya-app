@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,6 +109,7 @@ fun VizitApp(
     var wizardCompleted by rememberSaveable { mutableStateOf(false) }
     var wizardSaving by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
+    val sectionStateHolder = rememberSaveableStateHolder()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -249,7 +251,8 @@ fun VizitApp(
                 },
                 label = "vizit-section",
             ) { section ->
-                when (section) {
+                sectionStateHolder.SaveableStateProvider(section.name) {
+                    when (section) {
                     AppSection.HOME -> HomeScreen(
                         profile = viewModel.profile,
                         presentation = viewModel.cardPresentation,
@@ -310,6 +313,7 @@ fun VizitApp(
                         exportMessage = exportMessage,
                         exportError = exportError,
                     )
+                    }
                 }
             }
         }
@@ -342,7 +346,7 @@ private fun VizitBottomBar(
                 icon = {
                     Icon(
                         imageVector = section.icon,
-                        contentDescription = section.label,
+                        contentDescription = null,
                         modifier = Modifier.size(24.dp),
                     )
                 },
