@@ -42,6 +42,16 @@ class AuthCallbackParserTest {
         )
     }
 
+    @Test fun `signup confirmation is distinct from a login callback`() {
+        assertEquals(
+            AuthCallback.SignupConfirmation,
+            AuthCallbackParser.parse(
+                "vizit-dev://auth-callback?flow=signup&code=opaque",
+                "vizit-dev",
+            ),
+        )
+    }
+
     @Test fun `wrong scheme is rejected`() {
         assertNull(
             AuthCallbackParser.parse(
