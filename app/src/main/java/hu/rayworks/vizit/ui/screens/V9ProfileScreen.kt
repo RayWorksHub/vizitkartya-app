@@ -99,7 +99,7 @@ fun V9ProfileScreen(
         VizitGroup {
             VizitRow(
                 label = "Profiljaid",
-                supporting = "1 profil · a jelenlegi adatmodell egy aktív profilt kezel",
+                supporting = "1 profil",
                 icon = Icons.Outlined.Person,
                 showChevron = false,
             )
