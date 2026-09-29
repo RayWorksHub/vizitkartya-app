@@ -412,7 +412,7 @@ jobs:
           set -o pipefail
           args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Release)
           args+=(-destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/VIZIT.xcarchive")
-          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
+          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm")
           # Signing settings live on the VIZIT Release target so they are not
           # inherited by Swift package targets that cannot use provisioning profiles.
           args+=(CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
