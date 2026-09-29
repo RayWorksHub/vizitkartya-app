@@ -1777,6 +1777,7 @@ struct SettingsScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var themeMode: ThemeMode
+    @Environment(\.openURL) private var openURL
     @AppStorage("navigationLayoutMode") private var navigationLayoutRaw = NavigationLayoutMode.oneScreen.rawValue
     @State private var customizing = false
     @State private var adjustingVisibility = false
@@ -1785,6 +1786,7 @@ struct SettingsScreen: View {
     @State private var confirmLogout = false
     @State private var confirmDelete = false
     @State private var deletionPhrase = ""
+    @State private var businessHubOpen = false
 
     private var themeIndex: Binding<Int> {
         Binding(
@@ -1815,7 +1817,34 @@ struct SettingsScreen: View {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
-                        VizitLargeTitle("Beállítások")
+                        VizitLargeTitle(
+                            (NavigationLayoutMode(rawValue: navigationLayoutRaw) ?? .oneScreen) == .threeTabs
+                                ? "Továbbiak" : "Beállítások"
+                        )
+
+                        if (NavigationLayoutMode(rawValue: navigationLayoutRaw) ?? .oneScreen) == .threeTabs,
+                           store.featureFlags.analytics || store.featureFlags.businessPortal {
+                            VizitSectionHeader(title: "Funkciók")
+                            VizitGroup {
+                                if store.featureFlags.analytics {
+                                    VizitRow(
+                                        label: "Statisztikák",
+                                        systemImage: "chart.bar",
+                                        supporting: "Megtekintések, mentések és kattintások"
+                                    ) { openDashboard("analytics") }
+                                }
+                                if store.featureFlags.analytics && store.featureFlags.businessPortal {
+                                    VizitDivider()
+                                }
+                                if store.featureFlags.businessPortal {
+                                    VizitRow(
+                                        label: "Vállalkozói Portál",
+                                        systemImage: "book.closed",
+                                        supporting: "VOSZ, edukáció, digitális segítség és eszköztár"
+                                    ) { businessHubOpen = true }
+                                }
+                            }
+                        }
 
                         VizitSectionHeader(title: "Névjegy")
                         VizitGroup {
@@ -1975,12 +2004,18 @@ struct SettingsScreen: View {
                 Button("Mégse", role: .cancel) {}
             }
             .sheet(isPresented: $confirmDelete) { deleteAccountSheet }
+            .sheet(isPresented: $businessHubOpen) { BusinessHubScreen() }
             .alert("A művelet nem sikerült", isPresented: Binding(
                 get: { error != nil }, set: { if !$0 { error = nil } }
             )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
         }
+    }
+
+    private func openDashboard(_ destination: String) {
+        guard let url = URL(string: "https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2F\(destination)") else { return }
+        openURL(url)
     }
 
     private var deleteAccountSheet: some View {
