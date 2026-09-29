@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -121,43 +122,83 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
-            ) {
-                QuickTile(
-                    icon = Icons.Outlined.Nfc,
-                    title = "NFC",
-                    subtitle = "Érintéssel",
-                    enabled = nfcStatus.isReady,
-                    modifier = Modifier.weight(1f),
+            if (featureFlags.qrScanner) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(Vizit.space.sm),
                 ) {
-                    onStartNfcShare()?.let { message ->
-                        scope.launch { snackbarHostState.showSnackbar(message) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                    ) {
+                        QuickTile(
+                            icon = Icons.Outlined.Nfc,
+                            title = "NFC",
+                            subtitle = "Érintéssel",
+                            enabled = nfcStatus.isReady,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            onStartNfcShare()?.let { message ->
+                                scope.launch { snackbarHostState.showSnackbar(message) }
+                            }
+                        }
+                        QuickTile(
+                            icon = Icons.Outlined.QrCode2,
+                            title = "QR-kód",
+                            subtitle = "Mutatás",
+                            modifier = Modifier.weight(1f),
+                            onClick = onOpenShare,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                    ) {
+                        QuickTile(
+                            icon = Icons.Outlined.QrCodeScanner,
+                            title = "Beolvasás",
+                            subtitle = "Új kapcsolat",
+                            modifier = Modifier.weight(1f),
+                            onClick = onOpenScanner,
+                        )
+                        QuickTile(
+                            icon = Icons.Outlined.ContentCopy,
+                            title = "Egyéb",
+                            subtitle = "Megosztás",
+                            modifier = Modifier.weight(1f),
+                        ) { onShareAsText(context) }
                     }
                 }
-                QuickTile(
-                    icon = Icons.Outlined.QrCode2,
-                    title = "QR-kód",
-                    subtitle = "Mutatás",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenShare,
-                )
-                if (featureFlags.qrScanner) {
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
+                ) {
                     QuickTile(
-                        icon = Icons.Outlined.QrCodeScanner,
-                        title = "Beolvasás",
-                        subtitle = "Új kapcsolat",
+                        icon = Icons.Outlined.Nfc,
+                        title = "NFC",
+                        subtitle = "Érintéssel",
+                        enabled = nfcStatus.isReady,
                         modifier = Modifier.weight(1f),
-                        onClick = onOpenScanner,
+                    ) {
+                        onStartNfcShare()?.let { message ->
+                            scope.launch { snackbarHostState.showSnackbar(message) }
+                        }
+                    }
+                    QuickTile(
+                        icon = Icons.Outlined.QrCode2,
+                        title = "QR-kód",
+                        subtitle = "Mutatás",
+                        modifier = Modifier.weight(1f),
+                        onClick = onOpenShare,
                     )
+                    QuickTile(
+                        icon = Icons.Outlined.ContentCopy,
+                        title = "Egyéb",
+                        subtitle = "Megosztás",
+                        modifier = Modifier.weight(1f),
+                    ) { onShareAsText(context) }
                 }
-                QuickTile(
-                    icon = Icons.Outlined.ContentCopy,
-                    title = "Egyéb",
-                    subtitle = "Megosztás",
-                    modifier = Modifier.weight(1f),
-                ) { onShareAsText(context) }
             }
 
             VizitStatusPill(
@@ -241,6 +282,7 @@ private fun QuickTile(
     val colors = Vizit.colors
     Column(
         modifier = modifier
+            .clip(RoundedCornerShape(Vizit.radius.lg))
             .background(colors.surface, RoundedCornerShape(Vizit.radius.lg))
             .border(1.dp, colors.border, RoundedCornerShape(Vizit.radius.lg))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)

@@ -1,18 +1,16 @@
 package hu.rayworks.vizit.ui.design.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -24,7 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -60,20 +58,15 @@ fun VizitButton(
     contentOverride: Color? = null,
 ) {
     val colors = Vizit.colors
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
     val active = enabled && !loading
-    val scale by animateFloatAsState(
-        targetValue = if (pressed && active) 0.97f else 1f,
-        label = "vizit-button-press",
-    )
+    val shape = RoundedCornerShape(Vizit.radius.lg)
 
     val container: Color = when {
-        containerOverride != null -> if (pressed && active) containerOverride.copy(alpha = 0.86f) else containerOverride
+        containerOverride != null -> containerOverride
         !active -> colors.controlDisabled
-        style == VizitButtonStyle.Primary -> if (pressed) colors.primaryPressed else colors.primary
-        style == VizitButtonStyle.Secondary -> if (pressed) colors.sunken else colors.surface
-        style == VizitButtonStyle.Tertiary -> if (pressed) colors.primarySubtle else Color.Transparent
+        style == VizitButtonStyle.Primary -> colors.primary
+        style == VizitButtonStyle.Secondary -> colors.surface
+        style == VizitButtonStyle.Tertiary -> Color.Transparent
         else -> colors.error
     }
     val content: Color = when {
@@ -92,13 +85,11 @@ fun VizitButton(
 
     Row(
         modifier = modifier
-            .scale(scale)
             .defaultMinSize(minHeight = 52.dp)
-            .background(container, RoundedCornerShape(Vizit.radius.lg))
-            .then(if (border != null) Modifier.border(border, RoundedCornerShape(Vizit.radius.lg)) else Modifier)
+            .clip(shape)
+            .background(container, shape)
+            .then(if (border != null) Modifier.border(border, shape) else Modifier)
             .clickable(
-                interactionSource = interaction,
-                indication = null,
                 enabled = active,
                 role = Role.Button,
                 onClick = onClick,
@@ -141,39 +132,26 @@ fun VizitIconButton(
     tint: Color? = null,
 ) {
     val colors = Vizit.colors
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
     Box(
         modifier = modifier
             .size(VizitMinTouchTarget)
+            .clip(CircleShape)
             .clickable(
-                interactionSource = interaction,
-                indication = null,
                 enabled = enabled,
                 role = Role.Button,
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(
-                    if (pressed && enabled) colors.sunken else Color.Transparent,
-                    RoundedCornerShape(Vizit.radius.md),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                modifier = Modifier.size(22.dp),
-                tint = when {
-                    !enabled -> colors.textDisabled
-                    tint != null -> tint
-                    else -> colors.textSecondary
-                },
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(22.dp),
+            tint = when {
+                !enabled -> colors.textDisabled
+                tint != null -> tint
+                else -> colors.textSecondary
+            },
+        )
     }
 }
