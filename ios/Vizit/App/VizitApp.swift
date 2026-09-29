@@ -762,7 +762,7 @@ struct RootView: View {
                         .tabItem { Label("Megosztás", systemImage: "qrcode") }
                         .tag(RootTab.share)
 
-                    CardScreen(selectedTab: $selection)
+                    V9ProfileDestination()
                         .tabItem { Label("Profil", systemImage: "person.crop.rectangle") }
                         .tag(RootTab.card)
 
@@ -1022,3 +1022,108 @@ private struct V9Menu: View {
     }
 }
 
+
+
+/// VIZIT 9 profile destination. The legacy owner-card preview is intentionally
+/// not shown here; this tab is for the public profile and editing entry points.
+private struct V9ProfileDestination: View {
+    @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
+    @Environment(\.openURL) private var openURL
+    @State private var editing = false
+    @State private var customizing = false
+    @State private var visibility = false
+
+    private var publicURL: URL? {
+        guard store.profile.isPublic, store.syncStatus == .synced,
+              let base = store.configuration?.publicProfileBaseURL else { return nil }
+        return PublicProfileLink.preferred(
+            baseURL: base,
+            slug: store.profile.publicSlug,
+            customDomain: store.profile.customDomain,
+            customDomainVerified: store.profile.customDomainVerified
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        VizitLargeTitle("Profil")
+
+                        VizitPanel {
+                            VStack(alignment: .leading, spacing: VizitSpace.sm) {
+                                Text("WEB PROFILOD")
+                                    .font(VizitFont.caption)
+                                    .foregroundStyle(VizitColor.textMuted)
+                                Text(publicURL?.absoluteString ?? "A profil-link a sikeres szinkron után jelenik meg.")
+                                    .font(VizitFont.body)
+                                    .foregroundStyle(publicURL == nil ? VizitColor.textMuted : VizitColor.textPrimary)
+                                    .textSelection(.enabled)
+                                if let url = publicURL {
+                                    VizitButton(
+                                        title: "Profil megnyitása",
+                                        systemImage: "safari",
+                                        kind: .secondary
+                                    ) { openURL(url) }
+                                } else {
+                                    VizitStatusPill(
+                                        text: store.profile.isPublic ? "Szinkronizálásra vár" : "Nyilvános profil kikapcsolva",
+                                        tone: .info
+                                    )
+                                }
+                            }
+                        }
+
+                        VizitGroup {
+                            VizitRow(
+                                label: "Profiljaid",
+                                systemImage: "person.crop.circle",
+                                supporting: "1 profil · a jelenlegi adatmodell egy aktív profilt kezel",
+                                showsChevron: false
+                            )
+                        }
+
+                        VizitSectionHeader(title: "Tartalom")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Adatok",
+                                systemImage: "pencil",
+                                supporting: "Név, elérhetőségek, cég és közösségi profilok"
+                            ) { editing = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Mi látszik a profilon",
+                                systemImage: "eye",
+                                value: "\(presentation.value.sharedFieldCount)/\(CardPresentation.optionalFieldCount)"
+                            ) { visibility = true }
+                            VizitDivider()
+                            VizitRow(
+                                label: "Megjelenés",
+                                systemImage: "paintpalette",
+                                value: presentation.value.colorway.label
+                            ) { customizing = true }
+                        }
+                    }
+                    .padding(.horizontal, VizitSpace.md)
+                    .padding(.bottom, VizitSpace.xxl)
+                    .frame(maxWidth: 620)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationBarHidden(true)
+        }
+        .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
+        .sheet(isPresented: $customizing) {
+            CardAppearanceScreen(store: presentation, profile: store.profile)
+        }
+        .sheet(isPresented: $visibility) {
+            DataVisibilityScreen(
+                store: presentation,
+                profile: store.profile,
+                isPublicProfile: store.profile.isPublic
+            )
+        }
+    }
+}
