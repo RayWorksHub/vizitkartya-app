@@ -45,43 +45,30 @@ def app_by_bundle(bundle):
     return exact[0]
 
 prod=app_by_bundle(PROD_BUNDLE)
-old=app_by_bundle(OLD_BUNDLE)
 
 builds=get("/builds",{
     "filter[app]":prod["id"],
     "sort":"-uploadedDate",
-    "limit":"10",
+    "limit":"200",
     "fields[builds]":"version,processingState,uploadedDate",
 }).get("data",[])
 if not builds:
     raise SystemExit("No production TestFlight build found")
-build=builds[0]
+target_version=os.environ.get("VIZIT_TARGET_BUILD_VERSION", "").strip()
+if target_version:
+    matching_builds=[
+        candidate for candidate in builds
+        if str(candidate.get("attributes",{}).get("version",""))==target_version
+    ]
+    if not matching_builds:
+        raise SystemExit(f"Production TestFlight build {target_version} is not visible yet")
+    build=matching_builds[0]
+else:
+    build=builds[0]
 attrs=build.get("attributes",{})
 if attrs.get("processingState")!="VALID":
     raise SystemExit(f"Latest production build is not VALID: {attrs.get('processingState')}")
 print("Production build:", attrs.get("version"), build["id"])
-
-old_groups=get("/betaGroups",{
-    "filter[app]":old["id"],
-    "filter[isInternalGroup]":"true",
-    "limit":"100",
-}).get("data",[])
-tester_ids=[]
-for g in old_groups:
-    rel=get(f"/betaGroups/{g['id']}/relationships/betaTesters",{"limit":"200"}).get("data",[])
-    tester_ids.extend(t["id"] for t in rel)
-tester_ids=sorted(set(tester_ids))
-if len(tester_ids)!=1:
-    raise SystemExit(f"Expected exactly one legacy internal tester, found {len(tester_ids)}")
-tester_id=tester_ids[0]
-legacy_tester=get(f"/betaTesters/{tester_id}",{
-    "fields[betaTesters]":"email,firstName,lastName,state"
-}).get("data",{})
-legacy_attrs=legacy_tester.get("attributes",{})
-tester_email=str(legacy_attrs.get("email","")).strip()
-if not tester_email:
-    raise SystemExit("Legacy internal tester has no email")
-print("Reusing one legacy internal tester identity:", tester_id)
 
 groups=get("/betaGroups",{
     "filter[app]":prod["id"],
@@ -106,28 +93,57 @@ post(f"/builds/{build['id']}/relationships/betaGroups",{
 })
 print("Build assigned to production beta group")
 
-# A betaTester resource can be app-scoped. The legacy tester belongs only to
-# the old DEV app, so create the production TestFlight assignment using the
-# same App Store Connect account email and the production beta group.
-created_tester=post("/betaTesters",{
-    "data":{
-        "type":"betaTesters",
-        "attributes":{
-            "email":tester_email,
-            "firstName":legacy_attrs.get("firstName") or "",
-            "lastName":legacy_attrs.get("lastName") or "",
-        },
-        "relationships":{
-            "betaGroups":{
-                "data":[{"type":"betaGroups","id":group["id"]}]
+# Keep subsequent releases idempotent: once the production group already has
+# its tester, reuse that relationship instead of trying to create a duplicate
+# betaTester resource (which App Store Connect rejects with HTTP 409).
+linked_testers=get(f"/betaGroups/{group['id']}/relationships/betaTesters",{"limit":"200"}).get("data",[])
+if linked_testers:
+    production_tester_id=linked_testers[0]["id"]
+    print("Using existing production internal tester assignment:", production_tester_id)
+else:
+    old=app_by_bundle(OLD_BUNDLE)
+    old_groups=get("/betaGroups",{
+        "filter[app]":old["id"],
+        "filter[isInternalGroup]":"true",
+        "limit":"100",
+    }).get("data",[])
+    tester_ids=[]
+    for old_group in old_groups:
+        rel=get(
+            f"/betaGroups/{old_group['id']}/relationships/betaTesters",
+            {"limit":"200"},
+        ).get("data",[])
+        tester_ids.extend(tester["id"] for tester in rel)
+    tester_ids=sorted(set(tester_ids))
+    if len(tester_ids)!=1:
+        raise SystemExit(f"Expected exactly one legacy internal tester, found {len(tester_ids)}")
+    legacy_tester=get(f"/betaTesters/{tester_ids[0]}",{
+        "fields[betaTesters]":"email,firstName,lastName,state"
+    }).get("data",{})
+    legacy_attrs=legacy_tester.get("attributes",{})
+    tester_email=str(legacy_attrs.get("email","")).strip()
+    if not tester_email:
+        raise SystemExit("Legacy internal tester has no email")
+
+    created_tester=post("/betaTesters",{
+        "data":{
+            "type":"betaTesters",
+            "attributes":{
+                "email":tester_email,
+                "firstName":legacy_attrs.get("firstName") or "",
+                "lastName":legacy_attrs.get("lastName") or "",
+            },
+            "relationships":{
+                "betaGroups":{
+                    "data":[{"type":"betaGroups","id":group["id"]}]
+                }
             }
         }
-    }
-}).get("data",{})
-production_tester_id=created_tester.get("id")
-if not production_tester_id:
-    raise SystemExit("Apple created no production beta tester resource")
-print("Production internal tester assignment created:", production_tester_id)
+    }).get("data",{})
+    production_tester_id=created_tester.get("id")
+    if not production_tester_id:
+        raise SystemExit("Apple created no production beta tester resource")
+    print("Production internal tester assignment created:", production_tester_id)
 
 linked_builds=get(f"/betaGroups/{group['id']}/relationships/builds",{"limit":"200"}).get("data",[])
 linked_testers=get(f"/betaGroups/{group['id']}/relationships/betaTesters",{"limit":"200"}).get("data",[])
