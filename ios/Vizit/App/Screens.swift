@@ -1777,6 +1777,7 @@ struct SettingsScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var themeMode: ThemeMode
+    @AppStorage("navigationLayoutMode") private var navigationLayoutRaw = NavigationLayoutMode.oneScreen.rawValue
     @State private var customizing = false
     @State private var adjustingVisibility = false
     @State private var confirmReset = false
@@ -1792,6 +1793,19 @@ struct SettingsScreen: View {
                 let mode = ThemeMode.allCases[newValue]
                 themeMode = mode
                 ThemeStorage.save(mode)
+            }
+        )
+    }
+
+    private var navigationLayoutIndex: Binding<Int> {
+        Binding(
+            get: {
+                (NavigationLayoutMode(rawValue: navigationLayoutRaw) ?? .oneScreen) == .threeTabs ? 0 : 1
+            },
+            set: { newValue in
+                navigationLayoutRaw = newValue == 0
+                    ? NavigationLayoutMode.threeTabs.rawValue
+                    : NavigationLayoutMode.oneScreen.rawValue
             }
         )
     }
@@ -1830,6 +1844,22 @@ struct SettingsScreen: View {
                             VizitSegmentedControl(
                                 options: ThemeMode.allCases.map(\.label),
                                 selection: themeIndex
+                            )
+                            .padding(VizitSpace.md)
+                        }
+
+                        VizitSectionHeader(title: "Felület")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Navigáció",
+                                systemImage: "rectangle.3.group",
+                                supporting: "Választhatsz a háromfüles és az egyképernyős VIZIT között.",
+                                showsChevron: false
+                            )
+                            VizitDivider()
+                            VizitSegmentedControl(
+                                options: NavigationLayoutMode.allCases.map(\.label),
+                                selection: navigationLayoutIndex
                             )
                             .padding(VizitSpace.md)
                         }
