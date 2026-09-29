@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ios-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  group: ios-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}-${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]') && 'testflight' || 'ci' }}
   cancel-in-progress: true
 
 jobs:
