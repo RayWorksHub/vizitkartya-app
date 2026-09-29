@@ -730,32 +730,51 @@ private struct LaunchScreen: View {
     }
 }
 
+enum NavigationLayoutMode: String, CaseIterable {
+    case threeTabs = "three_tabs"
+    case oneScreen = "one_screen"
+
+    var label: String {
+        switch self {
+        case .threeTabs: return "Három fül"
+        case .oneScreen: return "Egy képernyő"
+        }
+    }
+}
+
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @Binding var themeMode: ThemeMode
-    @State private var selection: RootTab = .home
+    @AppStorage("navigationLayoutMode") private var navigationLayoutRaw = NavigationLayoutMode.oneScreen.rawValue
+    @State private var selection: RootTab = .share
+
+    private var navigationLayout: NavigationLayoutMode {
+        NavigationLayoutMode(rawValue: navigationLayoutRaw) ?? .oneScreen
+    }
 
     var body: some View {
-        TabView(selection: $selection) {
-            HomeScreen(selectedTab: $selection)
-                .tabItem { Label("Kezdőlap", systemImage: "house") }
-                .tag(RootTab.home)
+        Group {
+            if navigationLayout == .oneScreen {
+                V9ShareHome(themeMode: $themeMode, singleScreen: true)
+            } else {
+                TabView(selection: $selection) {
+                    V9ShareHome(themeMode: $themeMode, singleScreen: false)
+                        .tabItem { Label("Megosztás", systemImage: "qrcode") }
+                        .tag(RootTab.share)
 
-            CardScreen(selectedTab: $selection)
-                .tabItem { Label("Névjegy", systemImage: "person.crop.rectangle") }
-                .tag(RootTab.card)
+                    CardScreen(selectedTab: $selection)
+                        .tabItem { Label("Profil", systemImage: "person.crop.rectangle") }
+                        .tag(RootTab.card)
 
-            ShareScreen()
-                .tabItem { Label("Megosztás", systemImage: "square.and.arrow.up") }
-                .tag(RootTab.share)
-
-            SettingsScreen(themeMode: $themeMode)
-                .tabItem { Label("Beállítások", systemImage: "gearshape") }
-                .tag(RootTab.settings)
+                    SettingsScreen(themeMode: $themeMode)
+                        .tabItem { Label("Továbbiak", systemImage: "ellipsis.circle") }
+                        .tag(RootTab.settings)
+                }
+                .tint(VizitColor.primary)
+                .toolbarBackground(VizitColor.surface, for: .tabBar)
+                .toolbarBackground(.visible, for: .tabBar)
+            }
         }
-        .tint(VizitColor.primary)
-        .toolbarBackground(VizitColor.surface, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
         .overlay(alignment: .top) {
             if store.authStatus == .offline {
                 VizitBanner(
@@ -768,3 +787,236 @@ struct RootView: View {
         }
     }
 }
+
+/// VIZIT 9 native home/share surface. No HTML or embedded browser UI is used.
+private struct V9ShareHome: View {
+    @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
+    @Environment(\.openURL) private var openURL
+    @Binding var themeMode: ThemeMode
+    let singleScreen: Bool
+
+    @State private var menuOpen = false
+    @State private var editing = false
+    @State private var settingsOpen = false
+    @State private var scannerOpen = false
+    @State private var businessOpen = false
+
+    private var publicURL: URL? {
+        guard store.profile.isPublic, store.syncStatus == .synced,
+              let base = store.configuration?.publicProfileBaseURL else { return nil }
+        return PublicProfileLink.preferred(
+            baseURL: base,
+            slug: store.profile.publicSlug,
+            customDomain: store.profile.customDomain,
+            customDomainVerified: store.profile.customDomainVerified
+        )
+    }
+
+    private var qrImage: UIImage? {
+        publicURL.flatMap { QRImage.make($0.absoluteString) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(spacing: VizitSpace.md) {
+                        HStack(spacing: VizitSpace.sm) {
+                            Text("VIZIT")
+                                .font(.system(size: 28, weight: .bold))
+                                .tracking(5)
+                                .foregroundStyle(VizitColor.textPrimary)
+                            Spacer()
+                            Button {
+                                if singleScreen {
+                                    menuOpen = true
+                                } else if store.featureFlags.qrScanner {
+                                    scannerOpen = true
+                                }
+                            } label: {
+                                if singleScreen {
+                                    VizitAvatar(profile: store.profile, size: 42)
+                                } else {
+                                    Image(systemName: "qrcode.viewfinder")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundStyle(VizitColor.primary)
+                                        .frame(width: 44, height: 44)
+                                        .background(VizitColor.surface)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(VizitColor.border, lineWidth: 1))
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(singleScreen ? "Menü" : "Névjegy beolvasása")
+                        }
+
+                        VStack(spacing: VizitSpace.md) {
+                            Text(store.profile.displayName.isEmpty ? "VIZIT profil" : store.profile.displayName)
+                                .font(VizitFont.h3)
+                                .foregroundStyle(VizitColor.textPrimary)
+                                .multilineTextAlignment(.center)
+
+                            if let qrImage {
+                                Image(uiImage: qrImage)
+                                    .interpolation(.none)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .padding(VizitSpace.sm)
+                                    .background(Color.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+                                    .accessibilityLabel("VIZIT profil QR-kód")
+                            } else {
+                                VStack(spacing: VizitSpace.sm) {
+                                    Image(systemName: "qrcode")
+                                        .font(.system(size: 44))
+                                    Text("A nyilvános profil még nem érhető el")
+                                        .font(VizitFont.bodySmall)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .foregroundStyle(VizitColor.textMuted)
+                                .frame(maxWidth: .infinity, minHeight: 220)
+                                .background(VizitColor.controlTrack)
+                                .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+                            }
+
+                            Text(publicURL?.absoluteString ?? "A profil-link a sikeres szinkron után jelenik meg.")
+                                .font(VizitFont.bodySmall)
+                                .foregroundStyle(VizitColor.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .textSelection(.enabled)
+                        }
+                        .padding(VizitSpace.lg)
+                        .background(VizitColor.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: VizitRadius.xl, style: .continuous)
+                                .stroke(VizitColor.border, lineWidth: 1)
+                        }
+
+                        if let url = publicURL {
+                            ShareLink(item: url) {
+                                Label("Megosztás", systemImage: "square.and.arrow.up")
+                                    .font(VizitFont.label)
+                                    .foregroundStyle(Color.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 54)
+                                    .background(VizitColor.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+
+                            VizitButton(
+                                title: "Profil megnyitása",
+                                systemImage: "safari",
+                                kind: .secondary
+                            ) { openURL(url) }
+                        } else {
+                            VizitButton(
+                                title: "Megosztás",
+                                systemImage: "square.and.arrow.up",
+                                isEnabled: false
+                            ) {}
+                            VizitButton(
+                                title: "Profil megnyitása",
+                                systemImage: "safari",
+                                kind: .secondary,
+                                isEnabled: false
+                            ) {}
+                        }
+                    }
+                    .padding(.horizontal, VizitSpace.md)
+                    .padding(.bottom, VizitSpace.xxl)
+                    .frame(maxWidth: 620)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationBarHidden(true)
+        }
+        .sheet(isPresented: $menuOpen) {
+            V9Menu(
+                themeMode: $themeMode,
+                editing: $editing,
+                settingsOpen: $settingsOpen,
+                scannerOpen: $scannerOpen,
+                businessOpen: $businessOpen,
+                openDashboard: openDashboard
+            )
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $editing) { ProfileEditor(draft: store.profile) }
+        .sheet(isPresented: $settingsOpen) { SettingsScreen(themeMode: $themeMode) }
+        .sheet(isPresented: $businessOpen) { BusinessHubScreen() }
+        .fullScreenCover(isPresented: $scannerOpen) { ScanFlow() }
+    }
+
+    private func openDashboard(_ destination: String) {
+        guard let url = URL(string: "https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2F\(destination)") else { return }
+        openURL(url)
+    }
+}
+
+private struct V9Menu: View {
+    @EnvironmentObject private var store: AppStore
+    @Binding var themeMode: ThemeMode
+    @Binding var editing: Bool
+    @Binding var settingsOpen: Bool
+    @Binding var scannerOpen: Bool
+    @Binding var businessOpen: Bool
+    let openDashboard: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VizitSpace.md) {
+                        HStack(spacing: VizitSpace.sm) {
+                            VizitAvatar(profile: store.profile, size: 48)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.profile.displayName).font(VizitFont.h3)
+                                if !store.accountEmail.isEmpty {
+                                    Text(store.accountEmail).font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
+                                }
+                            }
+                        }
+
+                        VizitGroup {
+                            VizitRow(label: "Profil szerkesztése", systemImage: "pencil") {
+                                dismiss(); editing = true
+                            }
+                            if store.featureFlags.qrScanner {
+                                VizitDivider()
+                                VizitRow(label: "Névjegy beolvasása", systemImage: "qrcode.viewfinder") {
+                                    dismiss(); scannerOpen = true
+                                }
+                            }
+                            if store.featureFlags.analytics {
+                                VizitDivider()
+                                VizitRow(label: "Statisztikák", systemImage: "chart.bar") {
+                                    dismiss(); openDashboard("analytics")
+                                }
+                            }
+                            if store.featureFlags.businessPortal {
+                                VizitDivider()
+                                VizitRow(label: "Vállalkozói Portál", systemImage: "book.closed") {
+                                    dismiss(); businessOpen = true
+                                }
+                            }
+                        }
+
+                        VizitGroup {
+                            VizitRow(label: "Beállítások", systemImage: "gearshape") {
+                                dismiss(); settingsOpen = true
+                            }
+                        }
+                    }
+                    .padding(VizitSpace.md)
+                }
+            }
+            .navigationTitle("Menü")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
