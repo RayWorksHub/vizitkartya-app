@@ -14,8 +14,19 @@ import kotlinx.coroutines.flow.map
 
 private val Context.vizitSettingsDataStore by preferencesDataStore(name = "vizit_settings")
 
+enum class NavigationLayoutMode(val storageValue: String) {
+    THREE_TABS("THREE_TABS"),
+    ONE_SCREEN("ONE_SCREEN");
+
+    companion object {
+        fun fromStorage(value: String?): NavigationLayoutMode =
+            entries.firstOrNull { it.storageValue == value } ?: ONE_SCREEN
+    }
+}
+
 data class AppSettings(
     val appearance: String = "LIGHT",
+    val navigationLayoutMode: NavigationLayoutMode = NavigationLayoutMode.ONE_SCREEN,
     val publicProfileEnabled: Boolean = false,
     val analyticsEnabled: Boolean = true,
     val automaticSyncEnabled: Boolean = true,
@@ -33,6 +44,7 @@ class AppSettingsStore(private val context: Context) {
         .map { preferences ->
             AppSettings(
                 appearance = preferences[APPEARANCE] ?: "LIGHT",
+                navigationLayoutMode = NavigationLayoutMode.fromStorage(preferences[NAVIGATION_LAYOUT_MODE]),
                 publicProfileEnabled = preferences[PUBLIC_PROFILE_ENABLED] ?: false,
                 analyticsEnabled = preferences[ANALYTICS_ENABLED] ?: true,
                 automaticSyncEnabled = preferences[AUTOMATIC_SYNC_ENABLED] ?: true,
@@ -45,6 +57,10 @@ class AppSettingsStore(private val context: Context) {
 
     suspend fun setAppearance(value: String) {
         context.vizitSettingsDataStore.edit { it[APPEARANCE] = value }
+    }
+
+    suspend fun setNavigationLayoutMode(value: NavigationLayoutMode) {
+        context.vizitSettingsDataStore.edit { it[NAVIGATION_LAYOUT_MODE] = value.storageValue }
     }
 
     suspend fun setPublicProfileEnabled(enabled: Boolean) {
@@ -108,6 +124,7 @@ class AppSettingsStore(private val context: Context) {
 
     private companion object {
         val APPEARANCE = stringPreferencesKey("appearance")
+        val NAVIGATION_LAYOUT_MODE = stringPreferencesKey("navigation_layout_mode")
         val PUBLIC_PROFILE_ENABLED = booleanPreferencesKey("public_profile_enabled")
         val ANALYTICS_ENABLED = booleanPreferencesKey("analytics_enabled")
         val AUTOMATIC_SYNC_ENABLED = booleanPreferencesKey("automatic_sync_enabled")
