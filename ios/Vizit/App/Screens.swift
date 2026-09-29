@@ -1777,6 +1777,8 @@ struct SettingsScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var themeMode: ThemeMode
+    @Environment(\.openURL) private var openURL
+    @AppStorage("navigationLayoutMode") private var navigationLayoutRaw = NavigationLayoutMode.oneScreen.rawValue
     @State private var customizing = false
     @State private var adjustingVisibility = false
     @State private var confirmReset = false
@@ -1784,6 +1786,7 @@ struct SettingsScreen: View {
     @State private var confirmLogout = false
     @State private var confirmDelete = false
     @State private var deletionPhrase = ""
+    @State private var businessHubOpen = false
 
     private var themeIndex: Binding<Int> {
         Binding(
@@ -1796,12 +1799,52 @@ struct SettingsScreen: View {
         )
     }
 
+    private var navigationLayoutIndex: Binding<Int> {
+        Binding(
+            get: {
+                (NavigationLayoutMode(rawValue: navigationLayoutRaw) ?? .oneScreen) == .threeTabs ? 0 : 1
+            },
+            set: { newValue in
+                navigationLayoutRaw = newValue == 0
+                    ? NavigationLayoutMode.threeTabs.rawValue
+                    : NavigationLayoutMode.oneScreen.rawValue
+            }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             VizitScreen {
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
-                        VizitLargeTitle("Beállítások")
+                        VizitLargeTitle(
+                            (NavigationLayoutMode(rawValue: navigationLayoutRaw) ?? .oneScreen) == .threeTabs
+                                ? "Továbbiak" : "Beállítások"
+                        )
+
+                        if (NavigationLayoutMode(rawValue: navigationLayoutRaw) ?? .oneScreen) == .threeTabs,
+                           store.featureFlags.analytics || store.featureFlags.businessPortal {
+                            VizitSectionHeader(title: "Funkciók")
+                            VizitGroup {
+                                if store.featureFlags.analytics {
+                                    VizitRow(
+                                        label: "Statisztikák",
+                                        systemImage: "chart.bar",
+                                        supporting: "Megtekintések, mentések és kattintások"
+                                    ) { openDashboard("analytics") }
+                                }
+                                if store.featureFlags.analytics && store.featureFlags.businessPortal {
+                                    VizitDivider()
+                                }
+                                if store.featureFlags.businessPortal {
+                                    VizitRow(
+                                        label: "Vállalkozói Portál",
+                                        systemImage: "book.closed",
+                                        supporting: "VOSZ, edukáció, digitális segítség és eszköztár"
+                                    ) { businessHubOpen = true }
+                                }
+                            }
+                        }
 
                         VizitSectionHeader(title: "Névjegy")
                         VizitGroup {
@@ -1830,6 +1873,22 @@ struct SettingsScreen: View {
                             VizitSegmentedControl(
                                 options: ThemeMode.allCases.map(\.label),
                                 selection: themeIndex
+                            )
+                            .padding(VizitSpace.md)
+                        }
+
+                        VizitSectionHeader(title: "Felület")
+                        VizitGroup {
+                            VizitRow(
+                                label: "Navigáció",
+                                systemImage: "rectangle.3.group",
+                                supporting: "Választhatsz a háromfüles és az egyképernyős VIZIT között.",
+                                showsChevron: false
+                            )
+                            VizitDivider()
+                            VizitSegmentedControl(
+                                options: NavigationLayoutMode.allCases.map(\.label),
+                                selection: navigationLayoutIndex
                             )
                             .padding(VizitSpace.md)
                         }
@@ -1945,12 +2004,18 @@ struct SettingsScreen: View {
                 Button("Mégse", role: .cancel) {}
             }
             .sheet(isPresented: $confirmDelete) { deleteAccountSheet }
+            .sheet(isPresented: $businessHubOpen) { BusinessHubScreen() }
             .alert("A művelet nem sikerült", isPresented: Binding(
                 get: { error != nil }, set: { if !$0 { error = nil } }
             )) {
                 Button("Rendben", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
         }
+    }
+
+    private func openDashboard(_ destination: String) {
+        guard let url = URL(string: "https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2F\(destination)") else { return }
+        openURL(url)
     }
 
     private var deleteAccountSheet: some View {
