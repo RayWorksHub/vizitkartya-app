@@ -59,6 +59,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.VizitViewModel
 import hu.rayworks.vizit.auth.AuthViewModel
+import hu.rayworks.vizit.data.settings.NavigationLayoutMode
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.data.remote.NodeBackendApi
 import hu.rayworks.vizit.data.remote.SupabaseProvider
@@ -78,6 +79,7 @@ import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
 import hu.rayworks.vizit.ui.screens.ProfileWizardScreen
+import hu.rayworks.vizit.ui.screens.V9ShareHomeScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -89,9 +91,9 @@ import kotlinx.coroutines.withContext
  */
 enum class AppSection(val label: String, val icon: ImageVector) {
     HOME("Kezdőlap", Icons.Outlined.Home),
-    CARD("Névjegy", Icons.Outlined.ContactPage),
+    CARD("Profil", Icons.Outlined.ContactPage),
     SHARE("Megosztás", Icons.Outlined.Share),
-    SETTINGS("Beállítások", Icons.Outlined.Settings),
+    SETTINGS("Továbbiak", Icons.Outlined.Settings),
 }
 
 @Composable
@@ -100,7 +102,7 @@ fun VizitApp(
     authViewModel: AuthViewModel,
     offlineMode: Boolean = false,
 ) {
-    var selectedSection by rememberSaveable { mutableStateOf(AppSection.HOME) }
+    var selectedSection by rememberSaveable { mutableStateOf(AppSection.SHARE) }
     var showKnowledgeHub by rememberSaveable { mutableStateOf(false) }
     var showAnalytics by rememberSaveable { mutableStateOf(false) }
     var showCardAppearance by rememberSaveable { mutableStateOf(false) }
@@ -154,7 +156,7 @@ fun VizitApp(
             showCardAppearance ||
             showDataVisibility ||
             showScanner ||
-            selectedSection != AppSection.HOME,
+            selectedSection != AppSection.SHARE,
     ) {
         when {
             viewModel.isNfcShareActive -> viewModel.stopNfcShare()
@@ -163,7 +165,7 @@ fun VizitApp(
             showCardAppearance -> showCardAppearance = false
             showAnalytics -> showAnalytics = false
             showKnowledgeHub -> showKnowledgeHub = false
-            selectedSection != AppSection.HOME -> selectedSection = AppSection.HOME
+            selectedSection != AppSection.SHARE -> selectedSection = AppSection.SHARE
         }
     }
 
@@ -243,85 +245,101 @@ fun VizitApp(
         }
 
         Box(modifier = Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = selectedSection,
-                transitionSpec = {
-                    val duration = if (reduceMotion) 0 else 180
-                    fadeIn(tween(duration)) togetherWith fadeOut(tween(duration))
-                },
-                label = "vizit-section",
-            ) { section ->
-                sectionStateHolder.SaveableStateProvider(section.name) {
-                    when (section) {
-                    AppSection.HOME -> HomeScreen(
-                        profile = viewModel.profile,
-                        presentation = viewModel.cardPresentation,
-                        nfcStatus = viewModel.nfcStatus,
-                        syncState = viewModel.profileSyncState,
-                        onStartNfcShare = viewModel::startNfcShare,
-                        onOpenCard = { selectedSection = AppSection.CARD },
-                        onOpenShare = { selectedSection = AppSection.SHARE },
-                        onOpenKnowledgeHub = { showKnowledgeHub = true },
-                        onOpenAnalytics = { showAnalytics = true },
-                        onOpenCRM = { uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fcrm") },
-                        onOpenOnlineEditor = { uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fprofile") },
-                        onOpenScanner = { showScanner = true },
-                        featureFlags = viewModel.featureFlags,
-                        onShareAsText = viewModel::shareAsText,
-                    )
+            if (viewModel.navigationLayoutMode == NavigationLayoutMode.ONE_SCREEN) {
+                V9ShareHomeScreen(
+                    profile = viewModel.profile,
+                    presentation = viewModel.cardPresentation,
+                    synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
+                        !viewModel.profileSyncState.pendingChanges,
+                    nfcStatus = viewModel.nfcStatus,
+                    onStartNfcShare = viewModel::startNfcShare,
+                    onOpenProfile = { selectedSection = AppSection.CARD; viewModel.updateNavigationLayoutMode(NavigationLayoutMode.THREE_TABS) },
+                    onOpenScanner = { showScanner = true },
+                    onOpenAnalytics = { showAnalytics = true },
+                    onOpenBusinessHub = { showKnowledgeHub = true },
+                    onOpenSettings = { selectedSection = AppSection.SETTINGS; viewModel.updateNavigationLayoutMode(NavigationLayoutMode.THREE_TABS) },
+                    singleScreen = true,
+                    analyticsEnabled = viewModel.featureFlags.analytics,
+                    businessPortalEnabled = viewModel.featureFlags.businessPortal,
+                    scannerEnabled = viewModel.featureFlags.qrScanner,
+                )
+            } else {
+                AnimatedContent(
+                    targetState = selectedSection,
+                    transitionSpec = {
+                        val duration = if (reduceMotion) 0 else 180
+                        fadeIn(tween(duration)) togetherWith fadeOut(tween(duration))
+                    },
+                    label = "vizit-section",
+                ) { section ->
+                    sectionStateHolder.SaveableStateProvider(section.name) {
+                        when (section) {
+                            AppSection.HOME, AppSection.SHARE -> V9ShareHomeScreen(
+                                profile = viewModel.profile,
+                                presentation = viewModel.cardPresentation,
+                                synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
+                                    !viewModel.profileSyncState.pendingChanges,
+                                nfcStatus = viewModel.nfcStatus,
+                                onStartNfcShare = viewModel::startNfcShare,
+                                onOpenProfile = { selectedSection = AppSection.CARD },
+                                onOpenScanner = { showScanner = true },
+                                onOpenAnalytics = { showAnalytics = true },
+                                onOpenBusinessHub = { showKnowledgeHub = true },
+                                onOpenSettings = { selectedSection = AppSection.SETTINGS },
+                                singleScreen = false,
+                                analyticsEnabled = viewModel.featureFlags.analytics,
+                                businessPortalEnabled = viewModel.featureFlags.businessPortal,
+                                scannerEnabled = viewModel.featureFlags.qrScanner,
+                            )
 
-                    AppSection.CARD -> CardScreen(
-                        profile = viewModel.profile,
-                        presentation = viewModel.cardPresentation,
-                        onSave = viewModel::saveProfile,
-                        onShare = { selectedSection = AppSection.SHARE },
-                        onOpenCardAppearance = { showCardAppearance = true },
-                        onOpenDataVisibility = { showDataVisibility = true },
-                    )
+                            AppSection.CARD -> CardScreen(
+                                profile = viewModel.profile,
+                                presentation = viewModel.cardPresentation,
+                                onSave = viewModel::saveProfile,
+                                onShare = { selectedSection = AppSection.SHARE },
+                                onOpenCardAppearance = { showCardAppearance = true },
+                                onOpenDataVisibility = { showDataVisibility = true },
+                            )
 
-                    AppSection.SHARE -> ShareScreen(
-                        profile = viewModel.profile,
-                        presentation = viewModel.cardPresentation,
-                        synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
-                            !viewModel.profileSyncState.pendingChanges,
-                        nfcStatus = viewModel.nfcStatus,
-                        onStartNfcShare = viewModel::startNfcShare,
-                    )
-
-                    AppSection.SETTINGS -> SettingsScreen(
-                        nfcStatus = viewModel.nfcStatus,
-                        cardPresentation = viewModel.cardPresentation,
-                        onOpenCardAppearance = { showCardAppearance = true },
-                        onOpenDataVisibility = { showDataVisibility = true },
-                        syncState = viewModel.profileSyncState,
-                        automaticSyncEnabled = viewModel.automaticSyncEnabled,
-                        themeMode = viewModel.themeMode,
-                        onThemeModeChange = viewModel::updateThemeMode,
-                        onAutomaticSyncChanged = viewModel::updateAutomaticSyncEnabled,
-                        onRetrySync = viewModel::retryProfileSync,
-                        onResolveConflict = viewModel::resolveProfileConflict,
-                        resolutionMessage = viewModel.conflictResolutionMessage,
-                        authActionState = authViewModel.actionState,
-                        googleSignInEnabled = authViewModel.googleSignInEnabled,
-                        cloudAccountAvailable = authViewModel.cloudAccountAvailable,
-                        privacyPolicyUrl = authViewModel.privacyPolicyUrl,
-                        termsUrl = authViewModel.termsUrl,
-                        onClearAuthAction = authViewModel::clearActionState,
-                        onLogout = authViewModel::logout,
-                        onDeleteAccount = authViewModel::deleteAccount,
-                        onExportAccount = ::exportAccount,
-                        exportMessage = exportMessage,
-                        exportError = exportError,
-                    )
+                            AppSection.SETTINGS -> SettingsScreen(
+                                nfcStatus = viewModel.nfcStatus,
+                                cardPresentation = viewModel.cardPresentation,
+                                onOpenCardAppearance = { showCardAppearance = true },
+                                onOpenDataVisibility = { showDataVisibility = true },
+                                syncState = viewModel.profileSyncState,
+                                automaticSyncEnabled = viewModel.automaticSyncEnabled,
+                                themeMode = viewModel.themeMode,
+                                navigationLayoutMode = viewModel.navigationLayoutMode,
+                                onThemeModeChange = viewModel::updateThemeMode,
+                                onNavigationLayoutModeChange = viewModel::updateNavigationLayoutMode,
+                                onAutomaticSyncChanged = viewModel::updateAutomaticSyncEnabled,
+                                onRetrySync = viewModel::retryProfileSync,
+                                onResolveConflict = viewModel::resolveProfileConflict,
+                                resolutionMessage = viewModel.conflictResolutionMessage,
+                                authActionState = authViewModel.actionState,
+                                googleSignInEnabled = authViewModel.googleSignInEnabled,
+                                cloudAccountAvailable = authViewModel.cloudAccountAvailable,
+                                privacyPolicyUrl = authViewModel.privacyPolicyUrl,
+                                termsUrl = authViewModel.termsUrl,
+                                onClearAuthAction = authViewModel::clearActionState,
+                                onLogout = authViewModel::logout,
+                                onDeleteAccount = authViewModel::deleteAccount,
+                                onExportAccount = ::exportAccount,
+                                exportMessage = exportMessage,
+                                exportError = exportError,
+                            )
+                        }
                     }
                 }
             }
         }
 
-        VizitBottomBar(
-            selected = selectedSection,
-            onSelect = { selectedSection = it },
-        )
+        if (viewModel.navigationLayoutMode == NavigationLayoutMode.THREE_TABS) {
+            VizitBottomBar(
+                selected = selectedSection,
+                onSelect = { selectedSection = it },
+            )
+        }
     }
 }
 
@@ -338,7 +356,7 @@ private fun VizitBottomBar(
         tonalElevation = 0.dp,
         windowInsets = WindowInsets.navigationBars,
     ) {
-        AppSection.entries.forEach { section ->
+        listOf(AppSection.SHARE, AppSection.CARD, AppSection.SETTINGS).forEach { section ->
             val isSelected = section == selected
             NavigationBarItem(
                 selected = isSelected,
