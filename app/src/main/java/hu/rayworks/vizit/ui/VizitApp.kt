@@ -79,6 +79,8 @@ import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
 import hu.rayworks.vizit.ui.screens.ProfileWizardScreen
+import hu.rayworks.vizit.ui.screens.ProfileEditScreen
+import hu.rayworks.vizit.ui.screens.V9ProfileScreen
 import hu.rayworks.vizit.ui.screens.V9ShareHomeScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -108,6 +110,7 @@ fun VizitApp(
     var showCardAppearance by rememberSaveable { mutableStateOf(false) }
     var showDataVisibility by rememberSaveable { mutableStateOf(false) }
     var showScanner by rememberSaveable { mutableStateOf(false) }
+    var showProfileEdit by rememberSaveable { mutableStateOf(false) }
     var wizardCompleted by rememberSaveable { mutableStateOf(false) }
     var wizardSaving by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
@@ -156,11 +159,13 @@ fun VizitApp(
             showCardAppearance ||
             showDataVisibility ||
             showScanner ||
+            showProfileEdit ||
             selectedSection != AppSection.SHARE,
     ) {
         when {
             viewModel.isNfcShareActive -> viewModel.stopNfcShare()
             showScanner -> showScanner = false
+            showProfileEdit -> showProfileEdit = false
             showDataVisibility -> showDataVisibility = false
             showCardAppearance -> showCardAppearance = false
             showAnalytics -> showAnalytics = false
@@ -209,6 +214,15 @@ fun VizitApp(
         return
     }
 
+    if (showProfileEdit) {
+        ProfileEditScreen(
+            profile = viewModel.profile,
+            onSave = viewModel::saveProfile,
+            onClose = { showProfileEdit = false },
+        )
+        return
+    }
+
     if (showCardAppearance) {
         CardAppearanceScreen(
             profile = viewModel.profile,
@@ -247,11 +261,12 @@ fun VizitApp(
         Box(modifier = Modifier.weight(1f)) {
             if (viewModel.navigationLayoutMode == NavigationLayoutMode.ONE_SCREEN) {
                 when (selectedSection) {
-                    AppSection.CARD -> CardScreen(
+                    AppSection.CARD -> V9ProfileScreen(
                         profile = viewModel.profile,
                         presentation = viewModel.cardPresentation,
-                        onSave = viewModel::saveProfile,
-                        onShare = { selectedSection = AppSection.SHARE },
+                        synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
+                            !viewModel.profileSyncState.pendingChanges,
+                        onEdit = { showProfileEdit = true },
                         onOpenCardAppearance = { showCardAppearance = true },
                         onOpenDataVisibility = { showDataVisibility = true },
                     )
