@@ -45,6 +45,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var passwordRecovery by mutableStateOf(false)
         private set
+    var registrationConfirmationInProgress by mutableStateOf(false)
+        private set
 
     val canUseDebugLocalProfile: Boolean
         get() = BuildConfig.DEBUG && AppEnvironment.current == AppEnvironment.DEV
@@ -83,7 +85,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 name = name,
                 email = email,
                 password = password,
-                redirectUrl = "${BuildConfig.AUTH_SCHEME}://auth-callback",
+                redirectUrl = "${BuildConfig.AUTH_SCHEME}://auth-callback?flow=signup",
                 privacyPolicyVersion = BuildConfig.PRIVACY_POLICY_VERSION,
                 termsVersion = BuildConfig.TERMS_VERSION,
             )
@@ -161,17 +163,37 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun reportDeepLinkSuccess(isPasswordRecovery: Boolean) {
-        passwordRecovery = isPasswordRecovery
-        if (actionState is AuthActionState.Error) actionState = AuthActionState.Idle
+    fun beginDeepLink(callback: AuthCallback) {
+        registrationConfirmationInProgress = callback == AuthCallback.SignupConfirmation
+    }
+
+    fun reportDeepLinkSuccess(callback: AuthCallback) {
+        passwordRecovery = callback == AuthCallback.PasswordRecovery
+        if (callback != AuthCallback.SignupConfirmation) {
+            registrationConfirmationInProgress = false
+            if (actionState is AuthActionState.Error) actionState = AuthActionState.Idle
+            return
+        }
+        viewModelScope.launch {
+            actionState = AuthActionState.Loading(AuthOperation.EMAIL_CONFIRMATION)
+            runCatching { repositoryOrThrow().logout() }
+            settingsStore.clearAuthenticationCache()
+            actionState = AuthActionState.Success(
+                AuthOperation.EMAIL_CONFIRMATION,
+                "Az e-mail-címed megerősítve. Most jelentkezz be, és utána létrehozhatod az első profilodat.",
+            )
+            registrationConfirmationInProgress = false
+        }
     }
     fun clearActionState() { actionState = AuthActionState.Idle }
     fun reportDeepLinkError(error: Throwable) {
         passwordRecovery = false
+        registrationConfirmationInProgress = false
         actionState = AuthActionState.Error(operation = null, message = authErrorMessage(error))
     }
     fun reportDeepLinkErrorCode(code: String?) {
         passwordRecovery = false
+        registrationConfirmationInProgress = false
         actionState = AuthActionState.Error(operation = null, message = authCallbackErrorMessage(code))
     }
     fun reportUiError(message: String) {

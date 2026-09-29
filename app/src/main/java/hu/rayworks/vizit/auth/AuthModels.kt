@@ -20,6 +20,7 @@ sealed interface AuthActionState {
 enum class AuthOperation {
     LOGIN,
     REGISTER,
+    EMAIL_CONFIRMATION,
     PASSWORD_RESET_REQUEST,
     PASSWORD_UPDATE,
     GOOGLE_SIGN_IN,

@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets
 sealed interface AuthCallback {
     data object Generic : AuthCallback
     data object PasswordRecovery : AuthCallback
+    data object SignupConfirmation : AuthCallback
     data class Error(val code: String?) : AuthCallback
 }
 
@@ -24,10 +25,10 @@ object AuthCallbackParser {
         if (!errorCode.isNullOrBlank()) return AuthCallback.Error(errorCode)
 
         val flow = parameters["flow"] ?: parameters["type"]
-        return if (flow.equals("recovery", ignoreCase = true)) {
-            AuthCallback.PasswordRecovery
-        } else {
-            AuthCallback.Generic
+        return when {
+            flow.equals("recovery", ignoreCase = true) -> AuthCallback.PasswordRecovery
+            flow.equals("signup", ignoreCase = true) -> AuthCallback.SignupConfirmation
+            else -> AuthCallback.Generic
         }
     }
 
