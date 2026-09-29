@@ -3,8 +3,6 @@ package hu.rayworks.vizit.ui.design.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +19,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -159,8 +155,6 @@ fun VizitRow(
     onClick: (() -> Unit)? = null,
 ) {
     val colors = Vizit.colors
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
     val clickable = onClick != null && enabled
 
     val fg = when {
@@ -172,12 +166,9 @@ fun VizitRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(if (pressed && clickable) colors.sunken else Color.Transparent)
             .then(
                 if (clickable) {
                     Modifier.clickable(
-                        interactionSource = interaction,
-                        indication = null,
                         role = Role.Button,
                         onClick = onClick!!,
                     )
