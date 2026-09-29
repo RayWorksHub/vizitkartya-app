@@ -43,6 +43,7 @@ import hu.rayworks.vizit.auth.AuthActionState
 import hu.rayworks.vizit.auth.AuthOperation
 import hu.rayworks.vizit.auth.AuthValidator
 import hu.rayworks.vizit.data.card.CardPresentation
+import hu.rayworks.vizit.data.settings.NavigationLayoutMode
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.ThemeMode
@@ -70,7 +71,9 @@ fun SettingsScreen(
     syncState: ProfileSyncState,
     automaticSyncEnabled: Boolean,
     themeMode: ThemeMode,
+    navigationLayoutMode: NavigationLayoutMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onNavigationLayoutModeChange: (NavigationLayoutMode) -> Unit,
     onAutomaticSyncChanged: (Boolean) -> Unit,
     onRetrySync: () -> Unit,
     onResolveConflict: (Boolean) -> Unit,
@@ -174,6 +177,28 @@ fun SettingsScreen(
                 icon = Icons.Outlined.Nfc,
                 showChevron = false,
             )
+        }
+
+        VizitSectionHeader("Felület")
+        VizitGroup {
+            VizitRow(
+                label = "Navigáció",
+                supporting = "Választhatsz a háromfüles és az egyképernyős VIZIT között.",
+                icon = Icons.Outlined.Description,
+                showChevron = false,
+            )
+            VizitDivider()
+            Column(modifier = Modifier.padding(Vizit.space.md)) {
+                VizitSegmentedControl(
+                    options = listOf("Három fül", "Egy képernyő"),
+                    selectedIndex = if (navigationLayoutMode == NavigationLayoutMode.THREE_TABS) 0 else 1,
+                    onSelect = {
+                        onNavigationLayoutModeChange(
+                            if (it == 0) NavigationLayoutMode.THREE_TABS else NavigationLayoutMode.ONE_SCREEN,
+                        )
+                    },
+                )
+            }
         }
 
         // ---------- Sync
