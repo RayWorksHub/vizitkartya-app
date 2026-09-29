@@ -149,7 +149,9 @@ fun ProfileWizardScreen(
             if (key != "type") ProfileCard(profile = draft, presentation = presentation.copy(colorway = style))
             when (key) {
                 "type" -> {
-                    Text("Milyen névjegyet készítesz?", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
+                    Text("Hozzuk létre az első profilodat", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
+                    Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.", color = Vizit.colors.textMuted)
+                    Text("Milyen névjegyet készítesz?", style = Vizit.type.h3, color = Vizit.colors.textPrimary)
                     WizardChoice("Vállalkozói névjegy", "Vállalkozás, beosztás, logó és bemutatkozás", type == "business") { type = "business" }
                     WizardChoice("Magánszemély", "Személyes kapcsolatokhoz, csak a lényeg", type == "private") {
                         type = "private"; draft = draft.copy(company = "", jobTitle = "", bio = "", logoBase64 = "")

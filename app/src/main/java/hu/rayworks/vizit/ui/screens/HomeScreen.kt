@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
+import hu.rayworks.vizit.data.AppFeatureFlags
 import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
@@ -79,6 +80,7 @@ fun HomeScreen(
     onOpenCRM: () -> Unit,
     onOpenOnlineEditor: () -> Unit,
     onShareAsText: (Context) -> Unit,
+    featureFlags: AppFeatureFlags = AppFeatureFlags(),
     modifier: Modifier = Modifier,
     onOpenScanner: () -> Unit = {},
     presentation: CardPresentation = CardPresentation(),
@@ -141,13 +143,15 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f),
                     onClick = onOpenShare,
                 )
-                QuickTile(
-                    icon = Icons.Outlined.QrCodeScanner,
-                    title = "Beolvasás",
-                    subtitle = "Új kapcsolat",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenScanner,
-                )
+                if (featureFlags.qrScanner) {
+                    QuickTile(
+                        icon = Icons.Outlined.QrCodeScanner,
+                        title = "Beolvasás",
+                        subtitle = "Új kapcsolat",
+                        modifier = Modifier.weight(1f),
+                        onClick = onOpenScanner,
+                    )
+                }
                 QuickTile(
                     icon = Icons.Outlined.ContentCopy,
                     title = "Egyéb",
@@ -179,30 +183,38 @@ fun HomeScreen(
             }
 
             VizitGroup {
-                VizitRow(
-                    label = "Vállalkozói Portál",
-                    supporting = "VOSZ, edukáció, digitális segítség és eszköztár",
-                    icon = Icons.AutoMirrored.Outlined.MenuBook,
-                    onClick = onOpenKnowledgeHub,
-                )
-                VizitRow(
-                    label = "Statisztikák",
-                    supporting = "Profilmegtekintés, mentések és kattintások · 30 nap",
-                    icon = Icons.Outlined.BarChart,
-                    onClick = onOpenAnalytics,
-                )
-                VizitRow(
-                    label = "CRM",
-                    supporting = "Partnerek, ügyletek, feladatok és ajánlatok a webes munkatérben",
-                    icon = Icons.Outlined.BusinessCenter,
-                    onClick = onOpenCRM,
-                )
-                VizitRow(
-                    label = "Online névjegy szerkesztése",
-                    supporting = "A nyilvános profil színei, logója és közösségi hivatkozásai",
-                    icon = Icons.Outlined.Edit,
-                    onClick = onOpenOnlineEditor,
-                )
+                if (featureFlags.businessPortal) {
+                    VizitRow(
+                        label = "Vállalkozói Portál",
+                        supporting = "VOSZ, edukáció, digitális segítség és eszköztár",
+                        icon = Icons.AutoMirrored.Outlined.MenuBook,
+                        onClick = onOpenKnowledgeHub,
+                    )
+                }
+                if (featureFlags.analytics) {
+                    VizitRow(
+                        label = "Statisztikák",
+                        supporting = "Profilmegtekintés, mentések és kattintások · 30 nap",
+                        icon = Icons.Outlined.BarChart,
+                        onClick = onOpenAnalytics,
+                    )
+                }
+                if (featureFlags.crm) {
+                    VizitRow(
+                        label = "CRM",
+                        supporting = "Partnerek, ügyletek, feladatok és ajánlatok a webes munkatérben",
+                        icon = Icons.Outlined.BusinessCenter,
+                        onClick = onOpenCRM,
+                    )
+                }
+                if (featureFlags.onlineEditor) {
+                    VizitRow(
+                        label = "Online névjegy szerkesztése",
+                        supporting = "A nyilvános profil színei, logója és közösségi hivatkozásai",
+                        icon = Icons.Outlined.Edit,
+                        onClick = onOpenOnlineEditor,
+                    )
+                }
             }
 
             Spacer(Modifier.height(Vizit.space.md))
