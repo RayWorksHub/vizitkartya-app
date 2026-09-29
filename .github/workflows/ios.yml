@@ -156,7 +156,7 @@ jobs:
           set -o pipefail
           args=(-project ios/VIZIT.xcodeproj -scheme VIZIT -configuration Debug)
           args+=(-destination "platform=iOS Simulator,id=$IPHONE_ID" -derivedDataPath "$RUNNER_TEMP/vizit")
-          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" -disableAutomaticPackageResolution)
+          args+=(-clonedSourcePackagesDirPath "$RUNNER_TEMP/spm")
           args+=(-resultBundlePath "$RUNNER_TEMP/VIZIT-iPhone.xcresult" -parallel-testing-enabled NO)
           args+=(ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
           args+=(VIZIT_SUPABASE_URL="$VIZIT_SUPABASE_URL" VIZIT_SUPABASE_KEY="$VIZIT_SUPABASE_KEY")
