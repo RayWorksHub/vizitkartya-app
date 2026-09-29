@@ -854,6 +854,7 @@ private struct V9ShareHome: View {
                         VStack(spacing: VizitSpace.md) {
                             Text(store.profile.displayName.isEmpty ? "VIZIT profil" : store.profile.displayName)
                                 .font(VizitFont.h3)
+                                .accessibilityIdentifier("v9.profileName")
                                 .foregroundStyle(VizitColor.textPrimary)
                                 .multilineTextAlignment(.center)
 
@@ -866,6 +867,7 @@ private struct V9ShareHome: View {
                                     .background(Color.white)
                                     .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
                                     .accessibilityLabel("VIZIT profil QR-kód")
+                                    .accessibilityIdentifier("v9.qr")
                             } else {
                                 VStack(spacing: VizitSpace.sm) {
                                     Image(systemName: "qrcode")
