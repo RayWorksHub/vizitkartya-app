@@ -1080,7 +1080,7 @@ private struct V9ProfileDestination: View {
                             VizitRow(
                                 label: "Profiljaid",
                                 systemImage: "person.crop.circle",
-                                supporting: "1 profil · a jelenlegi adatmodell egy aktív profilt kezel",
+                                supporting: "1 profil",
                                 showsChevron: false
                             )
                         }
