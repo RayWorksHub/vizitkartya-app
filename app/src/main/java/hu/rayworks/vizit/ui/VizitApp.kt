@@ -258,6 +258,7 @@ fun VizitApp(
 
         ProfileSwitcherBar(
             profiles = viewModel.accountProfiles,
+            activeProfileId = viewModel.activeProfileId,
             multiProfileEnabled = viewModel.featureFlags.multiProfile,
             busy = viewModel.profileCatalogBusy,
             message = viewModel.profileCatalogMessage,

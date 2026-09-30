@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -372,21 +373,34 @@ fun Dots(count: Int, selected: Int, onPick: (Int) -> Unit) {
 @Composable
 fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
     val pager = rememberPagerState(initialPage = app.selected) { app.profiles.size + 1 }
-    LaunchedEffect(pager) {
-        snapshotFlow { pager.currentPage }.collect { app.selected = it }
-    }
     var handled by remember { mutableStateOf(app.goToRequest?.nonce) }
+    var applyingNavigation by remember { mutableStateOf(false) }
+    LaunchedEffect(pager) {
+        snapshotFlow {
+            Triple(pager.settledPage, pager.isScrollInProgress || applyingNavigation, app.goToRequest?.nonce != handled)
+        }.collect { (page, scrolling, pendingNavigation) ->
+            if (!scrolling && !pendingNavigation) app.selected = page
+        }
+    }
     val req = app.goToRequest
     LaunchedEffect(req) {
         if (req != null && req.nonce != handled) {
+            applyingNavigation = true
             handled = req.nonce
-            if (req.animate) pager.animateScrollToPage(req.index) else pager.scrollToPage(req.index)
+            try {
+                val index = req.index.coerceIn(0, app.profiles.size)
+                if (req.animate) pager.animateScrollToPage(index) else pager.scrollToPage(index)
+            } finally {
+                applyingNavigation = false
+            }
         }
     }
     Column(modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pager,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("profile-pager"),
+            key = { index -> app.profiles.getOrNull(index)?.id ?: "new-profile" },
+            userScrollEnabled = !app.operationBusy,
             contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 6.dp, bottom = 20.dp),
             pageSpacing = 12.dp,
             verticalAlignment = Alignment.Top,
@@ -395,7 +409,7 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
             if (i < list.size) {
                 ProfileCard(list[i], qr = app.cardQr(list[i]), onQr = { app.openFullQr(i) })
             } else {
-                NewProfileCard(list.first(), onCreate = { app.openWizard() })
+                NewProfileCard(list.firstOrNull() ?: app.focus, onCreate = { app.openWizard() })
             }
         }
         Dots(count = app.profiles.size, selected = app.selected, onPick = { app.goTo(it) })

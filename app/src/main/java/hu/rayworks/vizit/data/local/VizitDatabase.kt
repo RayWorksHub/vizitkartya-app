@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import hu.rayworks.vizit.data.account.AccountProfileDao
+import hu.rayworks.vizit.data.account.AccountProfileEntity
+import hu.rayworks.vizit.data.account.AccountProfileSelection
 
 @Database(
     entities = [
@@ -16,12 +19,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProfileFieldSettingsEntity::class,
         ProfileSyncMetadataEntity::class,
         ProfileSyncOutboxEntity::class,
+        AccountProfileEntity::class,
+        AccountProfileSelection::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class VizitDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
+    abstract fun accountProfileDao(): AccountProfileDao
 
     companion object {
         @Volatile
@@ -93,12 +99,33 @@ abstract class VizitDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Keep the old snapshots/outbox intact. They cannot be sent safely without a profile ID.
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS account_profile_cache (
+                        ownerId TEXT NOT NULL, profileId TEXT NOT NULL, payloadJson TEXT NOT NULL,
+                        serverVersion INTEGER NOT NULL, isDefault INTEGER NOT NULL, createdAt TEXT NOT NULL,
+                        presentationJson TEXT NOT NULL, status TEXT NOT NULL, operationId TEXT,
+                        attemptCount INTEGER NOT NULL, nextAttemptAtEpochMs INTEGER NOT NULL,
+                        lastSyncedAtEpochMs INTEGER, lastError TEXT, conflictJson TEXT, conflictVersion INTEGER,
+                        PRIMARY KEY(ownerId, profileId)
+                    )
+                """.trimIndent())
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS account_profile_selection (
+                        ownerId TEXT NOT NULL PRIMARY KEY, profileId TEXT NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun get(context: Context): VizitDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 VizitDatabase::class.java,
                 "vizit.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { instance = it }
         }

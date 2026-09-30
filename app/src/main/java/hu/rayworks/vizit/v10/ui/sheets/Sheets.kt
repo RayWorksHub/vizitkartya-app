@@ -147,8 +147,9 @@ fun MenuSheet(app: AppState) {
             ) {
                 ProfileAvatar(p, 48.dp, V.blueSoft, V.blue)
                 Column(Modifier.weight(1f)) {
-                    Text(p.name, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (p.email.isNotBlank()) Text(p.email, fontSize = 13.sp, color = V.sub, maxLines = 1)
+                    Text(if (app.productionMode) app.accountName else p.name, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val email = if (app.productionMode) app.accountEmail else p.email
+                    if (email.isNotBlank()) Text(email, fontSize = 13.sp, color = V.sub, maxLines = 1)
                 }
                 SyncPill(app)
             }

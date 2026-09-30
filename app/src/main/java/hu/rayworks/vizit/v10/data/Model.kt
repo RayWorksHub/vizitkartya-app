@@ -109,6 +109,7 @@ data class Profile(
     val vis: Map<String, Boolean> = VIS_FIELDS.associate { it.first to true },
     val tag: String? = null,
     val fresh: Boolean = false,
+    val cloudSynced: Boolean = true,
 ) {
     val preset: Preset get() = preset(presetId)
     /** A címke pöttyének színe = a kártya színvilága. */
@@ -223,7 +224,7 @@ class RuntimeBindings(
     val onBeginAdditionalProfile: () -> String? = { null },
     val onCancelAdditionalProfile: () -> Unit = {},
     val onCreateAdditionalProfile: (Profile, Boolean) -> Unit = { _, _ -> },
-    val onDeleteActiveProfile: () -> Unit = {},
+    val onDeleteActiveProfile: (String) -> Unit = {},
     val onPresentationChanged: (Profile) -> Unit = {},
     val onAutomaticSyncChanged: (Boolean) -> Unit = {},
     val onRetrySync: () -> Unit = {},
@@ -251,6 +252,10 @@ class AppState(
     val profiles = mutableStateListOf<Profile>().apply { addAll(initialProfiles) }
 
     var runtime: RuntimeBindings? = null
+    var accountName by mutableStateOf("")
+    var accountEmail by mutableStateOf("")
+    private val emptyProfile = Profile(id = "empty-profile", label = "VIZIT", real = true, name = "")
+    private val draftIds = mutableSetOf<String>()
 
     private var selectedIndex by mutableIntStateOf(0)
 
@@ -263,6 +268,7 @@ class AppState(
         get() = selectedIndex
         set(value) {
             val safeValue = value.coerceIn(0, profiles.size)
+            if (safeValue == selectedIndex) return
             selectedIndex = safeValue
             if (safeValue < profiles.size) {
                 lastProfileIndex = safeValue
@@ -274,8 +280,8 @@ class AppState(
     val current: Profile? get() = profiles.getOrNull(selected)
 
     /** Amit a szerkesztő, a megjelenés és a statisztika mutat: a kiválasztott, vagy az utoljára kiválasztott profil. */
-    val focus: Profile get() = current ?: profiles[lastProfileIndex.coerceIn(0, profiles.lastIndex)]
-    val focusIndex: Int get() = if (selected < profiles.size) selected else lastProfileIndex.coerceIn(0, profiles.lastIndex)
+    val focus: Profile get() = current ?: profiles.getOrNull(lastProfileIndex) ?: emptyProfile
+    val focusIndex: Int get() = if (selected < profiles.size) selected else lastProfileIndex.coerceIn(0, profiles.lastIndex.coerceAtLeast(0))
 
     private var synchronizingProfiles = false
 
@@ -295,6 +301,7 @@ class AppState(
     var wizard by mutableStateOf<hu.rayworks.vizit.v10.ui.wizard.WizardState?>(null)
     var wizardOpen by mutableStateOf(false)
     private var initialProfileWizard = false
+    private var initialProfileWizardShown = false
 
     // Éles funkciók demó állapota
     var offline by mutableStateOf(false)
@@ -404,10 +411,13 @@ class AppState(
 
     /** A szerkesztő mindig a fókuszban lévő profilt írja. */
     fun updateFocus(change: (Profile) -> Profile) {
+        if (profiles.isEmpty()) return
         val i = focusIndex
         val before = profiles[i]
-        val after = change(before)
+        val changed = change(before)
+        val after = if (before.label == before.name && changed.name != before.name) changed.copy(label = changed.name) else changed
         profiles[i] = after
+        if (before != after) draftIds.add(after.id)
         if (
             before.presetId != after.presetId || before.layout != after.layout ||
             before.showPhoto != after.showPhoto || before.showQr != after.showQr ||
@@ -462,7 +472,8 @@ class AppState(
     val synced: Boolean get() = sync == SyncStatus.Synced
 
     /** Profil QR: nyilvános profil, profilcím és sikeres szinkron kell hozzá. */
-    fun profileQrAvailable(p: Profile): Boolean = p.isPublic && p.slug.length >= 3 && synced && (p.real || p.fresh)
+    fun profileQrAvailable(p: Profile): Boolean = p.isPublic && p.slug.length >= 3 &&
+        (if (productionMode) p.cloudSynced else synced) && (p.real || p.fresh)
 
     fun publicUrl(p: Profile): String =
         if (p.domainVerified && p.customDomain.isNotBlank()) "https://" + p.customDomain.trim() else p.url
@@ -518,7 +529,7 @@ class AppState(
     /** Új profil csak online, szinkronizált fiókhoz (éles üzenetekkel). */
     fun openWizard() {
         sheet = null
-        if (!multiProfileEnabled) {
+        if (!multiProfileEnabled && profiles.isNotEmpty()) {
             toast("A többprofilos funkció most nem érhető el.")
             return
         }
@@ -531,7 +542,7 @@ class AppState(
                 toast("Új profilt csak bejelentkezett, online fiókhoz lehet létrehozni.")
                 return
             }
-            sync == SyncStatus.Pending || sync == SyncStatus.Syncing || sync == SyncStatus.Conflict -> {
+            !productionMode && (sync == SyncStatus.Pending || sync == SyncStatus.Syncing || sync == SyncStatus.Conflict) -> {
                 toast("Előbb várd meg a jelenlegi profil szinkronizálását.")
                 return
             }
@@ -540,14 +551,15 @@ class AppState(
         initialProfileWizard = false
         wizard = hu.rayworks.vizit.v10.ui.wizard.WizardState(
             takenSlugs = { profiles.map { it.slug }.filter { it.isNotEmpty() } },
-            initialName = focus.name,
+            initialName = "",
         )
         wizardOpen = true
     }
 
     /** Első, még üres fiókprofil létrehozása ugyanazzal a teljes ZIP-varázslóval. */
     fun openInitialProfileWizard() {
-        if (wizardOpen) return
+        if (wizardOpen || initialProfileWizardShown) return
+        initialProfileWizardShown = true
         initialProfileWizard = true
         wizard = hu.rayworks.vizit.v10.ui.wizard.WizardState(
             takenSlugs = { profiles.map { it.slug }.filter(String::isNotEmpty) },
@@ -572,11 +584,7 @@ class AppState(
     /** Publikálás után: új kártya a lapozó végére, odagörgetés, üzenet. */
     fun addPublished(profile: Profile, isPublic: Boolean) {
         if (productionMode) {
-            if (initialProfileWizard) {
-                runtime?.onSaveProfile?.invoke(profile.copy(isPublic = isPublic))
-            } else {
-                runtime?.onCreateAdditionalProfile?.invoke(profile, isPublic)
-            }
+            runtime?.onCreateAdditionalProfile?.invoke(profile, isPublic)
             return
         }
         profiles.add(profile)
@@ -604,7 +612,7 @@ class AppState(
             onConfirm = {
                 if (productionMode) {
                     sheet = null
-                    runtime?.onDeleteActiveProfile?.invoke()
+                    runtime?.onDeleteActiveProfile?.invoke(p.id)
                 } else {
                     val i = profiles.indexOf(p)
                     if (i >= 0) {
@@ -655,6 +663,10 @@ class AppState(
         wizard = null
         wizardOpen = false
         initialProfileWizard = false
+        initialProfileWizardShown = false
+        draftIds.clear()
+        accountName = ""
+        accountEmail = ""
         operationBusy = false
         sync = SyncStatus.LocalOnly
         gate = Gate.Loading
@@ -695,24 +707,37 @@ class AppState(
 
     /** A valódi profilkatalógus atomikus betöltése a lapozóba. */
     fun replaceProfiles(values: List<Profile>, activeId: String?) {
-        if (values.isEmpty()) return
+        val oldIds = profiles.map { it.id }
+        val oldSelected = selectedIndex
+        val wasNewCard = selectedIndex == profiles.size
+        val oldFocusId = focus.id
+        val drafts = profiles.filter { it.id in draftIds }.associateBy { it.id }
+        val replacement = values.map { drafts[it.id] ?: it }
         synchronizingProfiles = true
         try {
             profiles.clear()
-            profiles.addAll(values)
+            profiles.addAll(replacement)
             val active = values.indexOfFirst { it.id == activeId }.takeIf { it >= 0 } ?: 0
-            selectedIndex = active
+            selectedIndex = if (wasNewCard && oldFocusId == activeId) values.size else active
             lastProfileIndex = active
-            goToRequest = GoTo(active, animate = false)
+            draftIds.retainAll(values.map { it.id }.toSet())
+            if (oldIds != values.map { it.id } || oldSelected != selectedIndex) {
+                goToRequest = GoTo(selectedIndex, animate = false)
+            }
         } finally {
             synchronizingProfiles = false
         }
     }
 
+    fun confirmSaved(saved: Profile) {
+        if (profiles.firstOrNull { it.id == saved.id } == saved) draftIds.remove(saved.id)
+    }
+
     /** Külső megjelenés-változás csak a kártyamezőket írja felül. */
     fun applyPresentation(source: Profile) {
         if (profiles.isEmpty()) return
-        val i = focusIndex
+        val i = profiles.indexOfFirst { it.id == source.id }
+        if (i < 0) return
         profiles[i] = profiles[i].copy(
             presetId = source.presetId,
             layout = source.layout,
