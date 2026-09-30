@@ -114,6 +114,11 @@ class ProfilePagerInstrumentedTest {
             if (color == Color.RED) assertTrue(Color.red(pixel) > 200 && Color.blue(pixel) < 40)
             else assertTrue(Color.blue(pixel) > 200 && Color.red(pixel) < 40)
         }
+        val node = compose.onNodeWithTag("profile-pager").fetchSemanticsNode()
+        val scroll = node.config[SemanticsProperties.HorizontalScrollAxisRange]
+        val index = app.profiles.indexOfFirst { it.id == id }
+        assertEquals("Visible pager page must match the selected profile", index * scroll.maxValue() / app.profiles.size,
+            scroll.value(), 1f)
     }
 
     @Test fun repeatedSwipesKeepNamePhotoQrAndLoginIdentityTogether() {

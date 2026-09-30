@@ -391,7 +391,12 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
             handled = req.nonce
             try {
                 val index = req.index.coerceIn(0, app.profiles.size)
-                if (req.animate) pager.animateScrollToPage(index) else pager.scrollToPage(index)
+                if (req.animate) pager.animateScrollToPage(index) else {
+                    // Apply catalog changes and the requested selection in the same remeasure.
+                    // An immediate scroll can measure the old "new-profile" key and retain it
+                    // at the end of the newly loaded catalog while AppState still selects 0.
+                    pager.requestScrollToPage(index)
+                }
             } finally {
                 applyingNavigation = false
             }
