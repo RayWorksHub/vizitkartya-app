@@ -14,7 +14,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.TargetedFlingBehavior
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.testTag
@@ -375,6 +381,33 @@ fun Dots(count: Int, selected: Int, onPick: (Int) -> Unit) {
 @Composable
 fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
     val pager = rememberPagerState(initialPage = app.selected) { app.profiles.size + 1 }
+    var swipeStart by remember(pager) { mutableStateOf<Int?>(null) }
+    val snapDistance = remember(pager) {
+        object : PagerSnapDistance {
+            override fun calculateTargetPage(startPage: Int, suggestedTargetPage: Int, velocity: Float,
+                                             pageSize: Int, pageSpacing: Int): Int {
+                // The fling's startPage can already be the next page after a long drag.
+                // Bound the WHOLE gesture to one neighbor of the page touched initially.
+                val origin = swipeStart ?: startPage
+                return suggestedTargetPage.coerceIn((origin - 1).coerceAtLeast(0),
+                    (origin + 1).coerceAtMost(pager.pageCount - 1))
+            }
+        }
+    }
+    val snapping = PagerDefaults.flingBehavior(pager, pagerSnapDistance = snapDistance)
+    val fling = remember(snapping) {
+        object : TargetedFlingBehavior {
+            override suspend fun ScrollScope.performFling(initialVelocity: Float,
+                                                         onRemainingDistanceUpdated: (Float) -> Unit): Float {
+                val scrollScope = this
+                try {
+                    return with(snapping) { scrollScope.performFling(initialVelocity, onRemainingDistanceUpdated) }
+                } finally {
+                    swipeStart = null
+                }
+            }
+        }
+    }
     var handled by remember { mutableStateOf(app.goToRequest?.nonce) }
     var applyingNavigation by remember { mutableStateOf(false) }
     LaunchedEffect(pager) {
@@ -405,10 +438,17 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pager,
-            modifier = Modifier.fillMaxWidth().testTag("profile-pager"),
+            modifier = Modifier.fillMaxWidth().testTag("profile-pager").pointerInput(pager) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    swipeStart = pager.settledPage
+                    waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                    if (!pager.isScrollInProgress) swipeStart = null
+                }
+            },
             key = { index -> app.profiles.getOrNull(index)?.id ?: "new-profile" },
             userScrollEnabled = !app.operationBusy,
-            flingBehavior = PagerDefaults.flingBehavior(pager, pagerSnapDistance = PagerSnapDistance.atMost(1)),
+            flingBehavior = fling,
             contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 6.dp, bottom = 20.dp),
             pageSpacing = 12.dp,
             verticalAlignment = Alignment.Top,
