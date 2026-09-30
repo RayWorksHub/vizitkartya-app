@@ -30,4 +30,11 @@ A szinkronizáló script:
 
 Az iOS `CURRENT_PROJECT_VERSION` külön buildszám. A TestFlight CI ezt a GitHub Actions futásszámából állítja elő, ezért nem kell megegyeznie az Android `versionCode` értékével.
 
-Jelenlegi közös publikus verzió: **8.7.3**. Android `versionCode`: **8070003**.
+Jelenlegi közös publikus verzió: **9.0.0**. Android `versionCode`: **9000000**.
+
+## 9.0.0 – több profil egy fiókban
+
+- A profilválasztó csak akkor enged új profilt létrehozni, amikor az éles `multi_profile` funkciókapcsoló aktív.
+- A kiválasztott mobilprofil egyben a fiók alapértelmezett profilja, ezért a 8.x kliensek ugyanazt az aktív profilt látják.
+- Profilváltás és profiltörlés csak tiszta, ütközésmentes szinkronállapotban indulhat.
+- A mobilalkalmazás az aktív profilt tartja offline gyorsítótárban; másik profilra váltáshoz hálózati kapcsolat szükséges.
