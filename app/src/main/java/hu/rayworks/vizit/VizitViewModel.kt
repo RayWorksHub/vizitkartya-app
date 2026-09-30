@@ -13,8 +13,10 @@ import androidx.lifecycle.viewModelScope
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.ContactProfileValidator
 import hu.rayworks.vizit.data.AppFeatureFlags
+import hu.rayworks.vizit.data.remote.AccountProfile
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncRunResult
+import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.nfc.HcePayloadStore
 import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.data.card.visibleThrough
@@ -34,6 +36,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsStore = container.settingsStore
     private val cardPresentationStore = container.cardPresentationStore
     private val featureFlagRepository = container.featureFlagRepository
+    private val profileCatalog = container.profileCatalog
     private val hcePayloadStore = HcePayloadStore()
     private var profileObservationJob: Job? = null
     private var nfcTimeoutJob: Job? = null
@@ -51,6 +54,18 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var featureFlags by mutableStateOf(AppFeatureFlags())
+        private set
+
+    var accountProfiles by mutableStateOf<List<AccountProfile>>(emptyList())
+        private set
+
+    var profileCatalogBusy by mutableStateOf(false)
+        private set
+
+    var profileCatalogMessage by mutableStateOf<String?>(null)
+        private set
+
+    var creatingAdditionalProfile by mutableStateOf(false)
         private set
 
     /** User-selected appearance. Light is the product default. */
@@ -105,10 +120,13 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun bindProfileOwner(userId: String, enableCloudSync: Boolean) {
-        if (enableCloudSync) {
-            viewModelScope.launch { featureFlags = featureFlagRepository.fetch() }
-        }
         if (activeProfileOwnerId == userId && cloudSyncEnabled == enableCloudSync) {
+            if (enableCloudSync) {
+                viewModelScope.launch {
+                    featureFlags = featureFlagRepository.fetch()
+                    refreshProfileCatalog()
+                }
+            }
             viewModelScope.launch {
                 repository.prepare(
                     userId = userId,
@@ -119,11 +137,20 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         }
         activeProfileOwnerId = userId
         cloudSyncEnabled = enableCloudSync
+        accountProfiles = emptyList()
+        profileCatalogMessage = null
+        creatingAdditionalProfile = false
         profile = ContactProfile()
         profileSyncState = ProfileSyncState()
         hasOfflineProfileSession = false
         profileLoadStatus = ProfileLoadStatus.LOADING
         profileObservationJob?.cancel()
+        if (enableCloudSync) {
+            viewModelScope.launch {
+                featureFlags = featureFlagRepository.fetch()
+                refreshProfileCatalog()
+            }
+        }
         profileObservationJob = viewModelScope.launch {
             val initialResult = repository.prepare(
                 userId = userId,
@@ -169,6 +196,116 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         )
         stopNfcShare()
         return null
+    }
+
+    fun beginAdditionalProfile(): String? {
+        if (!featureFlags.multiProfile) return "A többprofilos funkció még nincs bekapcsolva."
+        if (!cloudSyncEnabled) return "Új profilt csak bejelentkezett, online fiókhoz lehet létrehozni."
+        if (profileSyncState.pendingChanges || profileSyncState.status == ProfileSyncStatus.CONFLICT) {
+            return "Előbb várd meg a jelenlegi profil szinkronizálását."
+        }
+        creatingAdditionalProfile = true
+        profileCatalogMessage = null
+        return null
+    }
+
+    fun cancelAdditionalProfile() {
+        creatingAdditionalProfile = false
+    }
+
+    suspend fun createAdditionalProfile(updatedProfile: ContactProfile): String? {
+        val validationError = ContactProfileValidator.validate(updatedProfile)
+        if (validationError != null) return validationError
+        val userId = activeProfileOwnerId ?: return "A profil munkamenete még nem áll készen."
+        if (!featureFlags.multiProfile || !cloudSyncEnabled) return "A többprofilos funkció most nem érhető el."
+        if (profileSyncState.pendingChanges || profileSyncState.status == ProfileSyncStatus.CONFLICT) {
+            return "Előbb várd meg a jelenlegi profil szinkronizálását."
+        }
+        profileCatalogBusy = true
+        profileCatalogMessage = null
+        return try {
+            profileCatalog.create(updatedProfile)
+            reloadDefaultProfile(userId)
+            profileCatalogMessage = "Az új profil elkészült és aktív."
+            null
+        } catch (failure: Exception) {
+            failure.localizedMessage ?: "Az új profil nem hozható létre."
+        } finally {
+            profileCatalogBusy = false
+        }
+    }
+
+    fun switchProfile(profileId: String) {
+        val userId = activeProfileOwnerId ?: return
+        if (profileCatalogBusy || accountProfiles.firstOrNull { it.isDefault }?.id == profileId) return
+        if (profileSyncState.pendingChanges || profileSyncState.status == ProfileSyncStatus.CONFLICT) {
+            profileCatalogMessage = "Előbb várd meg a jelenlegi profil szinkronizálását."
+            return
+        }
+        viewModelScope.launch {
+            profileCatalogBusy = true
+            profileCatalogMessage = null
+            try {
+                profileCatalog.makeDefault(profileId)
+                reloadDefaultProfile(userId)
+                profileCatalogMessage = "Profil átváltva."
+            } catch (failure: Exception) {
+                profileCatalogMessage = failure.localizedMessage ?: "A profilváltás nem sikerült."
+            } finally {
+                profileCatalogBusy = false
+            }
+        }
+    }
+
+    fun deleteActiveProfile() {
+        val userId = activeProfileOwnerId ?: return
+        val active = accountProfiles.firstOrNull { it.isDefault } ?: return
+        if (profileCatalogBusy) return
+        if (profileSyncState.pendingChanges || profileSyncState.status == ProfileSyncStatus.CONFLICT) {
+            profileCatalogMessage = "Előbb várd meg a jelenlegi profil szinkronizálását."
+            return
+        }
+        viewModelScope.launch {
+            profileCatalogBusy = true
+            profileCatalogMessage = null
+            try {
+                profileCatalog.delete(active.id)
+                reloadDefaultProfile(userId)
+                profileCatalogMessage = "A profil törölve."
+            } catch (failure: Exception) {
+                profileCatalogMessage = failure.localizedMessage ?: "A profil nem törölhető."
+            } finally {
+                profileCatalogBusy = false
+            }
+        }
+    }
+
+    fun clearProfileCatalogMessage() {
+        profileCatalogMessage = null
+    }
+
+    private suspend fun reloadDefaultProfile(userId: String) {
+        profileLoadStatus = ProfileLoadStatus.LOADING
+        stopNfcShare()
+        repository.deleteLocalProfile(userId)
+        val result = repository.prepare(userId = userId, cloudSyncEnabled = cloudSyncEnabled)
+        refreshProfileCatalog()
+        profileLoadStatus = when {
+            profile.resolvedDisplayName.isNotBlank() -> ProfileLoadStatus.READY
+            result == ProfileSyncRunResult.RETRY || result == ProfileSyncRunResult.WAITING_FOR_SESSION ->
+                ProfileLoadStatus.UNAVAILABLE
+            else -> ProfileLoadStatus.READY
+        }
+    }
+
+    private suspend fun refreshProfileCatalog() {
+        runCatching { profileCatalog.list() }
+            .onSuccess { accountProfiles = it }
+            .onFailure {
+                if (accountProfiles.isEmpty()) {
+                    profileCatalogMessage = "A profillista most nem frissíthető."
+                }
+            }
     }
 
     var conflictResolutionMessage by mutableStateOf<String?>(null)

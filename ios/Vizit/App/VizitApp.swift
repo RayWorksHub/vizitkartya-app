@@ -56,6 +56,9 @@ final class AppStore: ObservableObject {
     @Published private(set) var storageError: String?
     @Published private(set) var message: String?
     @Published private(set) var busy = false
+    @Published private(set) var accountProfiles: [AccountProfile] = []
+    @Published private(set) var profileCatalogBusy = false
+    @Published private(set) var creatingAdditionalProfile = false
 
     private(set) var configuration: AppConfiguration?
     private var cloud: CloudService?
@@ -288,6 +291,107 @@ final class AppStore: ObservableObject {
         storageError = nil
         syncStatus = uiTesting ? .localOnly : .pending
         if !uiTesting { Task { await synchronize() } }
+    }
+
+    func beginAdditionalProfile() {
+        guard featureFlags.multiProfile else {
+            message = "A többprofilos funkció még nincs bekapcsolva."
+            return
+        }
+        guard authStatus == .authenticated, profileCatalogReady else {
+            message = "Előbb várd meg a jelenlegi profil szinkronizálását."
+            return
+        }
+        creatingAdditionalProfile = true
+        message = nil
+    }
+
+    func cancelAdditionalProfile() {
+        creatingAdditionalProfile = false
+    }
+
+    func createAdditionalProfile(_ draft: ContactProfile) async throws {
+        try draft.validate()
+        guard featureFlags.multiProfile, authStatus == .authenticated,
+              let cloud, let id = userID, profileCatalogReady else {
+            throw CloudError.profileCatalogUnavailable
+        }
+        profileCatalogBusy = true
+        defer { profileCatalogBusy = false }
+        let remote = try await cloud.createProfile(ownerID: id, profileID: UUID(), profile: draft.normalized)
+        do {
+            try await cloud.syncSocialProfiles(profileID: remote.id, value: draft.normalized, expected: ContactProfile())
+            try await cloud.makeDefaultProfile(ownerID: id, profileID: remote.id)
+        } catch {
+            try? await cloud.deleteProfile(ownerID: id, profileID: remote.id)
+            throw error
+        }
+        try await loadCurrentDefaultProfile()
+        await refreshProfileCatalog()
+    }
+
+    func switchProfile(_ profileID: UUID) async {
+        guard !profileCatalogBusy,
+              accountProfiles.first(where: { $0.isDefault })?.id != profileID,
+              let cloud, let id = userID, profileCatalogReady else {
+            if !profileCatalogReady { message = "Előbb várd meg a jelenlegi profil szinkronizálását." }
+            return
+        }
+        profileCatalogBusy = true
+        defer { profileCatalogBusy = false }
+        do {
+            try await cloud.makeDefaultProfile(ownerID: id, profileID: profileID)
+            try await loadCurrentDefaultProfile()
+            await refreshProfileCatalog()
+            message = "Profil átváltva."
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    func deleteActiveProfile() async {
+        guard !profileCatalogBusy, let active = accountProfiles.first(where: { $0.isDefault }),
+              let cloud, let id = userID, profileCatalogReady else {
+            if !profileCatalogReady { message = "Előbb várd meg a jelenlegi profil szinkronizálását." }
+            return
+        }
+        profileCatalogBusy = true
+        defer { profileCatalogBusy = false }
+        do {
+            let deletingLast = accountProfiles.count == 1
+            try await cloud.deleteProfile(ownerID: id, profileID: active.id)
+            if deletingLast {
+                try fileStore?.reset()
+                try syncStore?.reset()
+                profile = ContactProfile()
+                profileRevision &+= 1
+                syncStatus = .localOnly
+                accountProfiles = []
+                profileLoadStatus = .ready
+            } else {
+                try await loadCurrentDefaultProfile()
+                await refreshProfileCatalog()
+            }
+            message = "A profil törölve."
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private var profileCatalogReady: Bool {
+        guard !syncInFlight, syncStatus != .conflict, let syncStore,
+              let metadata = try? syncStore.load() else { return false }
+        return !metadata.pendingUpload && !metadata.conflict
+    }
+
+    private func loadCurrentDefaultProfile() async throws {
+        guard let storage = fileStore, let metadataStore = syncStore else { throw ProfileError.damagedFile }
+        try storage.reset()
+        try metadataStore.reset()
+        profileRevision &+= 1
+        syncStatus = .localOnly
+        await synchronize()
+        guard syncStatus == .synced else { throw CloudError.profileCatalogUnavailable }
     }
 
     func retrySync() {
@@ -575,12 +679,22 @@ final class AppStore: ObservableObject {
     private func completeInitialProfileLoad() async {
         await synchronize()
         await refreshFeatureFlags()
+        await refreshProfileCatalog()
         profileLoadStatus = hasProfile || syncStatus != .failed ? .ready : .unavailable
     }
 
     private func refreshFeatureFlags() async {
         guard let cloud, let flags = try? await cloud.fetchFeatureFlags() else { return }
         featureFlags = flags
+    }
+
+    private func refreshProfileCatalog() async {
+        guard let cloud, let id = userID, authStatus == .authenticated else { return }
+        do {
+            accountProfiles = try await cloud.fetchProfiles(ownerID: id)
+        } catch {
+            if accountProfiles.isEmpty { message = "A profillista most nem frissíthető." }
+        }
     }
 
     private func clearUser() {
@@ -594,6 +708,9 @@ final class AppStore: ObservableObject {
         syncStatus = .localOnly
         profileLoadStatus = .loading
         featureFlags = AppFeatureFlags()
+        accountProfiles = []
+        profileCatalogBusy = false
+        creatingAdditionalProfile = false
     }
 
     @discardableResult
@@ -682,12 +799,14 @@ struct AppGate: View {
                         .padding(.horizontal, VizitSpace.md)
                     }
                 case .ready:
-                    if store.hasProfile && !finishingWizard {
+                    if store.hasProfile && !finishingWizard && !store.creatingAdditionalProfile {
                         RootView(themeMode: $themeMode)
                     } else {
-                        ProfileWizard(onSaving: { finishingWizard = true },
+                        ProfileWizard(additionalProfile: store.creatingAdditionalProfile,
+                                      onCancel: store.creatingAdditionalProfile ? store.cancelAdditionalProfile : nil,
+                                      onSaving: { finishingWizard = true },
                                       onSaveFailed: { finishingWizard = false },
-                                      onFinished: { finishingWizard = false })
+                                      onFinished: { store.cancelAdditionalProfile(); finishingWizard = false })
                     }
                 }
             }
@@ -756,6 +875,9 @@ struct RootView: View {
         .tint(VizitColor.primary)
         .toolbarBackground(VizitColor.surface, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            AccountProfileSwitcher()
+        }
         .overlay(alignment: .top) {
             if store.authStatus == .offline {
                 VizitBanner(
@@ -764,6 +886,79 @@ struct RootView: View {
                 )
                 .padding(.horizontal, VizitSpace.md)
                 .padding(.top, VizitSpace.xxs)
+            }
+        }
+    }
+}
+
+private struct AccountProfileSwitcher: View {
+    @EnvironmentObject private var store: AppStore
+    @State private var confirmDelete = false
+
+    private var visible: Bool {
+        store.featureFlags.multiProfile || store.accountProfiles.count > 1
+    }
+
+    private var active: AccountProfile? {
+        store.accountProfiles.first(where: \.isDefault) ?? store.accountProfiles.first
+    }
+
+    var body: some View {
+        if visible {
+            Menu {
+                ForEach(store.accountProfiles) { profile in
+                    Button {
+                        Task { await store.switchProfile(profile.id) }
+                    } label: {
+                        Label(
+                            profile.displayName,
+                            systemImage: profile.isDefault ? "checkmark.circle.fill" : "person.crop.circle"
+                        )
+                    }
+                    .disabled(profile.isDefault || store.profileCatalogBusy)
+                }
+                if store.featureFlags.multiProfile {
+                    Divider()
+                    Button(action: store.beginAdditionalProfile) {
+                        Label("Új profil", systemImage: "plus.circle")
+                    }
+                }
+                if active != nil {
+                    Divider()
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label("Aktív profil törlése", systemImage: "trash")
+                    }
+                }
+            } label: {
+                HStack(spacing: VizitSpace.sm) {
+                    Image(systemName: "person.crop.circle")
+                        .foregroundStyle(VizitColor.primary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(active?.displayName ?? "Profil kiválasztása")
+                            .font(VizitFont.label)
+                            .foregroundStyle(VizitColor.textPrimary)
+                            .lineLimit(1)
+                        Text(store.accountProfiles.count > 1
+                             ? "\(store.accountProfiles.count) profil · váltás"
+                             : "Új profil hozzáadása")
+                            .font(VizitFont.caption)
+                            .foregroundStyle(VizitColor.textMuted)
+                    }
+                    Spacer()
+                    if store.profileCatalogBusy { ProgressView().controlSize(.small) }
+                    else { Image(systemName: "chevron.down").foregroundStyle(VizitColor.textMuted) }
+                }
+                .padding(.horizontal, VizitSpace.md)
+                .padding(.vertical, VizitSpace.sm)
+                .background(VizitColor.surface)
+                .overlay(alignment: .bottom) { Divider() }
+            }
+            .disabled(store.profileCatalogBusy)
+            .alert("Profil törlése?", isPresented: $confirmDelete) {
+                Button("Mégse", role: .cancel) {}
+                Button("Törlés", role: .destructive) { Task { await store.deleteActiveProfile() } }
+            } message: {
+                Text("A(z) „\(active?.displayName ?? "")” profil végleg törlődik. Ha van másik profil, az automatikusan aktívvá válik.")
             }
         }
     }

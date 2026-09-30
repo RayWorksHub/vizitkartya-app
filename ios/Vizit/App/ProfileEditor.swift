@@ -392,6 +392,8 @@ struct ProfileEditor: View {
 
 /// First card flow. Uses the existing AppStore save path and the device's own screen chrome.
 struct ProfileWizard: View {
+    var additionalProfile = false
+    var onCancel: (() -> Void)? = nil
     var onSaving: () -> Void = {}
     var onSaveFailed: () -> Void = {}
     var onFinished: () -> Void = {}
@@ -453,7 +455,8 @@ struct ProfileWizard: View {
         VizitScreen {
             if published {
                 VStack(spacing: VizitSpace.md) {
-                    Text("Elkészült a névjegyed").font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
+                    Text(additionalProfile ? "Elkészült az új profilod" : "Elkészült a névjegyed")
+                        .font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
                     Text(draft.isPublic ? "A névjegyed publikálva. Most már megoszthatod a profilcímedet." :
                             "A névjegyed elmentve. A nyilvános profilt később is bekapcsolhatod.")
                         .foregroundStyle(VizitColor.textSecondary)
@@ -465,7 +468,12 @@ struct ProfileWizard: View {
             } else {
             VStack(spacing: 0) {
                 HStack {
-                    Text(titles[step] ?? "Névjegy").font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(titles[step] ?? "Névjegy").font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
+                        if index == 0, let onCancel {
+                            Button("Mégse", action: onCancel).font(VizitFont.caption)
+                        }
+                    }
                     Spacer()
                     Text(step == "done" ? "Kész" : "\(index + 1) / \(path.count - 1)")
                         .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
@@ -514,7 +522,7 @@ struct ProfileWizard: View {
     @ViewBuilder private var content: some View {
         switch step {
         case "type":
-            Text("Hozzuk létre az első profilodat").font(VizitFont.title)
+            Text(additionalProfile ? "Hozzuk létre az új profilodat" : "Hozzuk létre az első profilodat").font(VizitFont.title)
             Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.")
                 .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
             Text("Milyen névjegyet készítesz?").font(VizitFont.h3)
@@ -645,8 +653,30 @@ struct ProfileWizard: View {
     private func save() {
         guard let prepared = normalizeURLs() else { error = "A hivatkozások teljes, https:// kezdetű címek legyenek."; return }
         onSaving()
-        do { try store.save(prepared); presentation.value.colorway = selectedStyle; published = true }
-        catch { onSaveFailed(); self.error = error.localizedDescription }
+        processing = true
+        if additionalProfile {
+            Task {
+                do {
+                    try await store.createAdditionalProfile(prepared)
+                    presentation.value.colorway = selectedStyle
+                    published = true
+                } catch {
+                    onSaveFailed()
+                    self.error = error.localizedDescription
+                }
+                processing = false
+            }
+        } else {
+            do {
+                try store.save(prepared)
+                presentation.value.colorway = selectedStyle
+                published = true
+            } catch {
+                onSaveFailed()
+                self.error = error.localizedDescription
+            }
+            processing = false
+        }
     }
     private func process(_ selection: PhotosPickerItem?, isLogo: Bool) async {
         guard let selection else { return }
