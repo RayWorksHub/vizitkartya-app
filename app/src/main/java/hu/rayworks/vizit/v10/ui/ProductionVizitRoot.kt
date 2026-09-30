@@ -251,7 +251,7 @@ fun ProductionVizitRoot(
                 app.authBanner = "A VIZIT backend ebben a buildben nincs konfigurálva." to false
                 Gate.Auth(AuthMode.Login)
             }
-            AuthSessionState.Initializing -> Gate.Loading
+            else -> Gate.Loading
         }
 
         if (
