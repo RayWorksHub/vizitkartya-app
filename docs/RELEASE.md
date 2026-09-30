@@ -35,7 +35,7 @@ másik platform projektjét, és a platform CI útvonalszűrői sem figyelik a m
 
 Az iOS `CURRENT_PROJECT_VERSION` külön buildszám. A TestFlight CI ezt a GitHub Actions futásszámából állítja elő, ezért nem kell megegyeznie az Android `versionCode` értékével.
 
-Jelenlegi Android verzió: **10.0.0** (`versionCode`: **10000000**). Jelenlegi iOS verzió: **9.0.0**.
+Jelenlegi Android verzió: **10.0.1** (`versionCode`: **10000001**). Jelenlegi iOS verzió: **9.0.0**.
 
 ## 9.0.0 – több profil egy fiókban
 

@@ -637,6 +637,29 @@ class AppState(
         gate = if (legalRequired) Gate.Auth(AuthMode.Legal) else null
     }
 
+    /** Semmilyen képernyő- vagy varázslóállapot nem vihető át két fiók között. */
+    fun resetForAccountChange() {
+        synchronizingProfiles = true
+        try {
+            profiles.clear()
+            profiles.add(Profile(id = "loading", label = "VIZIT", real = true, name = ""))
+            selectedIndex = 0
+            lastProfileIndex = 0
+            goToRequest = GoTo(0, animate = false)
+        } finally {
+            synchronizingProfiles = false
+        }
+        pages.clear()
+        sheet = null
+        dialog = null
+        wizard = null
+        wizardOpen = false
+        initialProfileWizard = false
+        operationBusy = false
+        sync = SyncStatus.LocalOnly
+        gate = Gate.Loading
+    }
+
     fun askDeleteAccount() {
         dialog = DialogSpec(
             title = "Biztosan törlöd a fiókodat?",

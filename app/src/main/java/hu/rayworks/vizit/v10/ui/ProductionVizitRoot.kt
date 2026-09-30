@@ -9,6 +9,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import hu.rayworks.vizit.NfcSharePhase
 import hu.rayworks.vizit.ProfileLoadStatus
@@ -52,12 +54,13 @@ fun ProductionVizitRoot(
             productionMode = true,
         ).apply { gate = Gate.Loading }
     }
+    var boundOwnerId by remember { mutableStateOf<String?>(null) }
 
     val runtime = remember(vizitViewModel, authViewModel, context, scope) {
         RuntimeBindings(
             onProfileSelected = vizitViewModel::switchProfile,
             onSaveProfile = save@{ profile ->
-                if (app.operationBusy) return@save
+                if (app.operationBusy || vizitViewModel.profileCatalogBusy) return@save
                 app.operationBusy = true
                 scope.launch {
                     try {
@@ -150,6 +153,16 @@ fun ProductionVizitRoot(
     SideEffect { app.runtime = runtime }
 
     LaunchedEffect(session, authViewModel.debugLocalProfile) {
+        val nextOwnerId = when {
+            authViewModel.debugLocalProfile -> LOCAL_DEBUG_PROFILE_OWNER_ID
+            session is AuthSessionState.Authenticated -> (session as AuthSessionState.Authenticated).userId
+            session is AuthSessionState.RefreshFailed -> (session as AuthSessionState.RefreshFailed).cachedUserId
+            else -> null
+        }
+        if (nextOwnerId != boundOwnerId) {
+            app.resetForAccountChange()
+            boundOwnerId = nextOwnerId
+        }
         when {
             authViewModel.debugLocalProfile -> vizitViewModel.bindProfileOwner(
                 userId = LOCAL_DEBUG_PROFILE_OWNER_ID,
@@ -182,14 +195,10 @@ fun ProductionVizitRoot(
             listOf(activeProfile)
         } else {
             catalog.map { summary ->
-                if (summary.isDefault) activeProfile else Profile(
+                if (summary.isDefault) activeProfile else summary.profile.toV10Profile(
                     id = summary.id,
                     label = summary.displayName,
-                    real = true,
-                    name = summary.displayName,
-                    isPublic = summary.slug.isNotBlank(),
-                    slug = summary.slug,
-                    presetId = activeProfile.presetId,
+                    presentation = vizitViewModel.cardPresentation,
                 )
             }
         }
@@ -278,6 +287,8 @@ fun ProductionVizitRoot(
 
         if (
             app.gate == null &&
+            !vizitViewModel.profileCatalogBusy &&
+            vizitViewModel.accountProfiles.isEmpty() &&
             vizitViewModel.profileLoadStatus == ProfileLoadStatus.READY &&
             vizitViewModel.profile.resolvedDisplayName.isBlank()
         ) {
