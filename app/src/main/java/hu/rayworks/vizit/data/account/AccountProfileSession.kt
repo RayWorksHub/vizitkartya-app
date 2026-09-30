@@ -186,7 +186,9 @@ class AccountProfileSession(private val store: AccountProfileStore, private val 
             val preferred = state.value.activeId ?: store.selection(owner)
             if (!current(owner, token)) return
             publish(profiles, preferred, ready = true, verified = true)
-            state.value.activeId?.let { store.select(owner, it) }
+            selectionWrites.withLock {
+                if (current(owner, token)) state.value.activeId?.let { store.select(owner, it) }
+            }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) { fail(owner, token, failure) }
     }

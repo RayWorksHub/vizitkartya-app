@@ -97,7 +97,8 @@ class ProfilePagerInstrumentedTest {
             compose.waitUntil(10_000) { app.current?.id == id && session.state.value.activeId == id }
         } catch (failure: Exception) {
             val node = compose.onNodeWithTag("profile-pager").fetchSemanticsNode()
-            val scroll = node.config.getOrElse(SemanticsProperties.HorizontalScrollAxisRange) { null }
+            val scroll = if (SemanticsProperties.HorizontalScrollAxisRange in node.config)
+                node.config[SemanticsProperties.HorizontalScrollAxisRange] else null
             throw AssertionError("Expected=$id UI=${app.current?.id} selected=${app.selected} active=${session.state.value.activeId} scroll=${scroll?.value?.invoke()} request=${app.goToRequest}", failure)
         }
         compose.runOnIdle {
