@@ -381,14 +381,16 @@ fun Dots(count: Int, selected: Int, onPick: (Int) -> Unit) {
 @Composable
 fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
     val pager = rememberPagerState(initialPage = app.selected) { app.profiles.size + 1 }
-    var swipeStart by remember(pager) { mutableStateOf<Int?>(null) }
+    var swipeStart by remember(pager) { mutableStateOf<Pair<Long, Int>?>(null) }
     val snapDistance = remember(pager) {
         object : PagerSnapDistance {
             override fun calculateTargetPage(startPage: Int, suggestedTargetPage: Int, velocity: Float,
                                              pageSize: Int, pageSpacing: Int): Int {
                 // The fling's startPage can already be the next page after a long drag.
                 // Bound the WHOLE gesture to one neighbor of the page touched initially.
-                val origin = swipeStart ?: startPage
+                val origin = swipeStart?.second ?: startPage
+                if (hu.rayworks.vizit.BuildConfig.DEBUG) android.util.Log.d("VizitProfilePager",
+                    "snap origin=$origin start=$startPage suggested=$suggestedTargetPage")
                 return suggestedTargetPage.coerceIn((origin - 1).coerceAtLeast(0),
                     (origin + 1).coerceAtMost(pager.pageCount - 1))
             }
@@ -400,10 +402,13 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
             override suspend fun ScrollScope.performFling(initialVelocity: Float,
                                                          onRemainingDistanceUpdated: (Float) -> Unit): Float {
                 val scrollScope = this
+                val gesture = swipeStart
                 try {
+                    if (hu.rayworks.vizit.BuildConfig.DEBUG) android.util.Log.d("VizitProfilePager",
+                        "fling origin=${gesture?.second} current=${pager.currentPage}")
                     return with(snapping) { scrollScope.performFling(initialVelocity, onRemainingDistanceUpdated) }
                 } finally {
-                    swipeStart = null
+                    if (swipeStart === gesture) swipeStart = null
                 }
             }
         }
@@ -422,6 +427,7 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
         if (req != null && req.nonce != handled) {
             applyingNavigation = true
             handled = req.nonce
+            swipeStart = null
             try {
                 val index = req.index.coerceIn(0, app.profiles.size)
                 if (req.animate) pager.animateScrollToPage(index) else {
@@ -441,9 +447,12 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth().testTag("profile-pager").pointerInput(pager) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    swipeStart = pager.settledPage
+                    swipeStart = System.nanoTime() to pager.settledPage
+                    if (hu.rayworks.vizit.BuildConfig.DEBUG) android.util.Log.d("VizitProfilePager",
+                        "touch origin=${swipeStart?.second} current=${pager.currentPage}")
                     waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                    if (!pager.isScrollInProgress) swipeStart = null
+                    // Consumed drag events can cancel this observer before the scroll job starts.
+                    // The matching fling (or a later explicit navigation) clears the origin.
                 }
             },
             key = { index -> app.profiles.getOrNull(index)?.id ?: "new-profile" },
