@@ -442,7 +442,10 @@ fun EditSheet(app: AppState) {
                     PicRow(
                         "Profilkép", pf.photo, round = true, initials = pf.initials,
                         links = if (pf.photo != null) listOf("Csere" to { pick("photo") }, "Törlés" to { upd { it.copy(photo = null) } })
-                        else listOf("Mostani kép" to { upd { it.copy(photo = Pic.Res(R.drawable.avatar)) } }, "Feltöltés" to { pick("photo") }),
+                        else listOf("Mostani kép" to {
+                            val currentPhoto = if (app.productionMode) app.profiles.firstOrNull { it.photo != null }?.photo else Pic.Res(R.drawable.avatar)
+                            if (currentPhoto != null) upd { it.copy(photo = currentPhoto) } else pick("photo")
+                        }, "Feltöltés" to { pick("photo") }),
                     ) { pick("photo") }
                     PicRow(
                         "Céges logó", pf.logo, round = false, initials = "",

@@ -229,7 +229,7 @@ class RuntimeBindings(
     val onAutomaticSyncChanged: (Boolean) -> Unit = {},
     val onRetrySync: () -> Unit = {},
     val onResolveConflict: (Boolean) -> Unit = {},
-    val onStartNfcShare: () -> String? = { null },
+    val onStartNfcShare: (String) -> String? = { null },
     val onStopNfcShare: () -> Unit = {},
     val onOpenNfcSettings: () -> Unit = {},
     val onThemeChanged: (hu.rayworks.vizit.v10.ui.theme.ThemeMode) -> Unit = {},
@@ -347,7 +347,8 @@ class AppState(
             }
         }
         if (page == Page.NfcSend) {
-            val issue = runtime?.onStartNfcShare?.invoke()
+            val profileId = current?.id ?: return
+            val issue = runtime?.onStartNfcShare?.invoke(profileId)
             if (issue != null) {
                 toast(issue)
                 return
@@ -552,6 +553,7 @@ class AppState(
         wizard = hu.rayworks.vizit.v10.ui.wizard.WizardState(
             takenSlugs = { profiles.map { it.slug }.filter { it.isNotEmpty() } },
             initialName = "",
+            currentPhoto = if (productionMode) focus.photo else Pic.Res(R.drawable.avatar),
         )
         wizardOpen = true
     }

@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -401,6 +403,7 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth().testTag("profile-pager"),
             key = { index -> app.profiles.getOrNull(index)?.id ?: "new-profile" },
             userScrollEnabled = !app.operationBusy,
+            flingBehavior = PagerDefaults.flingBehavior(pager, pagerSnapDistance = PagerSnapDistance.atMost(1)),
             contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 6.dp, bottom = 20.dp),
             pageSpacing = 12.dp,
             verticalAlignment = Alignment.Top,

@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -92,7 +93,13 @@ class ProfilePagerInstrumentedTest {
         return Base64.getEncoder().encodeToString(output.toByteArray())
     }
     private fun assertCurrent(id: String, name: String, color: Int) {
-        compose.waitUntil(10_000) { app.current?.id == id && session.state.value.activeId == id }
+        try {
+            compose.waitUntil(10_000) { app.current?.id == id && session.state.value.activeId == id }
+        } catch (failure: Exception) {
+            val node = compose.onNodeWithTag("profile-pager").fetchSemanticsNode()
+            val scroll = node.config.getOrElse(SemanticsProperties.HorizontalScrollAxisRange) { null }
+            throw AssertionError("Expected=$id UI=${app.current?.id} selected=${app.selected} active=${session.state.value.activeId} scroll=${scroll?.value?.invoke()} request=${app.goToRequest}", failure)
+        }
         compose.runOnIdle {
             val current = app.current!!
             assertEquals(name, current.name)

@@ -198,8 +198,8 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         if (profileId != activeProfileId) stopNfcShare()
         profiles.select(profileId)
     }
-    fun deleteActiveProfile() { profiles.deleteActive() }
-    fun deleteProfile(profileId: String) { profiles.deleteActive(profileId) }
+    fun deleteActiveProfile() { stopNfcShare(); profiles.deleteActive() }
+    fun deleteProfile(profileId: String) { stopNfcShare(); profiles.deleteActive(profileId) }
     fun clearProfileCatalogMessage() { profiles.clearMessage() }
     fun resolveProfileConflict(keepLocal: Boolean) { profiles.resolve(keepLocal) }
     fun retryProfileSync() { profiles.retrySync() }
@@ -229,7 +229,12 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startNfcShare(): String? {
+    fun startNfcShare(targetProfileId: String? = activeProfileId): String? {
+        val selected = profiles.state.value.profiles.firstOrNull {
+            it.ownerId == activeProfileOwnerId && it.id == targetProfileId
+        }
+        val profile = if (cloudSyncEnabled) selected?.profile ?: return "Válassz profilt." else localProfile
+        val sharedProfile = profile.visibleThrough(selected?.presentation ?: localPresentation)
         val validationError = ContactProfileValidator.validate(profile)
         if (validationError != null) return validationError
 

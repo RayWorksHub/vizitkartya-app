@@ -65,6 +65,7 @@ fun ProductionVizitRoot(
                 app.operationBusy = true
                 val epochAtStart = accountEpoch
                 scope.launch {
+                    if (accountEpoch != epochAtStart) return@launch
                     try {
                         val issue = runCatching {
                             vizitViewModel.saveProfile(profile.toContactProfile(context), profile.id, profile.toCardPresentation())
@@ -90,6 +91,7 @@ fun ProductionVizitRoot(
                 app.operationBusy = true
                 val epochAtStart = accountEpoch
                 scope.launch {
+                    if (accountEpoch != epochAtStart) return@launch
                     try {
                         val publishable = profile.copy(isPublic = isPublic)
                         val issue = runCatching {

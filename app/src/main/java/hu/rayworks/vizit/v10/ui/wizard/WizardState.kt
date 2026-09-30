@@ -61,6 +61,7 @@ data class ScrollReq(val blockId: String, val instant: Boolean, val nonce: Long 
 class WizardState(
     private val takenSlugs: () -> List<String>,
     initialName: String = "",
+    val currentPhoto: Pic? = null,
 ) {
     var type by mutableStateOf<ProfileType?>(null)
     var started by mutableStateOf(false)
