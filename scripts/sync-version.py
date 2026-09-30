@@ -17,6 +17,11 @@ ANDROID_VERSION_NAME_RE = re.compile(r'(\bversionName\s*=\s*")[^"]+(")')
 ANDROID_VERSION_CODE_RE = re.compile(r"(\bversionCode\s*=\s*)\d+")
 IOS_MARKETING_VERSION_RE = re.compile(r'(\bMARKETING_VERSION\s*=\s*")[^"]+(")')
 
+# Google Play never permits a versionCode to be reused. Code 9,000,000 was
+# consumed by an earlier VIZIT 9 upload, so every subsequent Android package
+# must stay above that permanent store-side floor.
+ANDROID_VERSION_CODE_MINIMUM = 9_000_001
+
 
 def load_version() -> tuple[str, int]:
     props: dict[str, str] = {}
@@ -41,9 +46,10 @@ def load_version() -> tuple[str, int]:
         raise SystemExit("PATCH must be <= 9999 for the Android versionCode mapping")
 
     # Preserve the existing VIZIT encoding: 7.3.4 -> 7,030,004.
-    android_version_code = major * 1_000_000 + minor * 10_000 + patch
+    derived_android_version_code = major * 1_000_000 + minor * 10_000 + patch
+    android_version_code = max(derived_android_version_code, ANDROID_VERSION_CODE_MINIMUM)
     if not 1 <= android_version_code <= 2_100_000_000:
-        raise SystemExit("Derived Android versionCode is outside the supported range")
+        raise SystemExit("Android versionCode is outside the supported range")
 
     return version, android_version_code
 
