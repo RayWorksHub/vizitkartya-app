@@ -43,6 +43,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private var activeNfcSessionId: Long? = null
     private var activeProfileOwnerId: String? = null
     private var cloudSyncEnabled = false
+    private var pendingProfileSwitchId: String? = null
 
     var profile by mutableStateOf(ContactProfile())
         private set
@@ -124,7 +125,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
             if (enableCloudSync) {
                 viewModelScope.launch {
                     featureFlags = featureFlagRepository.fetch()
-                    refreshProfileCatalog()
+                    refreshProfileCatalog(userId)
                 }
             }
             viewModelScope.launch {
@@ -140,6 +141,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         accountProfiles = emptyList()
         profileCatalogMessage = null
         creatingAdditionalProfile = false
+        pendingProfileSwitchId = null
         profile = ContactProfile()
         profileSyncState = ProfileSyncState()
         hasOfflineProfileSession = false
@@ -148,7 +150,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         if (enableCloudSync) {
             viewModelScope.launch {
                 featureFlags = featureFlagRepository.fetch()
-                refreshProfileCatalog()
+                refreshProfileCatalog(userId)
             }
         }
         profileObservationJob = viewModelScope.launch {
@@ -199,6 +201,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun beginAdditionalProfile(): String? {
+        if (profileCatalogBusy) return "Várd meg a profilváltás befejezését."
         if (!featureFlags.multiProfile) return "A többprofilos funkció még nincs bekapcsolva."
         if (!cloudSyncEnabled) return "Új profilt csak bejelentkezett, online fiókhoz lehet létrehozni."
         if (profileSyncState.pendingChanges || profileSyncState.status == ProfileSyncStatus.CONFLICT) {
@@ -237,22 +240,45 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
 
     fun switchProfile(profileId: String) {
         val userId = activeProfileOwnerId ?: return
-        if (profileCatalogBusy || accountProfiles.firstOrNull { it.isDefault }?.id == profileId) return
+        if (accountProfiles.none { it.id == profileId }) {
+            profileCatalogMessage = "A kiválasztott profil nem ehhez a fiókhoz tartozik."
+            return
+        }
         if (profileSyncState.pendingChanges || profileSyncState.status == ProfileSyncStatus.CONFLICT) {
             profileCatalogMessage = "Előbb várd meg a jelenlegi profil szinkronizálását."
             return
         }
+        if (!profileCatalogBusy && accountProfiles.firstOrNull { it.isDefault }?.id == profileId) return
+        pendingProfileSwitchId = profileId
+        if (profileCatalogBusy) return
+        profileCatalogBusy = true
+        profileLoadStatus = ProfileLoadStatus.LOADING
         viewModelScope.launch {
-            profileCatalogBusy = true
             profileCatalogMessage = null
             try {
-                profileCatalog.makeDefault(profileId)
-                reloadDefaultProfile(userId)
-                profileCatalogMessage = "Profil átváltva."
+                while (activeProfileOwnerId == userId) {
+                    val requestedId = pendingProfileSwitchId ?: break
+                    pendingProfileSwitchId = null
+                    if (accountProfiles.firstOrNull { it.isDefault }?.id != requestedId) {
+                        profileCatalog.makeDefault(requestedId)
+                        reloadDefaultProfile(userId)
+                    }
+                    if (pendingProfileSwitchId == null) {
+                        profileCatalogMessage = "Profil átváltva."
+                    }
+                }
             } catch (failure: Exception) {
                 profileCatalogMessage = failure.localizedMessage ?: "A profilváltás nem sikerült."
             } finally {
+                pendingProfileSwitchId = null
                 profileCatalogBusy = false
+                if (profileLoadStatus == ProfileLoadStatus.LOADING) {
+                    profileLoadStatus = if (profile.resolvedDisplayName.isNotBlank()) {
+                        ProfileLoadStatus.READY
+                    } else {
+                        ProfileLoadStatus.UNAVAILABLE
+                    }
+                }
             }
         }
     }
@@ -289,7 +315,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         stopNfcShare()
         repository.deleteLocalProfile(userId)
         val result = repository.prepare(userId = userId, cloudSyncEnabled = cloudSyncEnabled)
-        refreshProfileCatalog()
+        refreshProfileCatalog(userId)
         profileLoadStatus = when {
             profile.resolvedDisplayName.isNotBlank() -> ProfileLoadStatus.READY
             result == ProfileSyncRunResult.RETRY || result == ProfileSyncRunResult.WAITING_FOR_SESSION ->
@@ -298,11 +324,13 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun refreshProfileCatalog() {
+    private suspend fun refreshProfileCatalog(expectedOwnerId: String) {
         runCatching { profileCatalog.list() }
-            .onSuccess { accountProfiles = it }
+            .onSuccess { profiles ->
+                if (activeProfileOwnerId == expectedOwnerId) accountProfiles = profiles
+            }
             .onFailure {
-                if (accountProfiles.isEmpty()) {
+                if (activeProfileOwnerId == expectedOwnerId && accountProfiles.isEmpty()) {
                     profileCatalogMessage = "A profillista most nem frissíthető."
                 }
             }
