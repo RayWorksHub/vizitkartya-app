@@ -2,10 +2,10 @@ name: Android profile stability
 on:
   push:
     branches: [fix/beta-share-stability]
-    paths: ['app/**', 'config/**', 'gradle/**', '*.kts', 'gradle.properties', '.github/workflows/android-stability.yml']
+    paths: ['app/**', 'config/android-version.properties', 'config/android-node.properties', 'config/sharing.properties', 'gradle/**', '*.kts', 'gradle.properties', '.github/workflows/android-stability.yml']
   pull_request:
     branches: [develop]
-    paths: ['app/**', 'config/**', '.github/workflows/android-stability.yml']
+    paths: ['app/**', 'config/android-version.properties', 'config/android-node.properties', 'config/sharing.properties', '.github/workflows/android-stability.yml']
 permissions:
   contents: read
 concurrency:
@@ -27,8 +27,8 @@ jobs:
       ORG_GRADLE_PROJECT_VIZIT_DEV_GOOGLE_WEB_CLIENT_ID: ''
     steps:
       - uses: actions/checkout@v4
-      - name: Verify unified app version
-        run: python3 scripts/sync-version.py --check
+      - name: Verify Android app version
+        run: python3 scripts/sync-android-version.py --check
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
