@@ -764,53 +764,7 @@ struct AppGate: View {
     @State private var finishingWizard = false
 
     var body: some View {
-        Group {
-            switch store.authStatus {
-            case .launching:
-                LaunchScreen()
-
-            case .signedOut, .verificationSent:
-                AuthScreen()
-
-            case .passwordRecovery:
-                PasswordChangeScreen()
-
-            case .configurationError(let detail):
-                VizitScreen {
-                    VizitErrorState(
-                        title: "Ez a build nem használható",
-                        message: detail
-                    )
-                    .padding(.horizontal, VizitSpace.md)
-                }
-
-            case .authenticated, .offline:
-                switch store.profileLoadStatus {
-                case .loading:
-                    LaunchScreen()
-                case .unavailable:
-                    VizitScreen {
-                        VizitErrorState(
-                            title: "A névjegy most nem tölthető be",
-                            message: "Nem nyitjuk meg az újprofil-varázslót, amíg nem derül ki biztosan, hogy ehhez a fiókhoz még nincs névjegy.",
-                            retryTitle: "Újrapróbálás",
-                            onRetry: store.retrySync
-                        )
-                        .padding(.horizontal, VizitSpace.md)
-                    }
-                case .ready:
-                    if store.hasProfile && !finishingWizard && !store.creatingAdditionalProfile {
-                        RootView(themeMode: $themeMode)
-                    } else {
-                        ProfileWizard(additionalProfile: store.creatingAdditionalProfile,
-                                      onCancel: store.creatingAdditionalProfile ? store.cancelAdditionalProfile : nil,
-                                      onSaving: { finishingWizard = true },
-                                      onSaveFailed: { finishingWizard = false },
-                                      onFinished: { store.cancelAdditionalProfile(); finishingWizard = false })
-                    }
-                }
-            }
-        }
+        gateContent
         .preferredColorScheme(themeMode.colorScheme)
         .onChange(of: store.authStatus) { status in
             if status == .signedOut { finishingWizard = false }
@@ -821,6 +775,75 @@ struct AppGate: View {
         )) {
             Button("Rendben", role: .cancel) { store.dismissMessage() }
         } message: { Text(store.message ?? "") }
+    }
+
+    @ViewBuilder
+    private var gateContent: some View {
+        switch store.authStatus {
+        case .launching:
+            LaunchScreen()
+        case .signedOut, .verificationSent:
+            AuthScreen()
+        case .passwordRecovery:
+            PasswordChangeScreen()
+        case .configurationError(let detail):
+            configurationError(detail)
+        case .authenticated, .offline:
+            profileContent
+        }
+    }
+
+    @ViewBuilder
+    private var profileContent: some View {
+        switch store.profileLoadStatus {
+        case .loading:
+            LaunchScreen()
+        case .unavailable:
+            unavailableProfile
+        case .ready:
+            if store.hasProfile && !finishingWizard && !store.creatingAdditionalProfile {
+                RootView(themeMode: $themeMode)
+            } else {
+                profileWizard
+            }
+        }
+    }
+
+    private func configurationError(_ detail: String) -> some View {
+        VizitScreen {
+            VizitErrorState(title: "Ez a build nem használható", message: detail)
+                .padding(.horizontal, VizitSpace.md)
+        }
+    }
+
+    private var unavailableProfile: some View {
+        VizitScreen {
+            VizitErrorState(
+                title: "A névjegy most nem tölthető be",
+                message: "Nem nyitjuk meg az újprofil-varázslót, amíg nem derül ki biztosan, hogy ehhez a fiókhoz még nincs névjegy.",
+                retryTitle: "Újrapróbálás",
+                onRetry: store.retrySync
+            )
+            .padding(.horizontal, VizitSpace.md)
+        }
+    }
+
+    private var profileWizard: some View {
+        ProfileWizard(
+            additionalProfile: store.creatingAdditionalProfile,
+            onCancel: wizardCancel,
+            onSaving: { finishingWizard = true },
+            onSaveFailed: { finishingWizard = false },
+            onFinished: {
+                store.cancelAdditionalProfile()
+                finishingWizard = false
+            }
+        )
+    }
+
+    private var wizardCancel: (() -> Void)? {
+        guard store.creatingAdditionalProfile else { return nil }
+        return { store.cancelAdditionalProfile() }
     }
 }
 
