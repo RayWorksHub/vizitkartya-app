@@ -16,8 +16,14 @@ for raw_line in pathlib.Path('config/version.properties').read_text(encoding='ut
     key, value = line.split('=', 1)
     version_props[key.strip()] = value.strip()
 release_name = version_props['versionName']
-major, minor, patch = map(int, release_name.split('.'))
-expected_version_code = major * 1_000_000 + minor * 10_000 + patch
+expected_version_code = subprocess.run(
+    ['python3', 'scripts/sync-version.py', '--print-android-code'],
+    check=True,
+    capture_output=True,
+    text=True,
+).stdout.strip()
+if not expected_version_code.isdigit():
+    raise SystemExit('Version sync returned an invalid Android versionCode')
 def report(status, detail):
     value = {'status':status,'detail':detail,'package':'hu.rayworks.vizit','track':track}
     out.write_text(json.dumps(value,ensure_ascii=False,indent=2))
@@ -61,7 +67,10 @@ try:
     aab=next(pathlib.Path('release-output').glob('*.aab'))
     bundle=request('https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/hu.rayworks.vizit/edits/'+edit+'/bundles?uploadType=media',token=token,binary=aab.read_bytes())
     version=str(bundle['versionCode'])
-    assert version == str(expected_version_code)
+    if version != expected_version_code:
+        raise RuntimeError(
+            f'Uploaded bundle versionCode {version} does not match expected {expected_version_code}'
+        )
     request(root+'/edits/'+edit+'/tracks/'+track,method='PUT',token=token,payload={
         'track':track,'releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
         'releaseNotes':[{'language':'hu-HU','text':'Egységesebb bejelentkezési és regisztrációs mezők, átláthatóbb VIZIT fejléc.'}]}]})
