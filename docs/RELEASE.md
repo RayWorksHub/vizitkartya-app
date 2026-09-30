@@ -9,28 +9,33 @@ A `main` stabil ág. Signing kulcs és jelszó GitHub Secret / biztonságos rele
 Az iPhone teljes Android-szerű NFC kontaktimportjának hiánya nem release blocker, ha a QR és HTTPS profil fallback stabil és dokumentált. Súlyos támogatott Android NFC hiba release blocker.
 
 
-## Egységes alkalmazásverzió
+## Platformonként független alkalmazásverzió
 
-Az Android és az iOS felhasználó által látható verziószáma közös. Az egyetlen forrás:
+Az Android és az iOS verziója egymástól független. Az Android forrása:
 
-`config/version.properties`
+`config/android-version.properties`
 
-Új release esetén kizárólag a `versionName` értékét kell módosítani, majd futtatni:
+Az Android release ellenőrzése és alkalmazása:
 
 ```bash
-python3 scripts/sync-version.py --apply
-python3 scripts/sync-version.py --check
+python3 scripts/sync-android-version.py --apply
+python3 scripts/sync-android-version.py --check
 ```
 
-A szinkronizáló script:
+Az iOS forrása és parancsai:
 
-- ugyanazt a `MAJOR.MINOR.PATCH` verziót írja az Android `versionName` és az iOS `MARKETING_VERSION` mezőjébe;
-- az Android `versionCode` értékét determinisztikusan képezi: `MAJOR * 1_000_000 + MINOR * 10_000 + PATCH`;
-- CI-ben hibára fut, ha bármelyik platform verziója eltér a központi értéktől.
+```bash
+python3 scripts/sync-ios-version.py --apply
+python3 scripts/sync-ios-version.py --check
+```
+
+Az Android fájl a `versionName` mellett a Play Console-ban soha újra nem használható
+`versionCode` értéket is külön tárolja. Egyik platform szinkronizáló scriptje sem írja át a
+másik platform projektjét, és a platform CI útvonalszűrői sem figyelik a másik verziófájlját.
 
 Az iOS `CURRENT_PROJECT_VERSION` külön buildszám. A TestFlight CI ezt a GitHub Actions futásszámából állítja elő, ezért nem kell megegyeznie az Android `versionCode` értékével.
 
-Jelenlegi közös publikus verzió: **9.0.0**. Android `versionCode`: **9000000**.
+Jelenlegi Android verzió: **10.0.0** (`versionCode`: **10000000**). Jelenlegi iOS verzió: **9.0.0**.
 
 ## 9.0.0 – több profil egy fiókban
 

@@ -3,10 +3,10 @@ name: iOS secure IPA
 on:
   push:
     branches: [main, feature/ios-secure-beta, feature/vizit-public-profile-photo, fix/beta-share-stability, claude/vizit-mobile-ui-redesign-4q5ujj]
-    paths: ['ios/**', 'config/**', 'scripts/apple-production-bootstrap.py', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'config/ios-version.properties', 'config/android-node.properties', 'config/sharing.properties', 'scripts/apple-production-bootstrap.py', '.github/workflows/ios.yml']
   pull_request:
     branches: [main, develop]
-    paths: ['ios/**', 'config/**', 'scripts/apple-production-bootstrap.py', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'config/ios-version.properties', 'config/android-node.properties', 'config/sharing.properties', 'scripts/apple-production-bootstrap.py', '.github/workflows/ios.yml']
   workflow_dispatch:
 
 permissions:
@@ -36,8 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify unified app version
-        run: python3 scripts/sync-version.py --check
+      - name: Verify iOS app version
+        run: python3 scripts/sync-ios-version.py --check
 
       - name: Verify shared public endpoint configuration
         run: |
@@ -318,8 +318,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify unified app version
-        run: python3 scripts/sync-version.py --check
+      - name: Verify iOS app version
+        run: python3 scripts/sync-ios-version.py --check
 
       - name: Select App Store-compatible Xcode
         shell: bash
@@ -450,7 +450,7 @@ jobs:
           test -d "$app"
           codesign --verify --deep --strict "$app"
           test "$(plutil -extract CFBundleIdentifier raw "$app/Info.plist")" = "$APPLE_BUNDLE_ID"
-          expected_version="$(python3 scripts/sync-version.py --print-version)"
+          expected_version="$(python3 scripts/sync-ios-version.py --print-version)"
           python3 - "$app/Info.plist" "$expected_version" <<'PY'
           import plistlib
           import sys

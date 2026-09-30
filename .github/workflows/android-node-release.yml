@@ -4,7 +4,9 @@ on:
     branches: [main]
     paths:
       - 'app/**'
-      - 'config/**'
+      - 'config/android-version.properties'
+      - 'config/android-node.properties'
+      - 'config/sharing.properties'
       - 'scripts/publish-android-node.py'
       - '.github/workflows/android-node-release.yml'
   workflow_dispatch:
@@ -42,12 +44,12 @@ jobs:
             echo 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON is not a service account key' >&2
             exit 1
           fi
-      - name: Verify unified app version
+      - name: Verify Android app version
         id: version
         run: |
-          python3 scripts/sync-version.py --check
-          echo "name=$(python3 scripts/sync-version.py --print-version)" >> "$GITHUB_OUTPUT"
-          echo "code=$(python3 scripts/sync-version.py --print-android-code)" >> "$GITHUB_OUTPUT"
+          python3 scripts/sync-android-version.py --check
+          echo "name=$(python3 scripts/sync-android-version.py --print-version)" >> "$GITHUB_OUTPUT"
+          echo "code=$(python3 scripts/sync-android-version.py --print-android-code)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

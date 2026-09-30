@@ -9,7 +9,7 @@ if track not in {'internal','alpha','beta','production'}:
     raise SystemExit('Unsupported Google Play track: '+track)
 
 version_props = {}
-for raw_line in pathlib.Path('config/version.properties').read_text(encoding='utf-8').splitlines():
+for raw_line in pathlib.Path('config/android-version.properties').read_text(encoding='utf-8').splitlines():
     line = raw_line.strip()
     if not line or line.startswith('#'):
         continue
@@ -17,7 +17,7 @@ for raw_line in pathlib.Path('config/version.properties').read_text(encoding='ut
     version_props[key.strip()] = value.strip()
 release_name = version_props['versionName']
 expected_version_code = subprocess.run(
-    ['python3', 'scripts/sync-version.py', '--print-android-code'],
+    ['python3', 'scripts/sync-android-version.py', '--print-android-code'],
     check=True,
     capture_output=True,
     text=True,
@@ -73,7 +73,7 @@ try:
         )
     request(root+'/edits/'+edit+'/tracks/'+track,method='PUT',token=token,payload={
         'track':track,'releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
-        'releaseNotes':[{'language':'hu-HU','text':'Egységesebb bejelentkezési és regisztrációs mezők, átláthatóbb VIZIT fejléc.'}]}]})
+        'releaseNotes':[{'language':'hu-HU','text':'Megújult VIZIT felület animációkkal, többprofilos használattal, élő QR-, NFC- és statisztikai funkciókkal.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
     report('SUBMITTED',f'Google Play accepted the {track} release submission; Google review/publication state is managed by Play Console.')
 except urllib.error.HTTPError as error:
