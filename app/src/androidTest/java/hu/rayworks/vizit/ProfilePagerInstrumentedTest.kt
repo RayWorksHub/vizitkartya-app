@@ -82,7 +82,8 @@ class ProfilePagerInstrumentedTest {
             VizitApp(app, auth)
         }
         compose.runOnIdle { session.bind("one") }
-        compose.waitUntil(10_000) { session.state.value.catalogVerified && app.current != null }
+        compose.waitUntil(10_000) { session.state.value.catalogVerified && app.current != null && app.gate == null }
+        compose.waitForIdle()
     }
     private fun jpeg(color: Int): String {
         val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
@@ -95,11 +96,11 @@ class ProfilePagerInstrumentedTest {
     private fun assertCurrent(id: String, name: String, color: Int) {
         try {
             compose.waitUntil(10_000) { app.current?.id == id && session.state.value.activeId == id }
-        } catch (failure: Exception) {
+        } catch (failure: Throwable) {
             val node = compose.onNodeWithTag("profile-pager").fetchSemanticsNode()
             val scroll = if (SemanticsProperties.HorizontalScrollAxisRange in node.config)
                 node.config[SemanticsProperties.HorizontalScrollAxisRange] else null
-            throw AssertionError("Expected=$id UI=${app.current?.id} selected=${app.selected} active=${session.state.value.activeId} scroll=${scroll?.value?.invoke()} request=${app.goToRequest}", failure)
+            throw AssertionError("Expected=$id UI=${app.current?.id} selected=${app.selected} active=${session.state.value.activeId} scroll=${scroll?.value?.invoke()}/${scroll?.maxValue?.invoke()} request=${app.goToRequest} gate=${app.gate} wizard=${app.wizardOpen} bounds=${node.boundsInRoot}\n${compose.onRoot().printToString()}", failure)
         }
         compose.runOnIdle {
             val current = app.current!!
@@ -122,7 +123,7 @@ class ProfilePagerInstrumentedTest {
         mount()
         assertCurrent(first.id, first.displayName, Color.BLUE)
         repeat(4) {
-            compose.onNodeWithTag("profile-pager").performTouchInput { swipeLeft() }
+            compose.onNodeWithTag("profile-pager").assertIsDisplayed().performTouchInput { swipeLeft() }
             assertCurrent(second.id, second.displayName, Color.RED)
             compose.onNodeWithTag("profile-pager").performTouchInput { swipeRight() }
             assertCurrent(first.id, first.displayName, Color.BLUE)
