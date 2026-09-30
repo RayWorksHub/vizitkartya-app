@@ -199,9 +199,10 @@ fun QrPage(app: AppState, index: Int) {
             Spacer(Modifier.height(6.dp))
             val payload = contentFor(app, p, app.qrMode).text
             val has = payload != null
+            val withLogo = app.qrMode != QrMode.Contact
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(VIcons.download, "Mentés", has) { payload?.let(actions::saveQr) }
-                ActionTile(VIcons.share, "Megosztás", has) { payload?.let(actions::shareQr) }
+                ActionTile(VIcons.download, "Mentés", has) { payload?.let { actions.saveQr(it, withLogo) } }
+                ActionTile(VIcons.share, "Megosztás", has) { payload?.let { actions.shareQr(it, withLogo) } }
                 if (app.qrMode == QrMode.Profile) ActionTile(VIcons.copy, "Link", has) { actions.copyLink(p) }
             }
             if (app.qrMode == QrMode.Photo && p.photo != null) {

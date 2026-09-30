@@ -85,6 +85,7 @@ class WizardController(
     }
 
     fun publish() {
+        if (app.operationBusy) return
         val p = wiz.buildProfile() ?: return
         focusManager.clearFocus(force = true)
         app.addPublished(p, wiz.isPublic)

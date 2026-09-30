@@ -65,8 +65,8 @@ class Actions(private val context: Context, private val app: AppState) {
         start(Intent.createChooser(send, "Névjegy megosztása"), "Névjegy megosztása")
     }
 
-    fun saveQr(payload: String) {
-        runCatching { createQr(payload) }
+    fun saveQr(payload: String, withLogo: Boolean) {
+        runCatching { createQr(payload, withLogo) }
             .map { QrShareHelper.saveToPictures(context, it) }
             .onSuccess { saved ->
                 app.toast(if (saved) "A QR-kód a Képek/VIZIT mappába került." else "A QR-kód nem menthető.")
@@ -74,8 +74,8 @@ class Actions(private val context: Context, private val app: AppState) {
             .onFailure { app.toast(it.localizedMessage ?: "A QR-kód nem menthető.") }
     }
 
-    fun shareQr(payload: String) {
-        runCatching { QrShareHelper.share(context, createQr(payload)) }
+    fun shareQr(payload: String, withLogo: Boolean) {
+        runCatching { QrShareHelper.share(context, createQr(payload, withLogo)) }
             .onFailure { app.toast(it.localizedMessage ?: "A QR-kód nem osztható meg.") }
     }
 
@@ -89,9 +89,9 @@ class Actions(private val context: Context, private val app: AppState) {
         }.onFailure { app.toast(it.localizedMessage ?: "A névjegyfájl nem osztható meg.") }
     }
 
-    private fun createQr(payload: String) = QrCodeGenerator.create(
+    private fun createQr(payload: String, withLogo: Boolean) = QrCodeGenerator.create(
         payload = payload,
-        logo = BitmapFactory.decodeResource(context.resources, R.drawable.vizit_logo_mark),
+        logo = if (withLogo) BitmapFactory.decodeResource(context.resources, R.drawable.vizit_logo_mark) else null,
     )
 
     fun copyLink(p: Profile) {

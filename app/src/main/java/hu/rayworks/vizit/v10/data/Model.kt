@@ -290,6 +290,7 @@ class AppState(
     var sheet by mutableStateOf<SheetKind?>(null)
     var editSection by mutableStateOf<String?>(null)
     var toast by mutableStateOf<ToastMsg?>(null)
+    var operationBusy by mutableStateOf(false)
 
     var wizard by mutableStateOf<hu.rayworks.vizit.v10.ui.wizard.WizardState?>(null)
     var wizardOpen by mutableStateOf(false)

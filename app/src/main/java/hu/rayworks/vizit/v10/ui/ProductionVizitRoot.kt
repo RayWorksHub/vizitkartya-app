@@ -56,35 +56,47 @@ fun ProductionVizitRoot(
     val runtime = remember(vizitViewModel, authViewModel, context, scope) {
         RuntimeBindings(
             onProfileSelected = vizitViewModel::switchProfile,
-            onSaveProfile = { profile ->
+            onSaveProfile = save@{ profile ->
+                if (app.operationBusy) return@save
+                app.operationBusy = true
                 scope.launch {
-                    val issue = runCatching {
-                        vizitViewModel.updateCardPresentation(profile.toCardPresentation())
-                        vizitViewModel.saveProfile(profile.toContactProfile(context))
-                    }.getOrElse { it.localizedMessage ?: "A mentés nem sikerült." }
-                    if (issue == null) {
-                        app.sheet = null
-                        if (app.wizardOpen) app.closeWizard(force = true)
-                        app.toast("A névjegy mentve.")
-                    } else {
-                        app.toast(issue)
+                    try {
+                        val issue = runCatching {
+                            vizitViewModel.updateCardPresentation(profile.toCardPresentation())
+                            vizitViewModel.saveProfile(profile.toContactProfile(context))
+                        }.getOrElse { it.localizedMessage ?: "A mentés nem sikerült." }
+                        if (issue == null) {
+                            app.sheet = null
+                            if (app.wizardOpen) app.closeWizard(force = true)
+                            app.toast("A névjegy mentve.")
+                        } else {
+                            app.toast(issue)
+                        }
+                    } finally {
+                        app.operationBusy = false
                     }
                 }
             },
             onBeginAdditionalProfile = vizitViewModel::beginAdditionalProfile,
             onCancelAdditionalProfile = vizitViewModel::cancelAdditionalProfile,
-            onCreateAdditionalProfile = { profile, isPublic ->
+            onCreateAdditionalProfile = create@{ profile, isPublic ->
+                if (app.operationBusy) return@create
+                app.operationBusy = true
                 scope.launch {
-                    val publishable = profile.copy(isPublic = isPublic)
-                    val issue = runCatching {
-                        vizitViewModel.updateCardPresentation(publishable.toCardPresentation())
-                        vizitViewModel.createAdditionalProfile(publishable.toContactProfile(context))
-                    }.getOrElse { it.localizedMessage ?: "Az új profil nem hozható létre." }
-                    if (issue == null) {
-                        app.closeWizard(force = true)
-                        app.toast(if (isPublic) "Az új profil elkészült és publikus." else "Az új profil elkészült.")
-                    } else {
-                        app.toast(issue)
+                    try {
+                        val publishable = profile.copy(isPublic = isPublic)
+                        val issue = runCatching {
+                            vizitViewModel.updateCardPresentation(publishable.toCardPresentation())
+                            vizitViewModel.createAdditionalProfile(publishable.toContactProfile(context))
+                        }.getOrElse { it.localizedMessage ?: "Az új profil nem hozható létre." }
+                        if (issue == null) {
+                            app.closeWizard(force = true)
+                            app.toast(if (isPublic) "Az új profil elkészült és publikus." else "Az új profil elkészült.")
+                        } else {
+                            app.toast(issue)
+                        }
+                    } finally {
+                        app.operationBusy = false
                     }
                 }
             },
@@ -157,7 +169,6 @@ fun ProductionVizitRoot(
     LaunchedEffect(
         vizitViewModel.profile,
         vizitViewModel.accountProfiles,
-        vizitViewModel.cardPresentation,
     ) {
         val catalog = vizitViewModel.accountProfiles
         val activeSummary = catalog.firstOrNull { it.isDefault }
@@ -183,6 +194,17 @@ fun ProductionVizitRoot(
             }
         }
         app.replaceProfiles(profiles, activeId)
+    }
+
+    LaunchedEffect(vizitViewModel.cardPresentation) {
+        val current = app.current ?: return@LaunchedEffect
+        app.applyPresentation(
+            vizitViewModel.profile.toV10Profile(
+                id = current.id,
+                label = current.label,
+                presentation = vizitViewModel.cardPresentation,
+            ),
+        )
     }
 
     SideEffect {
