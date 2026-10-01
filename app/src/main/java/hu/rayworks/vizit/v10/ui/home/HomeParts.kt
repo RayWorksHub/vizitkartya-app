@@ -5,6 +5,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.StartOffsetType
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -33,8 +34,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +57,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,6 +83,7 @@ import hu.rayworks.vizit.v10.ui.components.dashedBorder
 import hu.rayworks.vizit.v10.ui.components.noRippleClickable
 import hu.rayworks.vizit.v10.ui.icons.VIcons
 import hu.rayworks.vizit.v10.ui.theme.V
+import kotlin.math.abs
 
 /* ------------------------------------------------------------------ fejléc */
 
@@ -382,31 +383,43 @@ fun Dots(count: Int, selected: Int, onPick: (Int) -> Unit) {
 fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
     val pager = rememberPagerState(initialPage = app.selected) { app.profiles.size + 1 }
     var swipeStart by remember(pager) { mutableStateOf<Pair<Long, Int>?>(null) }
-    val snapDistance = remember(pager) {
-        object : PagerSnapDistance {
-            override fun calculateTargetPage(startPage: Int, suggestedTargetPage: Int, velocity: Float,
-                                             pageSize: Int, pageSpacing: Int): Int {
-                // The fling's startPage can already be the next page after a long drag.
-                // Bound the WHOLE gesture to one neighbor of the page touched initially.
-                val origin = swipeStart?.second ?: startPage
-                if (hu.rayworks.vizit.BuildConfig.DEBUG) android.util.Log.d("VizitProfilePager",
-                    "snap origin=$origin start=$startPage suggested=$suggestedTargetPage")
-                return suggestedTargetPage.coerceIn((origin - 1).coerceAtLeast(0),
-                    (origin + 1).coerceAtMost(pager.pageCount - 1))
-            }
-        }
-    }
-    val snapping = PagerDefaults.flingBehavior(pager, pagerSnapDistance = snapDistance)
-    val fling = remember(snapping) {
+    val minimumFlingVelocity = with(LocalDensity.current) { 400.dp.toPx() }
+    val fling = remember(pager, minimumFlingVelocity) {
         object : TargetedFlingBehavior {
             override suspend fun ScrollScope.performFling(initialVelocity: Float,
                                                          onRemainingDistanceUpdated: (Float) -> Unit): Float {
-                val scrollScope = this
                 val gesture = swipeStart
                 try {
+                    val origin = gesture?.second ?: pager.settledPage
+                    val position = pager.currentPage + pager.currentPageOffsetFraction
+                    val displacement = position - origin
+                    val direction = when {
+                        displacement > 0.001f -> 1
+                        displacement < -0.001f -> -1
+                        initialVelocity > 0f -> 1
+                        initialVelocity < 0f -> -1
+                        else -> 0
+                    }
+                    val quickForward = abs(initialVelocity) >= minimumFlingVelocity &&
+                        initialVelocity * direction > 0f
+                    val target = (origin + if (abs(displacement) >= 0.5f || quickForward) direction else 0)
+                        .coerceIn(0, pager.pageCount - 1)
+                    val distance = (target - position) * (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing)
                     if (hu.rayworks.vizit.BuildConfig.DEBUG) android.util.Log.d("VizitProfilePager",
-                        "fling origin=${gesture?.second} current=${pager.currentPage}")
-                    return with(snapping) { scrollScope.performFling(initialVelocity, onRemainingDistanceUpdated) }
+                        "fling origin=$origin position=$position velocity=$initialVelocity target=$target")
+                    // Drive the existing scroll scope to the exact card; a second native snap
+                    // must not choose another neighbor after the approach animation.
+                    var consumed = 0f
+                    onRemainingDistanceUpdated(distance)
+                    if (abs(distance) > 0.5f) {
+                        animate(0f, distance, animationSpec = tween(240, easing = EaseOut)) { value, _ ->
+                            consumed += scrollBy(value - consumed)
+                            onRemainingDistanceUpdated(distance - consumed)
+                        }
+                    }
+                    scrollBy(distance - consumed)
+                    onRemainingDistanceUpdated(0f)
+                    return 0f
                 } finally {
                     if (swipeStart === gesture) swipeStart = null
                 }
