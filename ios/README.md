@@ -48,7 +48,7 @@ Az artifact aláíratlan IPA. Sideloadly/AltStore a saját Apple ID-val újra tu
 
 A `VIZIT_PHYSICAL_DEVICE_RELEASE_APPROVED=true` repository-változó és a
 `[testflight]` kiadási commit együtt engedélyezi az aláírt App Store-archívum
-ellenőrzését és TestFlight-feltöltését. A jelenlegi közös alkalmazásverzió: **VIZIT 8.7.5**.
+ellenőrzését és TestFlight-feltöltését. A jelenlegi közös alkalmazásverzió: **VIZIT 10.0.0**.
 Az Android Play Alpha és az iOS TestFlight kiadás külön indítható, így egyik áruház átmeneti hibája sem blokkolja a másikat.
 
 ## Kötelező fizikai készülékteszt

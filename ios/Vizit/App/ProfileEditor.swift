@@ -392,9 +392,11 @@ struct ProfileEditor: View {
 
 /// First card flow. Uses the existing AppStore save path and the device's own screen chrome.
 struct ProfileWizard: View {
+    var isAdditional = false
     var onSaving: () -> Void = {}
     var onSaveFailed: () -> Void = {}
     var onFinished: () -> Void = {}
+    var onCancel: (() -> Void)? = nil
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @State private var draft: ContactProfile = {
@@ -465,6 +467,15 @@ struct ProfileWizard: View {
             } else {
             VStack(spacing: 0) {
                 HStack {
+                    if isAdditional, let onCancel {
+                        Button(action: onCancel) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Bezárás")
+                    }
                     Text(titles[step] ?? "Névjegy").font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
                     Spacer()
                     Text(step == "done" ? "Kész" : "\(index + 1) / \(path.count - 1)")
@@ -514,7 +525,8 @@ struct ProfileWizard: View {
     @ViewBuilder private var content: some View {
         switch step {
         case "type":
-            Text("Hozzuk létre az első profilodat").font(VizitFont.title)
+            Text(isAdditional ? "Hozzuk létre az új profilodat" : "Hozzuk létre az első profilodat")
+                .font(VizitFont.title)
             Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.")
                 .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
             Text("Milyen névjegyet készítesz?").font(VizitFont.h3)
@@ -645,7 +657,18 @@ struct ProfileWizard: View {
     private func save() {
         guard let prepared = normalizeURLs() else { error = "A hivatkozások teljes, https:// kezdetű címek legyenek."; return }
         onSaving()
-        do { try store.save(prepared); presentation.value.colorway = selectedStyle; published = true }
+        do {
+            var cardPresentation = presentation.value
+            cardPresentation.colorway = selectedStyle
+            if isAdditional {
+                try store.createBusinessCard(prepared, presentation: cardPresentation)
+            } else {
+                try store.save(prepared)
+                store.updateActiveCardPresentation(cardPresentation)
+            }
+            presentation.value = cardPresentation
+            published = true
+        }
         catch { onSaveFailed(); self.error = error.localizedDescription }
     }
     private func process(_ selection: PhotosPickerItem?, isLogo: Bool) async {
