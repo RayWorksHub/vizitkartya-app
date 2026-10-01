@@ -106,7 +106,7 @@ fun VizitApp(
     var showCardAppearance by rememberSaveable { mutableStateOf(false) }
     var showDataVisibility by rememberSaveable { mutableStateOf(false) }
     var showScanner by rememberSaveable { mutableStateOf(false) }
-    var wizardCompleted by rememberSaveable { mutableStateOf(false) }
+    var creatingAdditionalCard by rememberSaveable { mutableStateOf(false) }
     var wizardSaving by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
     val sectionStateHolder = rememberSaveableStateHolder()
@@ -167,16 +167,31 @@ fun VizitApp(
         }
     }
 
-    if ((viewModel.profile.resolvedDisplayName.isBlank() || wizardSaving) && !wizardCompleted) {
+    val needsFirstCard = if (viewModel.usesBusinessCardCatalog) {
+        viewModel.businessCards.isEmpty()
+    } else {
+        viewModel.profile.resolvedDisplayName.isBlank()
+    }
+    if (needsFirstCard || creatingAdditionalCard || wizardSaving) {
         ProfileWizardScreen(onSave = { draft ->
             wizardSaving = true
-            val issue = try { viewModel.saveProfile(draft) } catch (failure: Exception) {
+            val issue = try {
+                if (creatingAdditionalCard) viewModel.createBusinessCard(draft)
+                else viewModel.saveProfile(draft)
+            } catch (failure: Exception) {
                 failure.localizedMessage ?: "A mentés nem sikerült."
             }
             if (issue != null) wizardSaving = false
             issue
         }, presentation = viewModel.cardPresentation,
-            onAppearanceChange = viewModel::updateCardPresentation, onDone = { wizardCompleted = true; wizardSaving = false })
+            onAppearanceChange = viewModel::updateCardPresentation,
+            onDone = { creatingAdditionalCard = false; wizardSaving = false },
+            isAdditional = creatingAdditionalCard,
+            onCancel = if (creatingAdditionalCard) {
+                { creatingAdditionalCard = false; wizardSaving = false }
+            } else {
+                null
+            })
         return
     }
 
@@ -268,6 +283,10 @@ fun VizitApp(
                         onOpenScanner = { showScanner = true },
                         featureFlags = viewModel.featureFlags,
                         onShareAsText = viewModel::shareAsText,
+                        businessCards = viewModel.businessCards,
+                        activeBusinessCardId = viewModel.activeBusinessCardId,
+                        onSelectBusinessCard = viewModel::selectBusinessCard,
+                        onCreateBusinessCard = { creatingAdditionalCard = true },
                     )
 
                     AppSection.CARD -> CardScreen(
@@ -277,6 +296,9 @@ fun VizitApp(
                         onShare = { selectedSection = AppSection.SHARE },
                         onOpenCardAppearance = { showCardAppearance = true },
                         onOpenDataVisibility = { showDataVisibility = true },
+                        canDelete = viewModel.usesBusinessCardCatalog &&
+                            viewModel.activeBusinessCardId != null,
+                        onDelete = viewModel::deleteActiveBusinessCard,
                     )
 
                     AppSection.SHARE -> ShareScreen(

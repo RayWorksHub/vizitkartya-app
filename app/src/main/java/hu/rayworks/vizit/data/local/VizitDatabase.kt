@@ -16,12 +16,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProfileFieldSettingsEntity::class,
         ProfileSyncMetadataEntity::class,
         ProfileSyncOutboxEntity::class,
+        BusinessCardCacheEntity::class,
+        BusinessCardSelectionEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class VizitDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
+    abstract fun businessCardDao(): BusinessCardDao
 
     companion object {
         @Volatile
@@ -93,12 +96,44 @@ abstract class VizitDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS business_card_cache (
+                        ownerId TEXT NOT NULL,
+                        profileId TEXT NOT NULL,
+                        payloadJson TEXT NOT NULL,
+                        fingerprint TEXT NOT NULL,
+                        isPrimary INTEGER NOT NULL,
+                        createdAt TEXT NOT NULL,
+                        updatedAt TEXT NOT NULL,
+                        cachedAtEpochMs INTEGER NOT NULL,
+                        PRIMARY KEY(ownerId, profileId)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_business_card_cache_ownerId " +
+                        "ON business_card_cache(ownerId)",
+                )
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS business_card_selection (
+                        ownerId TEXT NOT NULL PRIMARY KEY,
+                        profileId TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun get(context: Context): VizitDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 VizitDatabase::class.java,
                 "vizit.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { instance = it }
         }

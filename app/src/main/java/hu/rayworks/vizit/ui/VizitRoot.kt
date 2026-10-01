@@ -84,17 +84,23 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
     }
 
     when (currentSession) {
-        is AuthSessionState.Authenticated -> when (vizitViewModel.profileLoadStatus) {
-            ProfileLoadStatus.READY -> VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
-            ProfileLoadStatus.UNAVAILABLE -> Screen {
-                VizitErrorState(
-                    title = "A névjegy most nem tölthető be",
-                    message = "Nem nyitjuk meg az újprofil-varázslót, amíg nem derül ki biztosan, hogy ehhez a fiókhoz még nincs névjegy.",
-                    onRetry = vizitViewModel::retryProfileLoad,
-                )
+        is AuthSessionState.Authenticated -> if (!vizitViewModel.isBoundToCloudOwner(currentSession.userId)) {
+            // Never render the previously signed-in account while LaunchedEffect
+            // is rebinding the ViewModel to the new authenticated owner.
+            Booting("Fiók ellenőrzése…")
+        } else {
+            when (vizitViewModel.profileLoadStatus) {
+                ProfileLoadStatus.READY -> VizitApp(viewModel = vizitViewModel, authViewModel = authViewModel)
+                ProfileLoadStatus.UNAVAILABLE -> Screen {
+                    VizitErrorState(
+                        title = "A névjegyek most nem tölthetők be",
+                        message = "Nem nyitjuk meg az újnévjegy-varázslót, amíg nem derül ki biztosan, hogy ehhez a fiókhoz még nincs névjegy.",
+                        onRetry = vizitViewModel::retryProfileLoad,
+                    )
+                }
+                ProfileLoadStatus.IDLE,
+                ProfileLoadStatus.LOADING -> Booting("Névjegyek ellenőrzése…")
             }
-            ProfileLoadStatus.IDLE,
-            ProfileLoadStatus.LOADING -> Booting("Névjegy ellenőrzése…")
         }
 
         AuthSessionState.Initializing -> Booting("Betöltés…")
@@ -118,7 +124,11 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
         }
 
         is AuthSessionState.RefreshFailed ->
-            if (vizitViewModel.hasOfflineProfileSession) {
+            if (
+                currentSession.cachedUserId != null &&
+                vizitViewModel.isBoundToCloudOwner(currentSession.cachedUserId) &&
+                vizitViewModel.hasOfflineProfileSession
+            ) {
                 VizitApp(
                     viewModel = vizitViewModel,
                     authViewModel = authViewModel,

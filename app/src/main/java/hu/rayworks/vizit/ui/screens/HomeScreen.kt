@@ -50,6 +50,7 @@ import hu.rayworks.vizit.NfcStatus
 import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.AppFeatureFlags
 import hu.rayworks.vizit.data.card.CardPresentation
+import hu.rayworks.vizit.data.cards.OwnedBusinessCard
 import hu.rayworks.vizit.data.sync.ProfileSyncState
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
 import hu.rayworks.vizit.ui.design.Vizit
@@ -85,6 +86,10 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenScanner: () -> Unit = {},
     presentation: CardPresentation = CardPresentation(),
+    businessCards: List<OwnedBusinessCard> = emptyList(),
+    activeBusinessCardId: String? = null,
+    onSelectBusinessCard: (String) -> Unit = {},
+    onCreateBusinessCard: () -> Unit = {},
 ) {
     val colors = Vizit.colors
     val context = LocalContext.current
@@ -111,8 +116,18 @@ fun HomeScreen(
                 )
             }
 
-            Box(modifier = Modifier.clickable(role = Role.Button, onClick = onOpenCard)) {
-                ProfileCard(profile = profile, presentation = presentation)
+            if (businessCards.isNotEmpty()) {
+                BusinessCardPager(
+                    cards = businessCards,
+                    activeProfileId = activeBusinessCardId,
+                    onSelect = onSelectBusinessCard,
+                    onOpenCard = onOpenCard,
+                    onCreateCard = onCreateBusinessCard,
+                )
+            } else {
+                Box(modifier = Modifier.clickable(role = Role.Button, onClick = onOpenCard)) {
+                    ProfileCard(profile = profile, presentation = presentation)
+                }
             }
 
             VizitButton(

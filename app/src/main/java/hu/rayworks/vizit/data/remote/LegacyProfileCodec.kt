@@ -29,6 +29,8 @@ data class LegacyProfileRecord(
     @SerialName("is_public") val isPublic: Boolean = false,
     @SerialName("custom_domain") val customDomain: String? = null,
     @SerialName("custom_domain_verified") val customDomainVerified: Boolean = false,
+    @SerialName("is_primary") val isPrimary: Boolean = false,
+    @SerialName("created_at") val createdAt: String = "",
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("social_links") val socialLinks: List<LegacySocialLink> = emptyList(),
 ) {

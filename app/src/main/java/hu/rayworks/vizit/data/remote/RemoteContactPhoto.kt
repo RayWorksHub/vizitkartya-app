@@ -12,7 +12,11 @@ import java.net.URI
 import java.util.Base64
 
 object RemoteContactPhoto {
-    suspend fun load(value: String?, supabaseUrl: String): String = withContext(Dispatchers.IO) {
+    suspend fun load(
+        value: String?,
+        supabaseUrl: String,
+        expectedOwnerId: String? = null,
+    ): String = withContext(Dispatchers.IO) {
         if (value.isNullOrEmpty()) return@withContext ""
         val input = if (value.startsWith(LegacyProfileCodec.INLINE_PREFIX)) {
             require(value.length <= 350000)
@@ -24,6 +28,10 @@ object RemoteContactPhoto {
             val uri = URI(value); val origin = URI(supabaseUrl)
             require(uri.scheme == "https" && uri.host == origin.host && uri.port == origin.port && uri.userInfo == null && uri.query == null && uri.fragment == null)
             require(Regex("^/storage/v1/object/public/avatars/[a-fA-F0-9-]{36}/[a-zA-Z0-9_.-]+$").matches(uri.path) && !uri.path.contains(".."))
+            require(
+                expectedOwnerId == null ||
+                    uri.path.startsWith("/storage/v1/object/public/avatars/$expectedOwnerId/"),
+            ) { "A kép nem a bejelentkezett fiókhoz tartozik." }
             val connection = uri.toURL().openConnection() as HttpURLConnection
             try {
                 connection.instanceFollowRedirects = false

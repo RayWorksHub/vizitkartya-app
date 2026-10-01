@@ -18,7 +18,7 @@ class NodeBackendApi(private val client: SupabaseClient?) {
     suspend fun request(method: String, path: String, body: JsonObject? = null,
                         authenticated: Boolean = true): JsonObject {
         require(method in setOf("GET", "POST", "PUT", "DELETE"))
-        require(path in setOf("/api/profile", "/api/account", "/api/auth/sign-in", "/api/analytics/summary"))
+        require(path.isAllowedApiPath())
         val owner = if (authenticated) userId() ?: throw NodeBackendException(401, "session_unavailable", "Jelentkezz be újra.") else null
         suspend fun send(): Pair<Int, JsonObject> {
             val token = if (authenticated) {
@@ -80,6 +80,16 @@ class NodeBackendApi(private val client: SupabaseClient?) {
             result.second["error"]?.jsonPrimitive?.contentOrNull?.take(500) ?: "A szerver jelenleg nem érhető el.",
             result.second["conflict"]?.jsonPrimitive?.booleanOrNull == true)
         return result.second
+    }
+
+    private fun String.isAllowedApiPath(): Boolean =
+        this in setOf("/api/profile", "/api/profiles", "/api/account", "/api/auth/sign-in", "/api/analytics/summary") ||
+            PROFILE_BY_ID.matches(this)
+
+    private companion object {
+        private val PROFILE_BY_ID = Regex(
+            "^/api/profiles/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        )
     }
 }
 

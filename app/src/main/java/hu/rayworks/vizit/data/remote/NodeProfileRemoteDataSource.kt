@@ -25,8 +25,12 @@ class NodeProfileRemoteDataSource(private val client: SupabaseClient?) : Profile
     }
     private suspend fun snapshot(record: Record) = RemoteProfileSnapshot(record.row.version,
         record.row.payload(
-            RemoteContactPhoto.load(record.row.avatarUrl, BuildConfig.SUPABASE_URL),
-            RemoteContactPhoto.load(RemoteProfileLogo.url(record.row.appearance), BuildConfig.SUPABASE_URL),
+            RemoteContactPhoto.load(record.row.avatarUrl, BuildConfig.SUPABASE_URL, record.row.ownerId),
+            RemoteContactPhoto.load(
+                RemoteProfileLogo.url(record.row.appearance),
+                BuildConfig.SUPABASE_URL,
+                record.row.ownerId,
+            ),
         ))
     override suspend fun pull(userId: String): RemoteProfileSnapshot? {
         if (authenticatedUserId() != userId) return null
@@ -48,7 +52,11 @@ class NodeProfileRemoteDataSource(private val client: SupabaseClient?) : Profile
             if (sourceChanged && current != null) return conflict(mutation.userId)
             val values = LegacyProfileCodec.write(mutation.payload, current?.row, mutation.userId)
             val remoteLogo = if (mutation.payload.logoPath != null && current != null)
-                RemoteContactPhoto.load(RemoteProfileLogo.url(current.row.appearance), BuildConfig.SUPABASE_URL)
+                RemoteContactPhoto.load(
+                    RemoteProfileLogo.url(current.row.appearance),
+                    BuildConfig.SUPABASE_URL,
+                    mutation.userId,
+                )
             else ""
             val oldLinks = current?.raw?.get("social_links")?.jsonArray.orEmpty().map { it.jsonObject }
             // Preserve custom/unknown links, their visibility and the existing order.
