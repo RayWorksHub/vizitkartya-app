@@ -35,9 +35,17 @@ másik platform projektjét, és a platform CI útvonalszűrői sem figyelik a m
 
 Az iOS `CURRENT_PROJECT_VERSION` külön buildszám. A TestFlight CI ezt a GitHub Actions futásszámából állítja elő, ezért nem kell megegyeznie az Android `versionCode` értékével.
 
-Jelenlegi Android verzió: **10.0.1** (`versionCode`: **10000001**). Jelenlegi iOS verzió: **9.0.0**.
+Jelenlegi Android verzió: **10.0.2** (`versionCode`: **10000002**). Jelenlegi iOS verzió: **9.0.0**.
 
-## 9.0.0 – több profil egy fiókban
+## Android 10.0.2 – külön fiók és aktív profil
+
+- A profilváltás helyi profilazonosítót választ; a bejelentkezett fiók és a szerver alapértelmezett profilja külön állapot.
+- A helyi adatok, megjelenési beállítások és függő mentések `(ownerId, profileId)` szerint tárolódnak. Minden profil elérhető a helyi gyorsítótárból.
+- A mentés, törlés és statisztika konkrét profilazonosítóra megy; a QR és NFC az adott profil teljes rekordját használja.
+- A menüben a bejelentkezett fiók e-mailje látható. Új profil ugyanahhoz a fiókhoz készül.
+- Részletek és ellenőrzési kör: [android-10.0.2-profile-isolation.md](android-10.0.2-profile-isolation.md).
+
+## 9.0.0 – korábbi többprofilos megoldás (Androidon a 10.0.2 felváltja)
 
 - A profilválasztó csak akkor enged új profilt létrehozni, amikor az éles `multi_profile` funkciókapcsoló aktív.
 - A kiválasztott mobilprofil egyben a fiók alapértelmezett profilja, ezért a 8.x kliensek ugyanazt az aktív profilt látják.

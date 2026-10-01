@@ -5,6 +5,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.StartOffsetType
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -14,7 +15,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.TargetedFlingBehavior
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,8 +53,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +83,7 @@ import hu.rayworks.vizit.v10.ui.components.dashedBorder
 import hu.rayworks.vizit.v10.ui.components.noRippleClickable
 import hu.rayworks.vizit.v10.ui.icons.VIcons
 import hu.rayworks.vizit.v10.ui.theme.V
+import kotlin.math.abs
 
 /* ------------------------------------------------------------------ fejléc */
 
@@ -372,21 +382,95 @@ fun Dots(count: Int, selected: Int, onPick: (Int) -> Unit) {
 @Composable
 fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
     val pager = rememberPagerState(initialPage = app.selected) { app.profiles.size + 1 }
-    LaunchedEffect(pager) {
-        snapshotFlow { pager.currentPage }.collect { app.selected = it }
+    var swipeStart by remember(pager) { mutableStateOf<Pair<Long, Int>?>(null) }
+    val minimumFlingVelocity = with(LocalDensity.current) { 400.dp.toPx() }
+    val fling = remember(pager, minimumFlingVelocity) {
+        object : TargetedFlingBehavior {
+            override suspend fun ScrollScope.performFling(initialVelocity: Float,
+                                                         onRemainingDistanceUpdated: (Float) -> Unit): Float {
+                val gesture = swipeStart
+                try {
+                    val origin = gesture?.second ?: pager.settledPage
+                    val position = pager.currentPage + pager.currentPageOffsetFraction
+                    val displacement = position - origin
+                    val direction = when {
+                        displacement > 0.001f -> 1
+                        displacement < -0.001f -> -1
+                        initialVelocity > 0f -> 1
+                        initialVelocity < 0f -> -1
+                        else -> 0
+                    }
+                    val quickForward = abs(initialVelocity) >= minimumFlingVelocity &&
+                        initialVelocity * direction > 0f
+                    val target = (origin + if (abs(displacement) >= 0.5f || quickForward) direction else 0)
+                        .coerceIn(0, pager.pageCount - 1)
+                    val distance = (target - position) * (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing)
+                    if (hu.rayworks.vizit.BuildConfig.DEBUG) android.util.Log.d("VizitProfilePager",
+                        "fling origin=$origin position=$position velocity=$initialVelocity target=$target")
+                    // Drive the existing scroll scope to the exact card; a second native snap
+                    // must not choose another neighbor after the approach animation.
+                    var consumed = 0f
+                    onRemainingDistanceUpdated(distance)
+                    if (abs(distance) > 0.5f) {
+                        animate(0f, distance, animationSpec = tween(240, easing = EaseOut)) { value, _ ->
+                            consumed += scrollBy(value - consumed)
+                            onRemainingDistanceUpdated(distance - consumed)
+                        }
+                    }
+                    scrollBy(distance - consumed)
+                    onRemainingDistanceUpdated(0f)
+                    return 0f
+                } finally {
+                    if (swipeStart === gesture) swipeStart = null
+                }
+            }
+        }
     }
     var handled by remember { mutableStateOf(app.goToRequest?.nonce) }
+    var applyingNavigation by remember { mutableStateOf(false) }
+    LaunchedEffect(pager) {
+        snapshotFlow {
+            Triple(pager.settledPage, pager.isScrollInProgress || applyingNavigation, app.goToRequest?.nonce != handled)
+        }.collect { (page, scrolling, pendingNavigation) ->
+            if (!scrolling && !pendingNavigation) app.selected = page
+        }
+    }
     val req = app.goToRequest
     LaunchedEffect(req) {
         if (req != null && req.nonce != handled) {
+            applyingNavigation = true
             handled = req.nonce
-            if (req.animate) pager.animateScrollToPage(req.index) else pager.scrollToPage(req.index)
+            swipeStart = null
+            try {
+                val index = req.index.coerceIn(0, app.profiles.size)
+                if (req.animate) pager.animateScrollToPage(index) else {
+                    // Apply catalog changes and the requested selection in the same remeasure.
+                    // An immediate scroll can measure the old "new-profile" key and retain it
+                    // at the end of the newly loaded catalog while AppState still selects 0.
+                    pager.requestScrollToPage(index)
+                }
+            } finally {
+                applyingNavigation = false
+            }
         }
     }
     Column(modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pager,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("profile-pager").pointerInput(pager) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    swipeStart = System.nanoTime() to pager.settledPage
+                    if (hu.rayworks.vizit.BuildConfig.DEBUG) android.util.Log.d("VizitProfilePager",
+                        "touch origin=${swipeStart?.second} current=${pager.currentPage}")
+                    waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                    // Consumed drag events can cancel this observer before the scroll job starts.
+                    // The matching fling (or a later explicit navigation) clears the origin.
+                }
+            },
+            key = { index -> app.profiles.getOrNull(index)?.id ?: "new-profile" },
+            userScrollEnabled = !app.operationBusy,
+            flingBehavior = fling,
             contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 6.dp, bottom = 20.dp),
             pageSpacing = 12.dp,
             verticalAlignment = Alignment.Top,
@@ -395,7 +479,7 @@ fun ProfileStack(app: AppState, modifier: Modifier = Modifier) {
             if (i < list.size) {
                 ProfileCard(list[i], qr = app.cardQr(list[i]), onQr = { app.openFullQr(i) })
             } else {
-                NewProfileCard(list.first(), onCreate = { app.openWizard() })
+                NewProfileCard(list.firstOrNull() ?: app.focus, onCreate = { app.openWizard() })
             }
         }
         Dots(count = app.profiles.size, selected = app.selected, onPick = { app.goTo(it) })

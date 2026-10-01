@@ -147,8 +147,9 @@ fun MenuSheet(app: AppState) {
             ) {
                 ProfileAvatar(p, 48.dp, V.blueSoft, V.blue)
                 Column(Modifier.weight(1f)) {
-                    Text(p.name, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (p.email.isNotBlank()) Text(p.email, fontSize = 13.sp, color = V.sub, maxLines = 1)
+                    Text(if (app.productionMode) app.accountName else p.name, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val email = if (app.productionMode) app.accountEmail else p.email
+                    if (email.isNotBlank()) Text(email, fontSize = 13.sp, color = V.sub, maxLines = 1)
                 }
                 SyncPill(app)
             }
@@ -441,7 +442,10 @@ fun EditSheet(app: AppState) {
                     PicRow(
                         "Profilkép", pf.photo, round = true, initials = pf.initials,
                         links = if (pf.photo != null) listOf("Csere" to { pick("photo") }, "Törlés" to { upd { it.copy(photo = null) } })
-                        else listOf("Mostani kép" to { upd { it.copy(photo = Pic.Res(R.drawable.avatar)) } }, "Feltöltés" to { pick("photo") }),
+                        else listOf("Mostani kép" to {
+                            val currentPhoto = if (app.productionMode) app.profiles.firstOrNull { it.photo != null }?.photo else Pic.Res(R.drawable.avatar)
+                            if (currentPhoto != null) upd { it.copy(photo = currentPhoto) } else pick("photo")
+                        }, "Feltöltés" to { pick("photo") }),
                     ) { pick("photo") }
                     PicRow(
                         "Céges logó", pf.logo, round = false, initials = "",

@@ -264,7 +264,7 @@ fun AnalyticsPage(app: AppState) {
             stats = if (!p.real) {
                 null
             } else if (app.productionMode) {
-                liveStats(NodeBackendApi(SupabaseProvider.getOrNull()).request("GET", "/api/analytics/summary"))
+                liveStats(NodeBackendApi(SupabaseProvider.getOrNull()).request("GET", "/api/analytics/summary?profileId=${p.id}"))
             } else {
                 delay(650)
                 sampleStats()

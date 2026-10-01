@@ -4,7 +4,7 @@ on:
     branches: [fix/beta-share-stability]
     paths: ['app/**', 'config/android-version.properties', 'config/android-node.properties', 'config/sharing.properties', 'gradle/**', '*.kts', 'gradle.properties', '.github/workflows/android-stability.yml']
   pull_request:
-    branches: [develop]
+    branches: [main, develop]
     paths: ['app/**', 'config/android-version.properties', 'config/android-node.properties', 'config/sharing.properties', '.github/workflows/android-stability.yml']
 permissions:
   contents: read

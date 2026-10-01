@@ -11,7 +11,6 @@ import hu.rayworks.vizit.data.remote.NodeProfileCatalog
 import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.data.card.CardPresentationStore
 import hu.rayworks.vizit.data.settings.AppSettingsStore
-import hu.rayworks.vizit.data.sync.ProfileSyncEngine
 import hu.rayworks.vizit.data.sync.WorkManagerProfileSyncScheduler
 import hu.rayworks.vizit.nfc.NfcRouting
 
@@ -34,12 +33,17 @@ class VizitAppContainer(application: Application) {
     private val supabaseClient = SupabaseProvider.getOrNull()
     private val remoteDataSource = NodeProfileRemoteDataSource(supabaseClient)
     val profileCatalog = NodeProfileCatalog(supabaseClient)
-    val profileSyncEngine = ProfileSyncEngine(localStore = localStore, remoteDataSource = remoteDataSource)
+    val accountProfileRepository = hu.rayworks.vizit.data.account.AccountProfileRepository(
+        dao = database.accountProfileDao(),
+        remote = hu.rayworks.vizit.data.account.NodeAccountProfileRemote(profileCatalog, remoteDataSource),
+        scheduler = syncScheduler,
+        automaticSync = { settingsStore.current().automaticSyncEnabled },
+    )
     val profileRepository = ContactProfileRepository(
         localStore = localStore,
         settingsStore = settingsStore,
         legacyStore = LegacyContactProfileStore(application),
         syncScheduler = syncScheduler,
-        initialSynchronizer = { profileSyncEngine.run() },
+        // The legacy local profile is used only by the offline DEV preview.
     )
 }

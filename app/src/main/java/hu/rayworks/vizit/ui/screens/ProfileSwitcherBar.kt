@@ -31,7 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import hu.rayworks.vizit.data.remote.AccountProfile
+import hu.rayworks.vizit.data.account.OwnedProfile
 import hu.rayworks.vizit.ui.design.Vizit
 import hu.rayworks.vizit.ui.design.components.VizitBanner
 import hu.rayworks.vizit.ui.design.components.VizitButton
@@ -40,7 +40,8 @@ import hu.rayworks.vizit.ui.design.components.VizitTone
 
 @Composable
 fun ProfileSwitcherBar(
-    profiles: List<AccountProfile>,
+    profiles: List<OwnedProfile>,
+    activeProfileId: String?,
     multiProfileEnabled: Boolean,
     busy: Boolean,
     message: String?,
@@ -51,7 +52,7 @@ fun ProfileSwitcherBar(
     modifier: Modifier = Modifier,
 ) {
     if (!multiProfileEnabled && profiles.size <= 1) return
-    val active = profiles.firstOrNull { it.isDefault } ?: profiles.firstOrNull()
+    val active = profiles.firstOrNull { it.id == activeProfileId } ?: profiles.firstOrNull()
     var pickerOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
@@ -102,12 +103,12 @@ fun ProfileSwitcherBar(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = !busy && !profile.isDefault, role = Role.Button) {
+                                .clickable(enabled = !busy && profile.id != activeProfileId, role = Role.Button) {
                                     pickerOpen = false
                                     onSwitch(profile.id)
                                 },
                             shape = RoundedCornerShape(12.dp),
-                            color = if (profile.isDefault) Vizit.colors.primarySubtle else Vizit.colors.surface,
+                            color = if (profile.id == activeProfileId) Vizit.colors.primarySubtle else Vizit.colors.surface,
                         ) {
                             Row(
                                 modifier = Modifier.padding(Vizit.space.sm),
@@ -115,7 +116,7 @@ fun ProfileSwitcherBar(
                                 horizontalArrangement = Arrangement.spacedBy(Vizit.space.sm),
                             ) {
                                 Icon(
-                                    if (profile.isDefault) Icons.Outlined.Check else Icons.Outlined.PersonOutline,
+                                    if (profile.id == activeProfileId) Icons.Outlined.Check else Icons.Outlined.PersonOutline,
                                     contentDescription = null,
                                     tint = Vizit.colors.primary,
                                 )
@@ -123,7 +124,7 @@ fun ProfileSwitcherBar(
                                     Text(profile.displayName, style = Vizit.type.label)
                                     Text("/${profile.slug}", style = Vizit.type.caption, color = Vizit.colors.textMuted)
                                 }
-                                if (profile.isDefault) {
+                                if (profile.id == activeProfileId) {
                                     Icon(Icons.Outlined.StarOutline, contentDescription = "Aktív és alapértelmezett")
                                 }
                             }

@@ -87,6 +87,10 @@ class NodeBackendApi(private val client: SupabaseClient?) {
             return true
         }
         if (path == "/api/profiles") return method == "GET" || method == "POST"
+        if (method == "GET" && Regex("^/api/analytics/summary\\?profileId=[0-9a-fA-F-]{36}$").matches(path)) {
+            val id = path.substringAfter("profileId=")
+            return runCatching { java.util.UUID.fromString(id).toString().equals(id, ignoreCase = true) }.getOrDefault(false)
+        }
         val profile = Regex("^/api/profiles/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
         val makeDefault = Regex("^/api/profiles/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/default$", RegexOption.IGNORE_CASE)
         return (profile.matches(path) && method in setOf("GET", "PUT", "DELETE")) ||

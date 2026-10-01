@@ -150,6 +150,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val authRepository = repositoryOrThrow()
             val userId = authRepository.authenticatedUserId() ?: error("Authenticated session required")
             authRepository.deleteAccount()
+            container.accountProfileRepository.deleteAccount(userId)
             container.profileRepository.deleteLocalProfile(userId)
             runCatching { authRepository.logout() }
             settingsStore.clearAuthenticationCache()

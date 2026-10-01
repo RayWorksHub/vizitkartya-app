@@ -582,7 +582,9 @@ private fun Media(c: WizardController, kind: String) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     val links: List<Pair<String, () -> Unit>> = when {
                         pic != null -> listOf("Csere" to { c.pickImage(kind) }, "Törlés" to { wiz.setPic(kind, null) })
-                        photo -> listOf("Mostani kép" to { wiz.setPic(kind, Pic.Res(R.drawable.avatar)) }, "Feltöltés" to { c.pickImage(kind) })
+                        photo -> listOf("Mostani kép" to {
+                            wiz.currentPhoto?.let { wiz.setPic(kind, it) } ?: c.pickImage(kind)
+                        }, "Feltöltés" to { c.pickImage(kind) })
                         else -> listOf("Feltöltés" to { c.pickImage(kind) }, "Minta" to { wiz.setPic(kind, Pic.Res(R.drawable.sample_logo)) })
                     }
                     links.forEach { (t, onClick) ->

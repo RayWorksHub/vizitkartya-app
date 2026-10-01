@@ -89,23 +89,31 @@ class SupabaseAuthRepository(
     fun refreshLegalAcceptance() { legalAcceptanceRefresh.update { it + 1L } }
     fun authenticatedUserId(): String? = client.auth.currentSessionOrNull()?.user?.id
 
+    private fun accountIdentity(userId: String): AuthSessionState.Authenticated {
+        val user = client.auth.currentSessionOrNull()?.user?.takeIf { it.id == userId }
+        return AuthSessionState.Authenticated(userId, user?.email.orEmpty(),
+            user?.userMetadata?.get("display_name")?.jsonPrimitive?.contentOrNull.orEmpty())
+    }
+
     private suspend fun authenticatedState(userId: String): AuthSessionState {
-        if (!legalDocumentsReady) return AuthSessionState.Authenticated(userId)
+        if (!legalDocumentsReady) return accountIdentity(userId)
         return runCatching {
             if (hasLegalAcceptance()) {
                 settingsStore.rememberLegalAcceptance(userId, privacyPolicyVersion, termsVersion)
-                AuthSessionState.Authenticated(userId)
+                accountIdentity(userId)
             } else AuthSessionState.LegalAcceptanceRequired(userId)
         }.getOrElse {
-            if (hasCachedLegalAcceptance(userId)) AuthSessionState.Authenticated(userId)
+            if (hasCachedLegalAcceptance(userId)) accountIdentity(userId)
             else AuthSessionState.LegalAcceptanceCheckFailed(userId,
                 "A jogi elfogadás ellenőrzéséhez internetkapcsolat szükséges.")
         }
     }
     private suspend fun refreshFailureState(): AuthSessionState {
         val userId = authenticatedUserId() ?: return AuthSessionState.SignedOut
+        val identity = accountIdentity(userId)
         return if (!legalDocumentsReady || hasCachedLegalAcceptance(userId)) AuthSessionState.RefreshFailed(
-            message = "A munkamenet megújítása nem sikerült. A helyi profil továbbra is használható.", cachedUserId = userId)
+            message = "A munkamenet megújítása nem sikerült. A helyi profil továbbra is használható.",
+            cachedUserId = userId, email = identity.email, displayName = identity.displayName)
         else AuthSessionState.LegalAcceptanceCheckFailed(userId,
             "A munkamenet és a jogi elfogadás ellenőrzéséhez internetkapcsolat szükséges.")
     }
