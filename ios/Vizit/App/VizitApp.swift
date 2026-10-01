@@ -455,7 +455,12 @@ final class AppStore: ObservableObject {
             indexStore = BusinessCardCatalogStore(directory: directory, ownerID: ownerID)
             catalogStore = indexStore
         }
-        var index = catalog ?? (try indexStore.load())
+        var index: BusinessCardCatalog
+        if let catalog {
+            index = catalog
+        } else {
+            index = try indexStore.load()
+        }
         guard index.ownerID == ownerID else { throw ProfileError.damagedFile }
         let profileID = UUID()
         index.cards.append(BusinessCardCatalogEntry(

@@ -593,7 +593,6 @@ private struct V10HomeMenu: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(VizitColor.canvas)
     }
 }
 
@@ -658,7 +657,6 @@ private struct V10ProfilesSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(VizitColor.canvas)
     }
 }
 
