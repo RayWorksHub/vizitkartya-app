@@ -33,6 +33,7 @@ jobs:
           import subprocess
           import tempfile
           import time
+          import urllib.error
           import urllib.parse
           import urllib.request
 
@@ -82,11 +83,15 @@ jobs:
               assert urllib.parse.urlsplit(url).hostname == "androidpublisher.googleapis.com"
               body = json.dumps(payload).encode() if payload is not None else None
               headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-              with urllib.request.urlopen(
-                  urllib.request.Request(url, data=body, headers=headers, method=method),
-                  timeout=60,
-              ) as response:
-                  return json.load(response)
+              try:
+                  with urllib.request.urlopen(
+                      urllib.request.Request(url, data=body, headers=headers, method=method),
+                      timeout=60,
+                  ) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as error:
+                  detail = error.read(8192).decode("utf-8", errors="replace")
+                  raise RuntimeError(f"{method} {urllib.parse.urlsplit(url).path} failed HTTP {error.code}: {detail[:2000]}") from error
 
           halted = []
           fallback = []
