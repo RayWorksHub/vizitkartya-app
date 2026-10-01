@@ -2,7 +2,9 @@ package hu.rayworks.vizit.data
 
 import hu.rayworks.vizit.qr.PublicProfileUrlFactory
 import java.net.URI
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class ContactProfile(
     val fullName: String = "",
     val firstName: String = "",

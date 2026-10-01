@@ -3,10 +3,12 @@ package hu.rayworks.vizit
 import android.app.Application
 import hu.rayworks.vizit.data.ContactProfileRepository
 import hu.rayworks.vizit.data.FeatureFlagRepository
+import hu.rayworks.vizit.data.cards.BusinessCardRepository
 import hu.rayworks.vizit.data.local.LegacyContactProfileStore
 import hu.rayworks.vizit.data.local.RoomProfileStore
 import hu.rayworks.vizit.data.local.VizitDatabase
 import hu.rayworks.vizit.data.remote.NodeProfileRemoteDataSource
+import hu.rayworks.vizit.data.remote.NodeBusinessCardRemoteDataSource
 import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.data.card.CardPresentationStore
 import hu.rayworks.vizit.data.settings.AppSettingsStore
@@ -31,6 +33,10 @@ class VizitAppContainer(application: Application) {
     private val localStore = RoomProfileStore(database.profileDao())
     private val syncScheduler = WorkManagerProfileSyncScheduler(application)
     private val remoteDataSource = NodeProfileRemoteDataSource(SupabaseProvider.getOrNull())
+    val businessCardRepository = BusinessCardRepository(
+        dao = database.businessCardDao(),
+        remote = NodeBusinessCardRemoteDataSource(SupabaseProvider.getOrNull()),
+    )
     val profileSyncEngine = ProfileSyncEngine(localStore = localStore, remoteDataSource = remoteDataSource)
     val profileRepository = ContactProfileRepository(
         localStore = localStore,

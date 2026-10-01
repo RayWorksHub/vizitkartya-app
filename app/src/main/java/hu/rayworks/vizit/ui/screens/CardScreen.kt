@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocationOn
@@ -25,10 +26,13 @@ import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -43,6 +47,7 @@ import hu.rayworks.vizit.ui.design.components.VizitEmptyState
 import hu.rayworks.vizit.ui.design.components.VizitGroup
 import hu.rayworks.vizit.ui.design.components.VizitRow
 import hu.rayworks.vizit.ui.design.components.VizitSectionHeader
+import kotlinx.coroutines.launch
 
 /**
  * The card tab: the card itself, what is on it, and the two things you can do
@@ -57,8 +62,46 @@ fun CardScreen(
     presentation: CardPresentation = CardPresentation(),
     onOpenCardAppearance: () -> Unit = {},
     onOpenDataVisibility: () -> Unit = {},
+    canDelete: Boolean = false,
+    onDelete: suspend () -> String? = { null },
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { if (!deleting) confirmDelete = false },
+            title = { Text("Névjegy törlése") },
+            text = {
+                Text(
+                    deleteError
+                        ?: "Biztosan törlöd ezt a névjegyet? A többi névjegyed változatlan marad.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deleting,
+                    onClick = {
+                        scope.launch {
+                            deleting = true
+                            deleteError = onDelete()
+                            deleting = false
+                            if (deleteError == null) confirmDelete = false
+                        }
+                    },
+                ) { Text(if (deleting) "Törlés…" else "Törlés") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deleting,
+                    onClick = { confirmDelete = false; deleteError = null },
+                ) { Text("Mégse") }
+            },
+        )
+    }
 
     if (editing) {
         ProfileEditScreen(
@@ -119,6 +162,15 @@ fun CardScreen(
             icon = Icons.Outlined.Share,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (canDelete) {
+            VizitButton(
+                text = "Névjegy törlése",
+                onClick = { deleteError = null; confirmDelete = true },
+                icon = Icons.Outlined.DeleteOutline,
+                style = VizitButtonStyle.Destructive,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         if (!hasDetails) {
             VizitEmptyState(

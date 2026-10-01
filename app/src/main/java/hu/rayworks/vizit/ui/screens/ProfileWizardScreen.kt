@@ -52,13 +52,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.Normalizer
 
-/** First profile only. The device's own status/navigation bars frame this screen. */
+/** Guided creation for the first or any additional business card. */
 @Composable
 fun ProfileWizardScreen(
     onSave: suspend (ContactProfile) -> String?,
     presentation: CardPresentation,
     onAppearanceChange: (CardPresentation) -> Unit,
     onDone: () -> Unit,
+    isAdditional: Boolean = false,
+    onCancel: (() -> Unit)? = null,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
@@ -138,7 +140,14 @@ fun ProfileWizardScreen(
         }
         return
     }
-    BackHandler(enabled = step > 0) { step = if (returnToReview) steps.lastIndex else step - 1; returnToReview = false; error = "" }
+    BackHandler(enabled = step > 0 || onCancel != null) {
+        if (step == 0) onCancel?.invoke()
+        else {
+            step = if (returnToReview) steps.lastIndex else step - 1
+            returnToReview = false
+            error = ""
+        }
+    }
     Column(Modifier.fillMaxSize().background(Vizit.colors.canvas).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(names[key].orEmpty(), style = Vizit.type.h2, color = Vizit.colors.textPrimary)
@@ -149,8 +158,12 @@ fun ProfileWizardScreen(
             if (key != "type") ProfileCard(profile = draft, presentation = presentation.copy(colorway = style))
             when (key) {
                 "type" -> {
-                    Text("Hozzuk létre az első profilodat", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
-                    Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.", color = Vizit.colors.textMuted)
+                    Text(
+                        if (isAdditional) "Hozzuk létre az új névjegyedet" else "Hozzuk létre az első névjegyedet",
+                        style = Vizit.type.h2,
+                        color = Vizit.colors.textPrimary,
+                    )
+                    Text("Válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.", color = Vizit.colors.textMuted)
                     Text("Milyen névjegyet készítesz?", style = Vizit.type.h3, color = Vizit.colors.textPrimary)
                     WizardChoice("Vállalkozói névjegy", "Vállalkozás, beosztás, logó és bemutatkozás", type == "business") { type = "business" }
                     WizardChoice("Magánszemély", "Személyes kapcsolatokhoz, csak a lényeg", type == "private") {
@@ -230,6 +243,15 @@ fun ProfileWizardScreen(
             if (error.isNotBlank()) Text(error, color = Vizit.colors.error)
         }
         Column(Modifier.fillMaxWidth().background(Vizit.colors.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (step == 0 && onCancel != null) {
+                VizitButton(
+                    "Mégse",
+                    onClick = onCancel,
+                    style = VizitButtonStyle.Tertiary,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !loading,
+                )
+            }
             if (step > 0) VizitButton("Vissza", onClick = {
                 step = if (returnToReview) steps.lastIndex else step - 1; returnToReview = false; error = ""
             }, style = VizitButtonStyle.Tertiary, modifier = Modifier.fillMaxWidth())
