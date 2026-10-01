@@ -1,7 +1,6 @@
 package hu.rayworks.vizit.data.card
 
 import hu.rayworks.vizit.data.ContactProfile
-import kotlinx.serialization.Serializable
 
 /**
  * How the card looks and which of the owner's data it carries.
@@ -11,7 +10,6 @@ import kotlinx.serialization.Serializable
  * rewrites the synchronised profile record. The iOS `CardPresentation` carries
  * the same fields with the same defaults.
  */
-@Serializable
 data class CardPresentation(
     val colorway: CardColorway = CardColorway.INK,
     val layout: CardLayout = CardLayout.PORTRAIT,
@@ -40,7 +38,6 @@ data class CardPresentation(
     }
 }
 
-@Serializable
 enum class CardColorway(
     val label: String,
     val gradientStart: Long,
@@ -57,7 +54,6 @@ enum class CardColorway(
     GRAPHITE("Grafit", 0xFF2B3240, 0xFF1D222D, 0xFF12161E, 0xFF8FD8F0),
 }
 
-@Serializable
 enum class CardLayout(val label: String) {
     PORTRAIT("Álló"),
     LANDSCAPE("Fekvő"),

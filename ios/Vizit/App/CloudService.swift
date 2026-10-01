@@ -11,7 +11,6 @@ struct AppFeatureFlags: Equatable, Sendable {
     var crm = true
     var qrScanner = true
     var onlineEditor = true
-    var multiProfile = false
 
     init(rows: [RemoteFeatureFlag] = []) {
         let values = Dictionary(uniqueKeysWithValues: rows.map { ($0.key, $0.enabled) })
@@ -20,7 +19,6 @@ struct AppFeatureFlags: Equatable, Sendable {
         crm = values["crm"] ?? true
         qrScanner = values["qr_scanner"] ?? true
         onlineEditor = values["online_editor"] ?? true
-        multiProfile = values["multi_profile"] ?? false
     }
 }
 
@@ -87,7 +85,6 @@ struct RemoteProfile: Decodable, Sendable {
     let avatarURL: String?
     let appearance: ProfileAppearance?
     let theme: String
-    let isDefault: Bool?
     var linkedIn = ""
     var facebook = ""
     var instagram = ""
@@ -161,21 +158,7 @@ struct RemoteProfile: Decodable, Sendable {
         case customDomainVerified = "custom_domain_verified"
         case avatarURL = "avatar_url"
         case appearance, theme
-        case isDefault = "is_default"
         case updatedAt = "updated_at"
-    }
-}
-
-struct AccountProfile: Identifiable, Equatable, Sendable, Decodable {
-    let id: UUID
-    let displayName: String
-    let slug: String
-    let isDefault: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case id, slug
-        case displayName = "display_name"
-        case isDefault = "is_default"
     }
 }
 
@@ -404,8 +387,7 @@ final class CloudService: @unchecked Sendable {
     func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
         let query = [
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "is_default", value: "eq.true"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,is_default,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme"),
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme"),
             URLQueryItem(name: "limit", value: "1")
         ]
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
@@ -449,43 +431,6 @@ final class CloudService: @unchecked Sendable {
         return (remote, profile)
     }
 
-    func fetchProfiles(ownerID: UUID) async throws -> [AccountProfile] {
-        try await request(path: ["rest", "v1", "profiles"], query: [
-            URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,display_name,slug,is_default"),
-            URLQueryItem(name: "order", value: "is_default.desc,created_at.asc,id.asc"),
-        ])
-    }
-
-    func makeDefaultProfile(ownerID: UUID, profileID: UUID) async throws {
-        let rows: [AccountProfile] = try await request(
-            path: ["rest", "v1", "profiles"],
-            method: "PATCH",
-            query: [
-                URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
-                URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-                URLQueryItem(name: "select", value: "id,display_name,slug,is_default"),
-            ],
-            body: ["is_default": true],
-            prefer: "return=representation"
-        )
-        guard rows.count == 1, rows[0].isDefault else { throw CloudError.emptyResponse }
-    }
-
-    func deleteProfile(ownerID: UUID, profileID: UUID) async throws {
-        let rows: [AccountProfile] = try await request(
-            path: ["rest", "v1", "profiles"],
-            method: "DELETE",
-            query: [
-                URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
-                URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-                URLQueryItem(name: "select", value: "id,display_name,slug,is_default"),
-            ],
-            prefer: "return=representation"
-        )
-        guard rows.count == 1 else { throw CloudError.emptyResponse }
-    }
-
     func createProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile) async throws -> RemoteProfile {
         let candidates = ProfileSlug.creationCandidates(
             requested: profile.publicSlug,
@@ -507,7 +452,7 @@ final class CloudService: @unchecked Sendable {
                                profile: ContactProfile, slug: String) async throws -> RemoteProfile {
         let payload = try await write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
-            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,is_default,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")],
+            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")],
             body: payload, prefer: "return=representation")
         guard let remote = rows.first else { throw CloudError.emptyResponse }
         return remote
@@ -523,7 +468,7 @@ final class CloudService: @unchecked Sendable {
             URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
             URLQueryItem(name: "updated_at", value: "eq.\(expectedUpdatedAt)"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,is_default,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")
         ], body: payload, prefer: "return=representation")
         guard let remote = rows.first else { return nil }
         return remote
@@ -690,7 +635,7 @@ private struct AnyEncodable: Encodable {
 
 enum CloudError: LocalizedError {
     case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled, providerUnavailable
-    case profileConflict, profileCatalogUnavailable
+    case profileConflict
     case passwordResetCooldown(Int)
     case server(status: Int, code: String?)
 
@@ -703,7 +648,6 @@ enum CloudError: LocalizedError {
         switch self {
         case .invalidCallback: return "A bejelentkezési hivatkozás érvénytelen."
         case .profileConflict: return "A profil közben másik eszközön megváltozott. Válaszd ki a megtartandó változatot."
-        case .profileCatalogUnavailable: return "Előbb várd meg a jelenlegi profil szinkronizálását, majd próbáld újra."
         case .invalidRequest: return "A kérés most nem küldhető el. Próbáld újra."
         case .emptyResponse: return "A kiszolgáló nem adott vissza mentett profilt."
         case .emailConfirmationDisabled: return "A kiszolgálón nincs kötelező e-mail-megerősítés. A munkamenetet biztonsági okból megszakítottuk."
