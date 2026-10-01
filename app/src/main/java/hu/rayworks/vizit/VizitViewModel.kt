@@ -14,6 +14,7 @@ import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.ContactProfileValidator
 import hu.rayworks.vizit.data.AppFeatureFlags
 import hu.rayworks.vizit.data.sync.ProfileSyncState
+import hu.rayworks.vizit.data.sync.ProfileSyncRunResult
 import hu.rayworks.vizit.nfc.HcePayloadStore
 import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.data.card.visibleThrough
@@ -29,11 +30,10 @@ import kotlinx.coroutines.launch
 
 class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private val container = (application as VizitApplication).container
-    private val repository = container.profileRepository // DEV local profile only.
+    private val repository = container.profileRepository
     private val settingsStore = container.settingsStore
     private val cardPresentationStore = container.cardPresentationStore
     private val featureFlagRepository = container.featureFlagRepository
-    private val profiles = hu.rayworks.vizit.data.account.AccountProfileSession(container.accountProfileRepository, viewModelScope)
     private val hcePayloadStore = HcePayloadStore()
     private var profileObservationJob: Job? = null
     private var nfcTimeoutJob: Job? = null
@@ -41,60 +41,61 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private var activeProfileOwnerId: String? = null
     private var cloudSyncEnabled = false
 
-    var accountState by mutableStateOf(hu.rayworks.vizit.data.account.AccountProfileState())
+    var profile by mutableStateOf(ContactProfile())
         private set
-    private var localProfile by mutableStateOf(ContactProfile())
-    private var localSyncState by mutableStateOf(ProfileSyncState())
-    private var localLoadStatus by mutableStateOf(ProfileLoadStatus.IDLE)
-    private var localPrepared by mutableStateOf(false)
-    private var localPresentation by mutableStateOf(CardPresentation())
 
-    val profile: ContactProfile get() = if (cloudSyncEnabled) accountState.active?.profile ?: ContactProfile() else localProfile
-    val activeProfileId: String? get() = if (cloudSyncEnabled) accountState.activeId else "local-profile"
-    val accountProfiles get() = accountState.profiles
-    val profileSyncState get() = if (cloudSyncEnabled) accountState.active?.sync ?: ProfileSyncState() else localSyncState
-    val profileCatalogBusy get() = accountState.operationBusy
-    val profileCatalogMessage get() = accountState.message
-    val needsFirstProfile get() = if (cloudSyncEnabled) accountState.needsFirstProfile else localPrepared && localProfile.resolvedDisplayName.isBlank()
-    val hasOfflineProfileSession get() = if (cloudSyncEnabled) accountState.profiles.isNotEmpty() else localPrepared
-    val profileLoadStatus get() = if (!cloudSyncEnabled) localLoadStatus else when (accountState.loadStatus) {
-        hu.rayworks.vizit.data.account.AccountProfileLoadStatus.LOADING -> ProfileLoadStatus.LOADING
-        hu.rayworks.vizit.data.account.AccountProfileLoadStatus.READY -> ProfileLoadStatus.READY
-        hu.rayworks.vizit.data.account.AccountProfileLoadStatus.UNAVAILABLE -> ProfileLoadStatus.UNAVAILABLE
-    }
-    val cardPresentation get() = if (cloudSyncEnabled) accountState.active?.presentation ?: CardPresentation() else localPresentation
+    var profileSyncState by mutableStateOf(ProfileSyncState())
+        private set
 
     var automaticSyncEnabled by mutableStateOf(true)
         private set
+
     var featureFlags by mutableStateOf(AppFeatureFlags())
         private set
-    var creatingAdditionalProfile by mutableStateOf(false)
-        private set
+
+    /** User-selected appearance. Light is the product default. */
     var themeMode by mutableStateOf(ThemeMode.LIGHT)
         private set
-    var conflictResolutionMessage by mutableStateOf<String?>(null)
+
+    /** Card styling and per-field visibility, both local to this device. */
+    var cardPresentation by mutableStateOf(CardPresentation())
         private set
+
+    var hasOfflineProfileSession by mutableStateOf(false)
+        private set
+
+    var profileLoadStatus by mutableStateOf(ProfileLoadStatus.IDLE)
+        private set
+
     var nfcStatus by mutableStateOf(readNfcStatus(application))
         private set
+
     var nfcSharePhase by mutableStateOf(NfcSharePhase.IDLE)
         private set
+
     var nfcPhotoIncluded by mutableStateOf(false)
         private set
-    val isNfcShareActive: Boolean get() = nfcSharePhase != NfcSharePhase.IDLE
+
+    val isNfcShareActive: Boolean
+        get() = nfcSharePhase != NfcSharePhase.IDLE
 
     init {
-        viewModelScope.launch { profiles.state.collect { accountState = it } }
         viewModelScope.launch {
             settingsStore.settings.collect { settings ->
                 automaticSyncEnabled = settings.automaticSyncEnabled
                 themeMode = ThemeMode.fromStorage(settings.appearance)
             }
         }
-        viewModelScope.launch { cardPresentationStore.presentation.collect { localPresentation = it } }
+        viewModelScope.launch {
+            cardPresentationStore.presentation.collect { cardPresentation = it }
+        }
         viewModelScope.launch {
             NfcShareEvents.events.collect { event ->
-                if (event is NfcShareEvent.PayloadRead && event.sessionId == activeNfcSessionId &&
-                    nfcSharePhase == NfcSharePhase.WAITING) {
+                if (
+                    event is NfcShareEvent.PayloadRead &&
+                    event.sessionId == activeNfcSessionId &&
+                    nfcSharePhase == NfcSharePhase.WAITING
+                ) {
                     nfcTimeoutJob?.cancel()
                     activeNfcSessionId = null
                     nfcSharePhase = NfcSharePhase.PAYLOAD_READ
@@ -104,137 +105,117 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun bindProfileOwner(userId: String, enableCloudSync: Boolean) {
-        if (activeProfileOwnerId == userId && cloudSyncEnabled == enableCloudSync) return
-        unbindProfileOwner()
+        if (enableCloudSync) {
+            viewModelScope.launch { featureFlags = featureFlagRepository.fetch() }
+        }
+        if (activeProfileOwnerId == userId && cloudSyncEnabled == enableCloudSync) {
+            viewModelScope.launch {
+                repository.prepare(
+                    userId = userId,
+                    cloudSyncEnabled = enableCloudSync,
+                )
+            }
+            return
+        }
         activeProfileOwnerId = userId
         cloudSyncEnabled = enableCloudSync
-        if (enableCloudSync) {
-            accountState = hu.rayworks.vizit.data.account.AccountProfileState(ownerId = userId)
-            profiles.bind(userId)
-            viewModelScope.launch {
-                val flags = featureFlagRepository.fetch()
-                if (activeProfileOwnerId == userId && cloudSyncEnabled) featureFlags = flags
-            }
-        } else {
-            localLoadStatus = ProfileLoadStatus.LOADING
-            profileObservationJob = viewModelScope.launch {
-                repository.prepare(userId, cloudSyncEnabled = false)
-                repository.observe(userId).collect { state ->
-                    if (activeProfileOwnerId == userId && !cloudSyncEnabled) {
-                        localProfile = state.profile
-                        localSyncState = state.sync
-                        localPrepared = true
-                        localLoadStatus = ProfileLoadStatus.READY
-                    }
+        profile = ContactProfile()
+        profileSyncState = ProfileSyncState()
+        hasOfflineProfileSession = false
+        profileLoadStatus = ProfileLoadStatus.LOADING
+        profileObservationJob?.cancel()
+        profileObservationJob = viewModelScope.launch {
+            val initialResult = repository.prepare(
+                userId = userId,
+                cloudSyncEnabled = enableCloudSync,
+            )
+            repository.observe(userId).collect { state ->
+                profile = state.profile
+                profileSyncState = state.sync
+                hasOfflineProfileSession = true
+                profileLoadStatus = when {
+                    state.profile.resolvedDisplayName.isNotBlank() -> ProfileLoadStatus.READY
+                    initialResult == ProfileSyncRunResult.RETRY ||
+                        initialResult == ProfileSyncRunResult.WAITING_FOR_SESSION -> ProfileLoadStatus.UNAVAILABLE
+                    else -> ProfileLoadStatus.READY
                 }
             }
         }
     }
 
-    fun unbindProfileOwner() {
-        stopNfcShare()
-        profileObservationJob?.cancel()
-        profileObservationJob = null
-        profiles.unbind()
-        accountState = hu.rayworks.vizit.data.account.AccountProfileState()
-        activeProfileOwnerId = null
-        cloudSyncEnabled = false
-        localProfile = ContactProfile()
-        localSyncState = ProfileSyncState()
-        localPrepared = false
-        localLoadStatus = ProfileLoadStatus.IDLE
-        creatingAdditionalProfile = false
-        conflictResolutionMessage = null
-        featureFlags = AppFeatureFlags()
-    }
-
     fun retryProfileLoad() {
-        if (cloudSyncEnabled) profiles.retryLoad()
+        val userId = activeProfileOwnerId ?: return
+        profileLoadStatus = ProfileLoadStatus.LOADING
+        viewModelScope.launch {
+            val result = repository.prepare(userId = userId, cloudSyncEnabled = cloudSyncEnabled)
+            profileLoadStatus = when {
+                profile.resolvedDisplayName.isNotBlank() -> ProfileLoadStatus.READY
+                result == ProfileSyncRunResult.RETRY ||
+                    result == ProfileSyncRunResult.WAITING_FOR_SESSION -> ProfileLoadStatus.UNAVAILABLE
+                else -> ProfileLoadStatus.READY
+            }
+        }
     }
 
-    suspend fun saveProfile(
-        updatedProfile: ContactProfile,
-        targetProfileId: String? = activeProfileId,
-        presentation: CardPresentation = cardPresentation,
-    ): String? {
+    suspend fun saveProfile(updatedProfile: ContactProfile): String? {
         val error = ContactProfileValidator.validate(updatedProfile)
         if (error != null) return error
-        val userId = activeProfileOwnerId ?: return "Jelentkezz be újra."
-        val issue = if (cloudSyncEnabled) {
-            profiles.save(targetProfileId ?: return "Válassz profilt.", updatedProfile, presentation)
-        } else {
-            repository.save(userId, updatedProfile, cloudSyncEnabled = false, automaticSyncEnabled = false)
-            cardPresentationStore.save(presentation)
-            null
-        }
-        if (issue == null) stopNfcShare()
-        return issue
-    }
-
-    fun beginAdditionalProfile(): String? {
-        if (!cloudSyncEnabled) return "Új profilt csak bejelentkezett, online fiókhoz lehet létrehozni."
-        if (!featureFlags.multiProfile && accountProfiles.isNotEmpty()) return "A többprofilos funkció most nem érhető el."
-        if (!accountState.catalogVerified || profileCatalogBusy) return "Várd meg a profillista betöltését."
-        creatingAdditionalProfile = true
+        val userId = activeProfileOwnerId ?: return "A profil munkamenete még nem áll készen."
+        repository.save(
+            userId = userId,
+            profile = updatedProfile,
+            cloudSyncEnabled = cloudSyncEnabled,
+            automaticSyncEnabled = automaticSyncEnabled,
+        )
+        stopNfcShare()
         return null
     }
 
-    fun cancelAdditionalProfile() { creatingAdditionalProfile = false }
+    var conflictResolutionMessage by mutableStateOf<String?>(null)
+        private set
 
-    suspend fun createAdditionalProfile(updatedProfile: ContactProfile, presentation: CardPresentation = CardPresentation()): String? {
-        val error = ContactProfileValidator.validate(updatedProfile)
-        if (error != null) return error
-        if (!cloudSyncEnabled) return saveProfile(updatedProfile, presentation = presentation)
-        if (accountProfiles.isNotEmpty() && !featureFlags.multiProfile) return "A többprofilos funkció most nem érhető el."
-        val result = profiles.create(updatedProfile, presentation)
-        if (result == null) {
-            creatingAdditionalProfile = false
-            stopNfcShare()
+    fun resolveProfileConflict(keepLocal: Boolean) {
+        val userId = activeProfileOwnerId ?: return
+        viewModelScope.launch {
+            conflictResolutionMessage = try {
+                if (repository.resolveConflict(userId, keepLocal)) "A választás mentve."
+                else "A profil közben megváltozott. Ellenőrizd újra az állapotot."
+            } catch (_: Exception) { "A feloldás nem sikerült. Az adatok megmaradtak." }
         }
-        return result
     }
 
-    fun switchProfile(profileId: String) {
-        if (profileId != activeProfileId) stopNfcShare()
-        profiles.select(profileId)
+    fun retryProfileSync() {
+        val userId = activeProfileOwnerId ?: return
+        viewModelScope.launch { repository.retrySync(userId) }
     }
-    fun deleteActiveProfile() { stopNfcShare(); profiles.deleteActive() }
-    fun deleteProfile(profileId: String) { stopNfcShare(); profiles.deleteActive(profileId) }
-    fun clearProfileCatalogMessage() { profiles.clearMessage() }
-    fun resolveProfileConflict(keepLocal: Boolean) { profiles.resolve(keepLocal) }
-    fun retryProfileSync() { profiles.retrySync() }
 
-    val sharedProfile: ContactProfile get() = profile.visibleThrough(cardPresentation)
+    /** The profile as a recipient sees it, with hidden fields already stripped. */
+    val sharedProfile: ContactProfile
+        get() = profile.visibleThrough(cardPresentation)
 
     fun updateCardPresentation(value: CardPresentation) {
-        val id = activeProfileId
-        if (cloudSyncEnabled && id != null) profiles.present(id, value)
-        else {
-            localPresentation = value
-            viewModelScope.launch { cardPresentationStore.save(value) }
-        }
+        // Optimistic: the switch has to move under the finger, the DataStore
+        // write follows and the collector confirms it.
+        cardPresentation = value
+        viewModelScope.launch { cardPresentationStore.save(value) }
     }
-    fun updateCardPresentation(profileId: String, value: CardPresentation) {
-        if (cloudSyncEnabled) profiles.present(profileId, value) else updateCardPresentation(value)
-    }
+
     fun updateThemeMode(mode: ThemeMode) {
         themeMode = mode
         viewModelScope.launch { settingsStore.setAppearance(mode.storageValue) }
     }
+
     fun updateAutomaticSyncEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.setAutomaticSyncEnabled(enabled)
-            if (enabled && cloudSyncEnabled) profiles.retrySync()
+            if (enabled && cloudSyncEnabled) {
+                activeProfileOwnerId?.let { repository.retrySync(it) }
+            }
             repository.setAutomaticSyncEnabled(enabled && cloudSyncEnabled)
         }
     }
 
-    fun startNfcShare(targetProfileId: String? = activeProfileId): String? {
-        val selected = profiles.state.value.profiles.firstOrNull {
-            it.ownerId == activeProfileOwnerId && it.id == targetProfileId
-        }
-        val profile = if (cloudSyncEnabled) selected?.profile ?: return "Válassz profilt." else localProfile
-        val sharedProfile = profile.visibleThrough(selected?.presentation ?: localPresentation)
+    fun startNfcShare(): String? {
         val validationError = ContactProfileValidator.validate(profile)
         if (validationError != null) return validationError
 

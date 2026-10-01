@@ -54,8 +54,8 @@ android {
         applicationId = "hu.rayworks.vizit"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10000002
-        versionName = "10.0.2"
+        versionCode = 10000003
+        versionName = "8.7.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders["profileHost"] = profileHost
@@ -190,7 +190,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.5.1")
     implementation("androidx.camera:camera-view:1.5.1")
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

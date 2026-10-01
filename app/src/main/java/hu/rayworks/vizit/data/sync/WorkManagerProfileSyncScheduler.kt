@@ -47,7 +47,7 @@ class ProfileSyncWorker(
 ) : CoroutineWorker(appContext, workerParameters) {
     override suspend fun doWork(): Result {
         val app = applicationContext as? VizitApplication ?: return Result.failure()
-        return when (app.container.accountProfileRepository.sync()) {
+        return when (app.container.profileSyncEngine.run()) {
             ProfileSyncRunResult.RETRY -> Result.retry()
             ProfileSyncRunResult.COMPLETE,
             ProfileSyncRunResult.WAITING_FOR_SESSION,

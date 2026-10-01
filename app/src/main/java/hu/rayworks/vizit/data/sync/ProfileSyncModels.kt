@@ -86,8 +86,6 @@ data class PendingProfileMutation(
     val payload: ProfileSyncPayload,
     val baseServerVersion: Long,
     val attemptCount: Int,
-    /** Required by the account profile store; null is only for the legacy local store. */
-    val profileId: String? = null,
 )
 
 sealed interface RemoteProfileSyncResult {

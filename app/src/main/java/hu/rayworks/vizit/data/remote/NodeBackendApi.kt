@@ -18,7 +18,7 @@ class NodeBackendApi(private val client: SupabaseClient?) {
     suspend fun request(method: String, path: String, body: JsonObject? = null,
                         authenticated: Boolean = true): JsonObject {
         require(method in setOf("GET", "POST", "PUT", "DELETE"))
-        require(isAllowedPath(method, path))
+        require(path in setOf("/api/profile", "/api/account", "/api/auth/sign-in", "/api/analytics/summary"))
         val owner = if (authenticated) userId() ?: throw NodeBackendException(401, "session_unavailable", "Jelentkezz be újra.") else null
         suspend fun send(): Pair<Int, JsonObject> {
             val token = if (authenticated) {
@@ -80,21 +80,6 @@ class NodeBackendApi(private val client: SupabaseClient?) {
             result.second["error"]?.jsonPrimitive?.contentOrNull?.take(500) ?: "A szerver jelenleg nem érhető el.",
             result.second["conflict"]?.jsonPrimitive?.booleanOrNull == true)
         return result.second
-    }
-
-    private fun isAllowedPath(method: String, path: String): Boolean {
-        if (path in setOf("/api/profile", "/api/account", "/api/auth/sign-in", "/api/analytics/summary")) {
-            return true
-        }
-        if (path == "/api/profiles") return method == "GET" || method == "POST"
-        if (method == "GET" && Regex("^/api/analytics/summary\\?profileId=[0-9a-fA-F-]{36}$").matches(path)) {
-            val id = path.substringAfter("profileId=")
-            return runCatching { java.util.UUID.fromString(id).toString().equals(id, ignoreCase = true) }.getOrDefault(false)
-        }
-        val profile = Regex("^/api/profiles/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
-        val makeDefault = Regex("^/api/profiles/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/default$", RegexOption.IGNORE_CASE)
-        return (profile.matches(path) && method in setOf("GET", "PUT", "DELETE")) ||
-            (makeDefault.matches(path) && method == "POST")
     }
 }
 

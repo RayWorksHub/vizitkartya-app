@@ -78,7 +78,6 @@ import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
 import hu.rayworks.vizit.ui.screens.ProfileWizardScreen
-import hu.rayworks.vizit.ui.screens.ProfileSwitcherBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -168,29 +167,16 @@ fun VizitApp(
         }
     }
 
-    val creatingAdditionalProfile = viewModel.creatingAdditionalProfile
-    if (creatingAdditionalProfile ||
-        ((viewModel.profile.resolvedDisplayName.isBlank() || wizardSaving) && !wizardCompleted)
-    ) {
+    if ((viewModel.profile.resolvedDisplayName.isBlank() || wizardSaving) && !wizardCompleted) {
         ProfileWizardScreen(onSave = { draft ->
             wizardSaving = true
-            val issue = try {
-                if (creatingAdditionalProfile) viewModel.createAdditionalProfile(draft)
-                else viewModel.saveProfile(draft)
-            } catch (failure: Exception) {
+            val issue = try { viewModel.saveProfile(draft) } catch (failure: Exception) {
                 failure.localizedMessage ?: "A mentés nem sikerült."
             }
             if (issue != null) wizardSaving = false
             issue
         }, presentation = viewModel.cardPresentation,
-            onAppearanceChange = viewModel::updateCardPresentation,
-            additionalProfile = creatingAdditionalProfile,
-            onCancel = if (creatingAdditionalProfile) viewModel::cancelAdditionalProfile else null,
-            onDone = {
-                viewModel.cancelAdditionalProfile()
-                if (!creatingAdditionalProfile) wizardCompleted = true
-                wizardSaving = false
-            })
+            onAppearanceChange = viewModel::updateCardPresentation, onDone = { wizardCompleted = true; wizardSaving = false })
         return
     }
 
@@ -255,19 +241,6 @@ fun VizitApp(
                     .padding(horizontal = Vizit.space.md, vertical = Vizit.space.xs),
             )
         }
-
-        ProfileSwitcherBar(
-            profiles = viewModel.accountProfiles,
-            activeProfileId = viewModel.activeProfileId,
-            multiProfileEnabled = viewModel.featureFlags.multiProfile,
-            busy = viewModel.profileCatalogBusy,
-            message = viewModel.profileCatalogMessage,
-            onSwitch = viewModel::switchProfile,
-            onCreate = viewModel::beginAdditionalProfile,
-            onDeleteActive = viewModel::deleteActiveProfile,
-            onDismissMessage = viewModel::clearProfileCatalogMessage,
-            modifier = Modifier.padding(horizontal = Vizit.space.md, vertical = Vizit.space.xs),
-        )
 
         Box(modifier = Modifier.weight(1f)) {
             AnimatedContent(

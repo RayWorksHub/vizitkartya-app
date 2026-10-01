@@ -9,21 +9,15 @@ if track not in {'internal','alpha','beta','production'}:
     raise SystemExit('Unsupported Google Play track: '+track)
 
 version_props = {}
-for raw_line in pathlib.Path('config/android-version.properties').read_text(encoding='utf-8').splitlines():
+for raw_line in pathlib.Path('config/version.properties').read_text(encoding='utf-8').splitlines():
     line = raw_line.strip()
     if not line or line.startswith('#'):
         continue
     key, value = line.split('=', 1)
     version_props[key.strip()] = value.strip()
 release_name = version_props['versionName']
-expected_version_code = subprocess.run(
-    ['python3', 'scripts/sync-android-version.py', '--print-android-code'],
-    check=True,
-    capture_output=True,
-    text=True,
-).stdout.strip()
-if not expected_version_code.isdigit():
-    raise SystemExit('Version sync returned an invalid Android versionCode')
+major, minor, patch = map(int, release_name.split('.'))
+expected_version_code = int(version_props.get('androidVersionCode') or (major * 1_000_000 + minor * 10_000 + patch))
 def report(status, detail):
     value = {'status':status,'detail':detail,'package':'hu.rayworks.vizit','track':track}
     out.write_text(json.dumps(value,ensure_ascii=False,indent=2))
@@ -67,13 +61,10 @@ try:
     aab=next(pathlib.Path('release-output').glob('*.aab'))
     bundle=request('https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/hu.rayworks.vizit/edits/'+edit+'/bundles?uploadType=media',token=token,binary=aab.read_bytes())
     version=str(bundle['versionCode'])
-    if version != expected_version_code:
-        raise RuntimeError(
-            f'Uploaded bundle versionCode {version} does not match expected {expected_version_code}'
-        )
+    assert version == str(expected_version_code)
     request(root+'/edits/'+edit+'/tracks/'+track,method='PUT',token=token,payload={
         'track':track,'releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
-        'releaseNotes':[{'language':'hu-HU','text':'Megújult VIZIT felület animációkkal, többprofilos használattal, élő QR-, NFC- és statisztikai funkciókkal.'}]}]})
+        'releaseNotes':[{'language':'hu-HU','text':'Visszaállítás a VIZIT 8.7.4 stabil, 9-es verzió előtti működésére.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
     report('SUBMITTED',f'Google Play accepted the {track} release submission; Google review/publication state is managed by Play Console.')
 except urllib.error.HTTPError as error:

@@ -58,8 +58,6 @@ fun ProfileWizardScreen(
     onSave: suspend (ContactProfile) -> String?,
     presentation: CardPresentation,
     onAppearanceChange: (CardPresentation) -> Unit,
-    additionalProfile: Boolean = false,
-    onCancel: (() -> Unit)? = null,
     onDone: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -131,7 +129,7 @@ fun ProfileWizardScreen(
             .windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars)
             .padding(24.dp), verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (additionalProfile) "Elkészült az új profilod" else "Elkészült a névjegyed", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
+            Text("Elkészült a névjegyed", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
             Spacer(Modifier.height(12.dp))
             Text(if (draft.isPublic) "A névjegyed publikálva. Most már megoszthatod a profilcímedet."
                 else "A névjegyed elmentve. A nyilvános profilt később is bekapcsolhatod.")
@@ -140,19 +138,10 @@ fun ProfileWizardScreen(
         }
         return
     }
-    BackHandler(enabled = step > 0 || onCancel != null) {
-        if (step == 0 && onCancel != null) onCancel()
-        else step = if (returnToReview) steps.lastIndex else step - 1
-        returnToReview = false; error = ""
-    }
+    BackHandler(enabled = step > 0) { step = if (returnToReview) steps.lastIndex else step - 1; returnToReview = false; error = "" }
     Column(Modifier.fillMaxSize().background(Vizit.colors.canvas).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text(names[key].orEmpty(), style = Vizit.type.h2, color = Vizit.colors.textPrimary)
-                if (onCancel != null && step == 0) {
-                    Text("Mégse", color = Vizit.colors.primary, modifier = Modifier.clickable(onClick = onCancel))
-                }
-            }
+            Text(names[key].orEmpty(), style = Vizit.type.h2, color = Vizit.colors.textPrimary)
             Text(if (key == "done") "Kész" else "${step + 1} / ${steps.lastIndex}", color = Vizit.colors.textMuted)
         }
         LinearProgressIndicator(progress = { (step + 1f) / steps.lastIndex.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
@@ -160,7 +149,7 @@ fun ProfileWizardScreen(
             if (key != "type") ProfileCard(profile = draft, presentation = presentation.copy(colorway = style))
             when (key) {
                 "type" -> {
-                    Text(if (additionalProfile) "Hozzuk létre az új profilodat" else "Hozzuk létre az első profilodat", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
+                    Text("Hozzuk létre az első profilodat", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
                     Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.", color = Vizit.colors.textMuted)
                     Text("Milyen névjegyet készítesz?", style = Vizit.type.h3, color = Vizit.colors.textPrimary)
                     WizardChoice("Vállalkozói névjegy", "Vállalkozás, beosztás, logó és bemutatkozás", type == "business") { type = "business" }

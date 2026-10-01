@@ -13,18 +13,12 @@ class NodeProfileRemoteDataSource(private val client: SupabaseClient?) : Profile
     private data class Record(val raw: JsonObject, val row: LegacyProfileRecord, val fingerprint: String)
     override fun authenticatedUserId(): String? = api.userId()
 
-    private suspend fun record(userId: String, profileId: String): Record? {
+    private suspend fun record(userId: String): Record? {
         check(authenticatedUserId() == userId)
-        val response = try {
-            api.request("GET", profilePath(profileId))
-        } catch (error: NodeBackendException) {
-            if (error.status == 404) return null
-            throw error
-        }
+        val response = api.request("GET", "/api/profile")
         val raw = response["profile"]?.takeUnless { it is JsonNull }?.jsonObject ?: return null
         val row = json.decodeFromJsonElement<LegacyProfileRecord>(raw)
         check(row.ownerId == userId) { "A profil nem a bejelentkezett fiókhoz tartozik." }
-        check(row.id == profileId) { "A szerver másik profilt adott vissza." }
         val fingerprint = requireNotNull(response["fingerprint"]?.jsonPrimitive?.contentOrNull)
         require(fingerprint.matches(Regex("[a-f0-9]{64}")))
         return Record(raw, row, fingerprint)
@@ -35,28 +29,23 @@ class NodeProfileRemoteDataSource(private val client: SupabaseClient?) : Profile
             RemoteContactPhoto.load(RemoteProfileLogo.url(record.row.appearance), BuildConfig.SUPABASE_URL),
         ))
     override suspend fun pull(userId: String): RemoteProfileSnapshot? {
-        // The legacy account-wide pull must never select a profile implicitly.
-        return null
-    }
-    suspend fun pullProfile(userId: String, profileId: String): RemoteProfileSnapshot? {
         if (authenticatedUserId() != userId) return null
-        return record(userId, profileId)?.let { snapshot(it) }
+        return record(userId)?.let { snapshot(it) }
     }
-    private suspend fun conflict(userId: String, profileId: String): RemoteProfileSyncResult.Conflict {
-        val latest = record(userId, profileId)?.let { snapshot(it) }
+    private suspend fun conflict(userId: String): RemoteProfileSyncResult.Conflict {
+        val latest = record(userId)?.let { snapshot(it) }
             ?: RemoteProfileSnapshot(0, ProfileSyncPayload(photoBase64 = "", displayImagePath = ""))
         return RemoteProfileSyncResult.Conflict(latest.serverVersion, latest.payload)
     }
 
     override suspend fun push(mutation: PendingProfileMutation): RemoteProfileSyncResult {
         if (authenticatedUserId() != mutation.userId) return RemoteProfileSyncResult.SessionUnavailable
-        val profileId = requireNotNull(mutation.profileId) { "A mentésből hiányzik a profilazonosító." }
         try {
-            val current = record(mutation.userId, profileId)
-                ?: return conflict(mutation.userId, profileId)
+            val current = record(mutation.userId)
+            if (current == null && mutation.baseServerVersion != 0L) return conflict(mutation.userId)
             val sourceChanged = mutation.payload.displayImagePath?.takeIf(String::isNotEmpty)
                 ?.let { it != current?.row?.avatarUrl } == true
-            if (sourceChanged) return conflict(mutation.userId, profileId)
+            if (sourceChanged && current != null) return conflict(mutation.userId)
             val values = LegacyProfileCodec.write(mutation.payload, current?.row, mutation.userId)
             val remoteLogo = if (mutation.payload.logoPath != null && current != null)
                 RemoteContactPhoto.load(RemoteProfileLogo.url(current.row.appearance), BuildConfig.SUPABASE_URL)
@@ -98,7 +87,7 @@ class NodeProfileRemoteDataSource(private val client: SupabaseClient?) : Profile
                     val saved = snapshot(current)
                     return RemoteProfileSyncResult.Applied(saved.serverVersion, saved.payload)
                 }
-                return conflict(mutation.userId, profileId)
+                return conflict(mutation.userId)
             }
             val appearance = RemoteProfileLogo.prepare(requireNotNull(client), mutation.userId,
                 current?.row?.appearance, remoteLogo, mutation.payload.logoPath,
@@ -107,25 +96,16 @@ class NodeProfileRemoteDataSource(private val client: SupabaseClient?) : Profile
                 for ((key, value) in baseBody) put(key, value)
                 if (appearance != null) put("appearance", appearance)
             }
-            check(authenticatedUserId() == mutation.userId) { "A munkamenet megváltozott." }
-            val response = api.request("PUT", profilePath(profileId), body)
+            val response = api.request("PUT", "/api/profile", body)
             val raw = requireNotNull(response["profile"]?.jsonObject)
             val row = json.decodeFromJsonElement<LegacyProfileRecord>(raw)
             check(row.ownerId == mutation.userId)
-            check(row.id == profileId)
             val saved = snapshot(Record(raw, row, requireNotNull(response["fingerprint"]?.jsonPrimitive?.contentOrNull)))
             return RemoteProfileSyncResult.Applied(saved.serverVersion, saved.payload)
         } catch (error: NodeBackendException) {
             if (error.status == 401) return RemoteProfileSyncResult.SessionUnavailable
-            if ((error.status == 409 && error.conflict) || error.status == 404) return conflict(mutation.userId, profileId)
+            if (error.status == 409 && error.conflict) return conflict(mutation.userId)
             throw error
-        }
-    }
-
-    internal companion object {
-        fun profilePath(profileId: String): String {
-            require(java.util.UUID.fromString(profileId).toString().equals(profileId, ignoreCase = true))
-            return "/api/profiles/$profileId"
         }
     }
 }

@@ -11,7 +11,6 @@ data class AppFeatureFlags(
     val crm: Boolean = true,
     val qrScanner: Boolean = true,
     val onlineEditor: Boolean = true,
-    val multiProfile: Boolean = false,
 ) {
     companion object {
         fun from(rows: List<RemoteFeatureFlag>): AppFeatureFlags {
@@ -22,7 +21,6 @@ data class AppFeatureFlags(
                 crm = values["crm"] ?: true,
                 qrScanner = values["qr_scanner"] ?: true,
                 onlineEditor = values["online_editor"] ?: true,
-                multiProfile = values["multi_profile"] ?: false,
             )
         }
     }
