@@ -64,7 +64,7 @@ try:
     assert version == str(expected_version_code)
     request(root+'/edits/'+edit+'/tracks/'+track,method='PUT',token=token,payload={
         'track':track,'releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
-        'releaseNotes':[{'language':'hu-HU','text':'Visszaállítás a VIZIT 8.7.4 stabil, 9-es verzió előtti működésére.'}]}]})
+        'releaseNotes':[{'language':'hu-HU','text':'Több névjegy létrehozása, lapozása, szerkesztése és törlése biztonságos fiókelkülönítéssel.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
     report('SUBMITTED',f'Google Play accepted the {track} release submission; Google review/publication state is managed by Play Console.')
 except urllib.error.HTTPError as error:
