@@ -25,8 +25,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify unified app version
-        run: python3 scripts/sync-version.py --check
+      - name: Verify Android version
+        run: python3 scripts/sync-version.py --check-android
 
       - name: Configure DEV signing
         run: |

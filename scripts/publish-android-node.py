@@ -9,15 +9,14 @@ if track not in {'internal','alpha','beta','production'}:
     raise SystemExit('Unsupported Google Play track: '+track)
 
 version_props = {}
-for raw_line in pathlib.Path('config/version.properties').read_text(encoding='utf-8').splitlines():
+for raw_line in pathlib.Path('config/android-version.properties').read_text(encoding='utf-8').splitlines():
     line = raw_line.strip()
     if not line or line.startswith('#'):
         continue
     key, value = line.split('=', 1)
     version_props[key.strip()] = value.strip()
 release_name = version_props['versionName']
-major, minor, patch = map(int, release_name.split('.'))
-expected_version_code = int(version_props.get('androidVersionCode') or (major * 1_000_000 + minor * 10_000 + patch))
+expected_version_code = int(version_props['versionCode'])
 def report(status, detail):
     value = {'status':status,'detail':detail,'package':'hu.rayworks.vizit','track':track}
     out.write_text(json.dumps(value,ensure_ascii=False,indent=2))
@@ -64,7 +63,7 @@ try:
     assert version == str(expected_version_code)
     request(root+'/edits/'+edit+'/tracks/'+track,method='PUT',token=token,payload={
         'track':track,'releases':[{'name':release_name,'versionCodes':[version],'status':'completed',
-        'releaseNotes':[{'language':'hu-HU','text':'Több névjegy létrehozása, lapozása, szerkesztése és törlése biztonságos fiókelkülönítéssel.'}]}]})
+        'releaseNotes':[{'language':'hu-HU','text':'Javítottuk a bejelentkezés után beragadó fiókellenőrzést és megerősítettük a fiókváltás adatvédelmét.'}]}]})
     request(root+'/edits/'+edit+':commit',token=token,payload={})
     report('SUBMITTED',f'Google Play accepted the {track} release submission; Google review/publication state is managed by Play Console.')
 except urllib.error.HTTPError as error:
