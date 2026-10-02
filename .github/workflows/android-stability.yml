@@ -16,8 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL: https://gixihulrptmleltxccxn.supabase.co
-      ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY: sb_publishable_msnliCDr1R9T2t9j-2T-Bg_IgXLWZjH
       ORG_GRADLE_PROJECT_VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
       ORG_GRADLE_PROJECT_VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       ORG_GRADLE_PROJECT_VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}

@@ -1,7 +1,19 @@
 #!/usr/bin/env node
 
-const supabaseUrl = process.env.ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL?.trim()
-const publishableKey = process.env.ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY?.trim()
+import { readFileSync } from 'node:fs'
+
+const publicConfig = Object.fromEntries(
+  readFileSync(new URL('../config/android-node.properties', import.meta.url), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && line.includes('='))
+    .map((line) => {
+      const separator = line.indexOf('=')
+      return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()]
+    }),
+)
+const supabaseUrl = process.env.ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_URL?.trim() || publicConfig.authUrl
+const publishableKey = process.env.ORG_GRADLE_PROJECT_VIZIT_DEV_SUPABASE_KEY?.trim() || publicConfig.authPublishableKey
 const googleClientId = process.env.ORG_GRADLE_PROJECT_VIZIT_DEV_GOOGLE_WEB_CLIENT_ID?.trim()
 if (!supabaseUrl || !publishableKey) throw new Error('Missing DEV Supabase configuration')
 
