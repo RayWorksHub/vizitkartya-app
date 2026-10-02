@@ -1,9 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-// The currently deployed VIZIT project stores avatars under <user-id>/… .
-// Keep this list aligned with the live bucket inventory so a missing bucket
-// cannot make an otherwise valid account deletion fail.
-const STORAGE_BUCKETS = ['avatars']
+const STORAGE_BUCKETS = ['avatars', 'crm-documents']
 const STORAGE_PAGE_SIZE = 100
 const STORAGE_REMOVE_BATCH_SIZE = 100
 const MAX_STORAGE_ENTRIES = 10_000
@@ -20,8 +17,7 @@ async function listUserFiles(
 
   while (directories.length > 0) {
     const directory = directories.shift()
-    if (!directory) continue
-    if (visited.has(directory)) continue
+    if (!directory || visited.has(directory)) continue
     visited.add(directory)
 
     let offset = 0
@@ -31,7 +27,13 @@ async function listUserFiles(
         offset,
         sortBy: { column: 'name', order: 'asc' },
       })
-      if (error) throw new Error(`storage-list-failed:${bucket}`)
+
+      // An optional/unused bucket must not block account deletion.
+      if (error) {
+        const message = String(error.message ?? '')
+        if (/bucket.*not found|not found/i.test(message)) break
+        throw new Error(`storage-list-failed:${bucket}`)
+      }
 
       const page = entries ?? []
       inspectedEntries += page.length
