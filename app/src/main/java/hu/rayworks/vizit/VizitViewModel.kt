@@ -46,6 +46,15 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     private var activeProfileOwnerId: String? = null
     private var cloudSyncEnabled = false
 
+    /**
+     * Compose-observable account binding used by the session gate.
+     *
+     * [activeProfileOwnerId] and [cloudSyncEnabled] are internal guards for
+     * repository operations. Keeping the UI gate on this snapshot state makes
+     * the first authenticated composition redraw after the owner is bound.
+     */
+    private var boundCloudOwnerId by mutableStateOf<String?>(null)
+
     var profile by mutableStateOf(ContactProfile())
         private set
 
@@ -128,6 +137,10 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
             retryProfileLoad()
             return
         }
+
+        // Close the UI gate before replacing any account-scoped state. This
+        // prevents even a single frame from rendering the previous account.
+        boundCloudOwnerId = null
         activeProfileOwnerId = userId
         cloudSyncEnabled = enableCloudSync
         profile = ContactProfile()
@@ -139,6 +152,23 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
         profileLoadStatus = ProfileLoadStatus.LOADING
         profileObservationJob?.cancel()
         profileObservationJob = if (enableCloudSync) observeCloudCards(userId) else observeLocalProfile(userId)
+        boundCloudOwnerId = userId.takeIf { enableCloudSync }
+    }
+
+    fun clearProfileOwnerBinding() {
+        boundCloudOwnerId = null
+        activeProfileOwnerId = null
+        cloudSyncEnabled = false
+        profileObservationJob?.cancel()
+        profileObservationJob = null
+        stopNfcShare()
+        profile = ContactProfile()
+        businessCards = emptyList()
+        activeBusinessCardId = null
+        cardPresentation = CardPresentation()
+        profileSyncState = ProfileSyncState()
+        hasOfflineProfileSession = false
+        profileLoadStatus = ProfileLoadStatus.IDLE
     }
 
     fun retryProfileLoad() {
@@ -303,7 +333,7 @@ class VizitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun isBoundToCloudOwner(ownerId: String): Boolean =
-        cloudSyncEnabled && activeProfileOwnerId == ownerId
+        boundCloudOwnerId == ownerId
 
     private fun observeLocalProfile(userId: String): Job = viewModelScope.launch {
         val initialResult = repository.prepare(userId = userId, cloudSyncEnabled = false)
