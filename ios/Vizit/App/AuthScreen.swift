@@ -44,13 +44,6 @@ struct AuthScreen: View {
 
                         modeSelector
 
-                        if let address = verificationAddress {
-                            VizitBanner(
-                                text: "Új fiók esetén a megerősítő link erre a címre érkezik: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót; ilyenkor új regisztrációs levél nem érkezik.",
-                                tone: .info
-                            )
-                        }
-
                         fields
 
                         if mode == .register { legalSection }
@@ -235,11 +228,6 @@ struct AuthScreen: View {
         .padding(.top, VizitSpace.xs)
     }
 
-    private var verificationAddress: String? {
-        if case .verificationSent(let address) = store.authStatus { return address }
-        return nil
-    }
-
     private var buildVersionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
@@ -418,5 +406,34 @@ struct PasswordChangeScreen: View {
 
     private func change() {
         Task { await store.changePassword(password, confirmation: confirmation) }
+    }
+}
+
+/// Separate post-registration route: form fields and passwords do not survive here.
+struct RegistrationVerificationScreen: View {
+    let email: String
+    let onLogin: () -> Void
+    var body: some View {
+        VizitScreen {
+            ScrollView {
+                VStack(spacing: VizitSpace.lg) {
+                    VizitIconChip(systemImage: "envelope.badge", tint: VizitColor.primary,
+                                  background: VizitColor.primarySubtle, size: 72)
+                    Text("Ellenőrizd az e-mail-fiókodat")
+                        .font(VizitFont.h1).foregroundStyle(VizitColor.textPrimary)
+                    Text("Új fiók esetén a megerősítő hivatkozás erre a címre érkezik:")
+                        .foregroundStyle(VizitColor.textSecondary)
+                    Text(email).font(VizitFont.label).textSelection(.enabled)
+                    Text("Nyisd meg a levélben kapott linket, majd jelentkezz be az alkalmazásban. Ha már van fiókod, lépj be vagy kérj új jelszót.")
+                        .font(VizitFont.bodySmall).foregroundStyle(VizitColor.textSecondary)
+                    VizitButton(title: "Vissza a bejelentkezéshez", action: onLogin)
+                        .accessibilityIdentifier("auth.verification.login")
+                }
+                .multilineTextAlignment(.center)
+                .padding(VizitSpace.xl)
+                .padding(.top, VizitSpace.xl)
+                .frame(maxWidth: 540).frame(maxWidth: .infinity)
+            }
+        }
     }
 }

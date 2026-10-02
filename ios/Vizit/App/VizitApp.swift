@@ -78,12 +78,19 @@ final class AppStore: ObservableObject {
     private var pendingCatalogSyncInFlight = false
     private var syncFailureMessage: String?
     private let uiTesting: Bool
+    private let signupLoginKey = "vizit.require-login-after-signup"
 
     init() {
         #if DEBUG
         uiTesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
         #else
         uiTesting = false
+        #endif
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-verification") {
+            authStatus = .verificationSent("verification@example.com")
+            return
+        }
         #endif
         if uiTesting {
             do {
@@ -265,6 +272,12 @@ final class AppStore: ObservableObject {
 
     private func bootstrap() async {
         guard let cloud else { return }
+        if UserDefaults.standard.bool(forKey: signupLoginKey) {
+            try? await cloud.logout()
+            clearUser()
+            authStatus = .signedOut
+            return
+        }
         guard let cached = cloud.cachedSession else {
             authStatus = .signedOut
             return
@@ -279,6 +292,9 @@ final class AppStore: ObservableObject {
         }
         do {
             let current = try await cloud.validSession()
+            guard !UserDefaults.standard.bool(forKey: signupLoginKey) else {
+                clearUser(); authStatus = .signedOut; return
+            }
             userEmail = current.user.email ?? ""
             authStatus = .authenticated
             await completeInitialProfileLoad()
@@ -296,6 +312,7 @@ final class AppStore: ObservableObject {
                           defaultError: "A bejelentkezés nem sikerült. Ellenőrizd a kapcsolatot, majd próbáld újra.") {
             guard let cloud = self.cloud else { return }
             let session = try await cloud.login(email: email, password: password)
+            UserDefaults.standard.removeObject(forKey: self.signupLoginKey)
             try self.configureStorage(for: session.user.id)
             self.userEmail = session.user.email ?? ""
             self.authStatus = .authenticated
@@ -314,9 +331,16 @@ final class AppStore: ObservableObject {
                           defaultError: "A regisztráció nem sikerült. Próbáld újra később.") {
             guard let cloud = self.cloud else { return }
             try await cloud.register(name: name, email: email, password: password)
+            UserDefaults.standard.set(true, forKey: self.signupLoginKey)
+            self.clearUser()
+            self.message = nil
             self.authStatus = .verificationSent(email.trimmingCharacters(in: .whitespacesAndNewlines))
-            self.message = "Ha ez új e-mail-cím, elküldtük a megerősítő levelet. Ha már van fiókod, lépj be vagy kérj új jelszót."
         }
+    }
+
+    func returnToLoginAfterRegistration() {
+        message = nil
+        authStatus = .signedOut
     }
 
     func googleLogin() async {
@@ -324,6 +348,7 @@ final class AppStore: ObservableObject {
                           defaultError: "A Google-bejelentkezés megszakadt vagy nem sikerült.") {
             guard let cloud = self.cloud else { return }
             let session = try await cloud.googleLogin()
+            UserDefaults.standard.removeObject(forKey: self.signupLoginKey)
             try self.configureStorage(for: session.user.id)
             self.userEmail = session.user.email ?? ""
             self.authStatus = .authenticated
@@ -341,17 +366,22 @@ final class AppStore: ObservableObject {
     }
 
     func handleCallback(_ url: URL) async {
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let fragment = URLComponents(string: "https://callback.invalid/?" + (url.fragment ?? ""))?.queryItems ?? []
+        let signup = query.contains { $0.name == "flow" && $0.value == "signup" }
+            || (query + fragment).contains { $0.name == "type" && $0.value == "signup" }
+        if signup { UserDefaults.standard.set(true, forKey: signupLoginKey) }
         await performAuth(operation: .callback,
                           defaultError: "A bejelentkezési hivatkozás lejárt vagy érvénytelen. Kérj új hivatkozást.") {
             guard let cloud = self.cloud else { return }
             let flow = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
                 .first(where: { $0.name == "flow" })?.value
             let session = try await cloud.handleCallback(url)
-            if flow == "signup" {
+            if signup {
                 try? await cloud.logout()
                 self.clearUser()
                 self.authStatus = .signedOut
-                self.message = "Az e-mail-címed megerősítve. Most jelentkezz be, és utána létrehozhatod az első profilodat."
+                self.message = nil
                 return
             }
             try self.configureStorage(for: session.user.id)
@@ -366,6 +396,7 @@ final class AppStore: ObservableObject {
         await performAuth(operation: .passwordChange,
                           defaultError: "A jelszó módosítása nem sikerült.") {
             try await self.cloud?.changePassword(password)
+            UserDefaults.standard.removeObject(forKey: self.signupLoginKey)
             self.authStatus = .authenticated
             self.message = "A jelszavad megváltozott."
             await self.completeInitialProfileLoad()
@@ -1207,8 +1238,13 @@ struct AppGate: View {
             case .launching:
                 LaunchScreen()
 
-            case .signedOut, .verificationSent:
-                AuthScreen()
+            case .signedOut:
+                AuthScreen().id("auth-clean-login")
+
+            case .verificationSent(let email):
+                RegistrationVerificationScreen(email: email) {
+                    store.returnToLoginAfterRegistration()
+                }.id("auth-verification")
 
             case .passwordRecovery:
                 PasswordChangeScreen()

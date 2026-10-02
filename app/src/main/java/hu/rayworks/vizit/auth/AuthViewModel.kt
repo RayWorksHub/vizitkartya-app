@@ -39,12 +39,22 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         AuthSessionState.Initializing,
     ) ?: unavailable
 
+    var registrationEmail by mutableStateOf("")
+        private set
+
     var actionState by mutableStateOf<AuthActionState>(AuthActionState.Idle)
         private set
     var debugLocalProfile by mutableStateOf(false)
         private set
     var passwordRecovery by mutableStateOf(false)
         private set
+    private val confirmationPrefs = application.getSharedPreferences("vizit-auth-flow", 0)
+    var requiresExplicitLogin by mutableStateOf(confirmationPrefs.getBoolean("signup-login", false))
+        private set
+    private fun requireExplicitLogin(value: Boolean) {
+        confirmationPrefs.edit().putBoolean("signup-login", value).apply()
+        requiresExplicitLogin = value
+    }
     var registrationConfirmationInProgress by mutableStateOf(false)
         private set
 
@@ -81,6 +91,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             operation = AuthOperation.REGISTER,
             successMessage = "Új fiók esetén ellenőrizd a megerősítő levelet. Ha már van fiókod, lépj be vagy kérj jelszó-visszaállítást; új regisztrációs levél ilyenkor nem érkezik.",
         ) {
+            registrationEmail = email.trim()
             repositoryOrThrow().register(
                 name = name,
                 email = email,
@@ -89,6 +100,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 privacyPolicyVersion = BuildConfig.PRIVACY_POLICY_VERSION,
                 termsVersion = BuildConfig.TERMS_VERSION,
             )
+            requireExplicitLogin(true)
         }
     }
 
@@ -97,6 +109,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         if (validation != null) return setError(validation)
         runAction(AuthOperation.LOGIN, "Sikeres bejelentkezés.") {
             repositoryOrThrow().login(email, password)
+            requireExplicitLogin(false)
         }
     }
 
@@ -120,6 +133,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         runAction(AuthOperation.PASSWORD_UPDATE, "Az új jelszó mentve.") {
             repositoryOrThrow().updatePassword(password)
             passwordRecovery = false
+            requireExplicitLogin(false)
         }
     }
 
@@ -160,11 +174,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         val adapter = googleAdapter ?: return setError("A Google-belépés még nincs konfigurálva.")
         runAction(AuthOperation.GOOGLE_SIGN_IN, "Sikeres Google-belépés.") {
             adapter.signIn(activity)
+            requireExplicitLogin(false)
         }
     }
 
     fun beginDeepLink(callback: AuthCallback) {
         registrationConfirmationInProgress = callback == AuthCallback.SignupConfirmation
+        if (registrationConfirmationInProgress) requireExplicitLogin(true)
     }
 
     fun reportDeepLinkSuccess(callback: AuthCallback) {

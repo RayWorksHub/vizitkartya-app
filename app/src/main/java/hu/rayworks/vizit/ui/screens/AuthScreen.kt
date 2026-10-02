@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.MarkEmailRead
 import androidx.compose.material3.Text
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -84,18 +85,24 @@ fun AuthScreen(
     }
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var confirmation by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
     var legalAccepted by rememberSaveable { mutableStateOf(false) }
+    var verificationEmail by rememberSaveable { mutableStateOf("") }
     val action = viewModel.actionState
     val loading = action is AuthActionState.Loading
 
     LaunchedEffect(action) {
         when ((action as? AuthActionState.Success)?.operation) {
             AuthOperation.REGISTER -> {
-                password = ""
-                confirmation = ""
+                verificationEmail = viewModel.registrationEmail
+                name = ""; email = ""; password = ""; confirmation = ""; legalAccepted = false
                 mode = AuthScreenMode.EMAIL_VERIFICATION_SENT
+            }
+            AuthOperation.EMAIL_CONFIRMATION -> {
+                name = ""; email = ""; password = ""; confirmation = ""; legalAccepted = false
+                verificationEmail = ""
+                mode = AuthScreenMode.LOGIN
             }
 
             AuthOperation.PASSWORD_RESET_REQUEST -> mode = AuthScreenMode.PASSWORD_RESET_SENT
@@ -145,7 +152,8 @@ fun AuthScreen(
                     modifier = Modifier.size(36.dp),
                 )
                 Text(
-                    text = if (email.isNotBlank()) email else "Ellenőrizd a postafiókodat.",
+                    text = if (mode == AuthScreenMode.EMAIL_VERIFICATION_SENT) verificationEmail
+                        else email.ifBlank { "Ellenőrizd a postafiókodat." },
                     style = Vizit.type.bodyStrong,
                     color = colors.textPrimary,
                 )

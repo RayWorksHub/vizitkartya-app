@@ -37,8 +37,11 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
     val session by authViewModel.sessionState.collectAsState()
     val currentSession = session
 
-    LaunchedEffect(currentSession, authViewModel.debugLocalProfile) {
+    LaunchedEffect(currentSession, authViewModel.debugLocalProfile,
+        authViewModel.requiresExplicitLogin, authViewModel.registrationConfirmationInProgress) {
         when {
+            (authViewModel.requiresExplicitLogin || authViewModel.registrationConfirmationInProgress) && !authViewModel.debugLocalProfile ->
+                vizitViewModel.clearProfileOwnerBinding()
             authViewModel.debugLocalProfile -> vizitViewModel.bindProfileOwner(
                 userId = LOCAL_DEBUG_PROFILE_OWNER_ID,
                 enableCloudSync = false,
@@ -85,6 +88,11 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
             )
     ) {
         AuthScreen(viewModel = authViewModel, forceNewPassword = true)
+        return
+    }
+
+    if (authViewModel.requiresExplicitLogin) {
+        AuthScreen(viewModel = authViewModel)
         return
     }
 
