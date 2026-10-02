@@ -35,5 +35,5 @@ Egyik parancs sem írja át vagy ellenőrzi a másik platform verzióját. Az An
 
 Az iOS `CURRENT_PROJECT_VERSION` külön buildszám. A TestFlight CI ezt a GitHub Actions futásszámából állítja elő, ezért nem kell megegyeznie az Android `versionCode` értékével.
 
-Jelenlegi Android-verzió: **10.0.1** (`versionCode`: **10000006**).
+Jelenlegi Android-verzió: **10.0.2** (`versionCode`: **10000007**).
 Jelenlegi iOS-verzió: **10.0.0**.
