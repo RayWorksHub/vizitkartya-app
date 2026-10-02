@@ -170,7 +170,7 @@ jobs:
           failed = result.get('failedTests')
           passed = result.get('passedTests')
           skipped = result.get('skippedTests', 0)
-          expected = 24
+          expected = 27
           if failed != 0 or passed != expected or skipped != 0:
               raise SystemExit(f'Invalid test summary: passed={passed}, failed={failed}, skipped={skipped}')
           print(f'Native/UI tests: PASS ({passed} passed, {skipped} skipped, 0 failed)')
@@ -529,7 +529,7 @@ jobs:
           VIZIT_TARGET_BUILD_VERSION: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          export VIZIT_TARGET_MARKETING_VERSION="$(python3 scripts/sync-version.py --print-version)"
+          export VIZIT_TARGET_MARKETING_VERSION="$(python3 scripts/sync-version.py --print-ios-version)"
           "$RUNNER_TEMP/apple-signing-venv/bin/python" scripts/apple-expire-post-v8-testflight.py
 
       - name: Remove temporary signing material
