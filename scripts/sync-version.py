@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep Android and iOS public versions aligned with config/version.properties."""
+"""Validate or apply Android and iOS versions independently."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION_FILE = ROOT / "config" / "version.properties"
-ANDROID_FILE = ROOT / "app" / "build.gradle.kts"
+ANDROID_VERSION_FILE = ROOT / "config" / "android-version.properties"
+IOS_VERSION_FILE = ROOT / "config" / "ios-version.properties"
+ANDROID_BUILD_FILE = ROOT / "app" / "build.gradle.kts"
 IOS_PROJECT_FILE = ROOT / "ios" / "VIZIT.xcodeproj" / "project.pbxproj"
 
 SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
@@ -18,110 +19,115 @@ ANDROID_VERSION_CODE_RE = re.compile(r"(\bversionCode\s*=\s*)\d+")
 IOS_MARKETING_VERSION_RE = re.compile(r'(\bMARKETING_VERSION\s*=\s*")[^"]+(")')
 
 
-def load_version() -> tuple[str, int]:
+def load_properties(path: Path) -> dict[str, str]:
     props: dict[str, str] = {}
-    for raw_line in VERSION_FILE.read_text(encoding="utf-8").splitlines():
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
         key, sep, value = line.partition("=")
         if not sep:
-            raise SystemExit(f"Invalid line in {VERSION_FILE}: {raw_line!r}")
+            raise SystemExit(f"Invalid line in {path}: {raw_line!r}")
         props[key.strip()] = value.strip()
-
-    version = props.get("versionName", "")
-    match = SEMVER_RE.fullmatch(version)
-    if not match:
-        raise SystemExit("versionName must use MAJOR.MINOR.PATCH numeric SemVer")
-
-    major, minor, patch = map(int, match.groups())
-    if minor > 99:
-        raise SystemExit("MINOR must be <= 99 for the Android versionCode mapping")
-    if patch > 9999:
-        raise SystemExit("PATCH must be <= 9999 for the Android versionCode mapping")
-
-    # Preserve the existing VIZIT encoding: 7.3.4 -> 7,030,004.
-    derived_android_version_code = major * 1_000_000 + minor * 10_000 + patch
-    configured_android_version_code = props.get("androidVersionCode", "").strip()
-    android_version_code = (
-        int(configured_android_version_code)
-        if configured_android_version_code
-        else derived_android_version_code
-    )
-    if not 1 <= android_version_code <= 2_100_000_000:
-        raise SystemExit("Derived Android versionCode is outside the supported range")
-
-    return version, android_version_code
+    return props
 
 
-def expected_texts(version: str, android_version_code: int) -> tuple[str, str]:
-    android = ANDROID_FILE.read_text(encoding="utf-8")
-    ios = IOS_PROJECT_FILE.read_text(encoding="utf-8")
-
-    android = ANDROID_VERSION_NAME_RE.sub(rf"\g<1>{version}\g<2>", android)
-    android = ANDROID_VERSION_CODE_RE.sub(rf"\g<1>{android_version_code}", android)
-    ios = IOS_MARKETING_VERSION_RE.sub(rf"\g<1>{version}\g<2>", ios)
-    return android, ios
+def require_semver(value: str, label: str) -> str:
+    if not SEMVER_RE.fullmatch(value):
+        raise SystemExit(f"{label} must use MAJOR.MINOR.PATCH numeric SemVer")
+    return value
 
 
-def check(version: str, android_version_code: int) -> int:
-    expected_android, expected_ios = expected_texts(version, android_version_code)
-    current_android = ANDROID_FILE.read_text(encoding="utf-8")
-    current_ios = IOS_PROJECT_FILE.read_text(encoding="utf-8")
+def load_android_version() -> tuple[str, int]:
+    props = load_properties(ANDROID_VERSION_FILE)
+    version = require_semver(props.get("versionName", ""), "Android versionName")
+    try:
+        version_code = int(props.get("versionCode", ""))
+    except ValueError as error:
+        raise SystemExit("Android versionCode must be an integer") from error
+    if not 1 <= version_code <= 2_100_000_000:
+        raise SystemExit("Android versionCode is outside the supported range")
+    return version, version_code
 
-    problems: list[str] = []
-    if current_android != expected_android:
-        problems.append(
-            f"Android version drift: expected versionName={version}, "
-            f"versionCode={android_version_code}"
-        )
-    if current_ios != expected_ios:
-        problems.append(f"iOS version drift: expected MARKETING_VERSION={version}")
 
-    if problems:
-        for problem in problems:
-            print(problem)
-        print("Run: python3 scripts/sync-version.py --apply")
+def load_ios_version() -> str:
+    props = load_properties(IOS_VERSION_FILE)
+    return require_semver(props.get("marketingVersion", ""), "iOS marketingVersion")
+
+
+def expected_android_text(version: str, version_code: int) -> str:
+    text = ANDROID_BUILD_FILE.read_text(encoding="utf-8")
+    text = ANDROID_VERSION_NAME_RE.sub(rf"\g<1>{version}\g<2>", text)
+    return ANDROID_VERSION_CODE_RE.sub(rf"\g<1>{version_code}", text)
+
+
+def expected_ios_text(version: str) -> str:
+    text = IOS_PROJECT_FILE.read_text(encoding="utf-8")
+    return IOS_MARKETING_VERSION_RE.sub(rf"\g<1>{version}\g<2>", text)
+
+
+def check_android() -> int:
+    version, version_code = load_android_version()
+    if ANDROID_BUILD_FILE.read_text(encoding="utf-8") != expected_android_text(version, version_code):
+        print(f"Android version drift: expected versionName={version}, versionCode={version_code}")
+        print("Run: python3 scripts/sync-version.py --apply-android")
         return 1
-
-    print(
-        f"VIZIT version sync: PASS — public version {version}, "
-        f"Android versionCode {android_version_code}"
-    )
+    print(f"Android version: PASS — {version} ({version_code})")
     return 0
 
 
-def apply(version: str, android_version_code: int) -> int:
-    android, ios = expected_texts(version, android_version_code)
-    ANDROID_FILE.write_text(android, encoding="utf-8")
-    IOS_PROJECT_FILE.write_text(ios, encoding="utf-8")
-    print(
-        f"Synced VIZIT {version}: Android versionCode={android_version_code}; "
-        "iOS MARKETING_VERSION aligned. "
-        "iOS CURRENT_PROJECT_VERSION remains an independent build number."
-    )
+def check_ios() -> int:
+    version = load_ios_version()
+    if IOS_PROJECT_FILE.read_text(encoding="utf-8") != expected_ios_text(version):
+        print(f"iOS version drift: expected MARKETING_VERSION={version}")
+        print("Run: python3 scripts/sync-version.py --apply-ios")
+        return 1
+    print(f"iOS version: PASS — {version}")
+    return 0
+
+
+def apply_android() -> int:
+    version, version_code = load_android_version()
+    ANDROID_BUILD_FILE.write_text(expected_android_text(version, version_code), encoding="utf-8")
+    print(f"Applied Android {version} ({version_code}); iOS was not changed.")
+    return 0
+
+
+def apply_ios() -> int:
+    version = load_ios_version()
+    IOS_PROJECT_FILE.write_text(expected_ios_text(version), encoding="utf-8")
+    print(f"Applied iOS {version}; Android was not changed.")
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--check", action="store_true", help="fail when platform versions drift")
-    mode.add_argument("--apply", action="store_true", help="write the shared version into platform files")
-    mode.add_argument("--print-version", action="store_true", help="print the shared public version")
-    mode.add_argument("--print-android-code", action="store_true", help="print the derived Android versionCode")
+    mode.add_argument("--check-android", action="store_true")
+    mode.add_argument("--apply-android", action="store_true")
+    mode.add_argument("--print-android-version", action="store_true")
+    mode.add_argument("--print-android-code", action="store_true")
+    mode.add_argument("--check-ios", action="store_true")
+    mode.add_argument("--apply-ios", action="store_true")
+    mode.add_argument("--print-ios-version", action="store_true")
     args = parser.parse_args()
 
-    version, android_version_code = load_version()
-    if args.print_version:
-        print(version)
+    if args.check_android:
+        return check_android()
+    if args.apply_android:
+        return apply_android()
+    if args.print_android_version:
+        print(load_android_version()[0])
         return 0
     if args.print_android_code:
-        print(android_version_code)
+        print(load_android_version()[1])
         return 0
-    if args.check:
-        return check(version, android_version_code)
-    return apply(version, android_version_code)
+    if args.check_ios:
+        return check_ios()
+    if args.apply_ios:
+        return apply_ios()
+    print(load_ios_version())
+    return 0
 
 
 if __name__ == "__main__":
