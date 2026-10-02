@@ -65,7 +65,9 @@ jobs:
           arch: x86_64
           profile: pixel_7
           disable-animations: true
-          script: ./gradlew connectedDevDebugAndroidTest --stacktrace
+          script: |
+            mkdir -p release-evidence/wizard
+            result=0; ./gradlew connectedDevDebugAndroidTest --stacktrace || result=$?; adb pull /sdcard/Android/data/hu.rayworks.vizit.dev/files/zip-wizard-evidence release-evidence/wizard || true; exit "$result"
       - name: Record exact artifact hash and signing certificate
         run: |
           mkdir -p release-evidence
@@ -89,4 +91,5 @@ jobs:
             app/build/reports
             app/build/outputs/androidTest-results
             app/build/test-results
+            release-evidence/wizard
           retention-days: 14
