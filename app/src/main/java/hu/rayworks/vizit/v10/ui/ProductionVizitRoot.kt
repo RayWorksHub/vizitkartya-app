@@ -289,7 +289,7 @@ fun ProductionVizitRoot(
         }
         app.nfcOn = vizitViewModel.nfcStatus.isEnabled
         app.nfcSharePhase = vizitViewModel.nfcSharePhase
-        app.multiProfileEnabled = vizitViewModel.featureFlags.multiProfile
+        app.multiProfileEnabled = true
         app.businessPortalEnabled = vizitViewModel.featureFlags.businessPortal
         app.analyticsEnabled = vizitViewModel.featureFlags.analytics
         app.qrScannerEnabled = vizitViewModel.featureFlags.qrScanner
