@@ -15,7 +15,7 @@ import hu.rayworks.vizit.v10.data.Profile
 import hu.rayworks.vizit.v10.ui.theme.ThemeState
 import hu.rayworks.vizit.v10.ui.wizard.BlockStatus
 import hu.rayworks.vizit.v10.ui.wizard.ProfileType
-import hu.rayworks.vizit.v10.ui.wizard.WizardHost
+import hu.rayworks.vizit.v10.ui.wizard.ThemedWizardHost as WizardHost
 import hu.rayworks.vizit.v10.ui.wizard.WizardState
 import java.io.File
 import org.junit.Assert.*
@@ -71,7 +71,6 @@ class ZipWizardInstrumentedTest {
 
     private fun capture(name: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        // UTP copies this directory before uninstalling the test application.
         val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
         val directory = if (output != null) File(output, "zip-wizard-evidence")
             else File(context.getExternalFilesDir(null), "zip-wizard-evidence")

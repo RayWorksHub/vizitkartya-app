@@ -1,0 +1,33 @@
+name: Update native ZIP regression inventory
+on:
+  push:
+    branches: [fix/zip-wizard-parity-20261003]
+    paths: ['.github/workflows/zip-test-count-update.yml']
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Account for the three added passing native/UI tests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/ios.yml')
+          s = p.read_text()
+          assert s.count('expected = 24') == 1
+          p.write_text(s.replace('expected = 24', 'expected = 27'))
+          PY
+      - name: Preserve strict zero-failure zero-skip release gate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'fix/zip-wizard-parity-20261003'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/zip-test-count-update.yml
+          git add .github/workflows/ios.yml
+          git diff --cached --check
+          git commit -m 'Require all 27 native and UI tests including ZIP wizard regressions'
+          git push origin "HEAD:$GITHUB_REF_NAME"

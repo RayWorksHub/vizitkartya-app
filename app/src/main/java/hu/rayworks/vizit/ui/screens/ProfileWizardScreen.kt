@@ -31,7 +31,7 @@ import hu.rayworks.vizit.v10.data.AppState
 import hu.rayworks.vizit.v10.data.Pic
 import hu.rayworks.vizit.v10.data.Profile
 import hu.rayworks.vizit.v10.ui.theme.ThemeState
-import hu.rayworks.vizit.v10.ui.wizard.WizardHost
+import hu.rayworks.vizit.v10.ui.wizard.ThemedWizardHost as WizardHost
 import hu.rayworks.vizit.v10.ui.wizard.WizardState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
