@@ -12,11 +12,11 @@ Az iPhone HTTPS NFC-fallback később külön, explicit átadási módként vizs
 
 A payload csak explicit NFC megosztási módban hozzáférhető. A vCard és a profilkép process-local memóriában marad, SharedPreferences-be vagy fájlba nem kerül. Minden aktiválás külön session ID-t kap; egy régi timeout vagy APDU-kapcsolat nem deaktiválhat újabb átadást. `requireDeviceUnlock=true` marad. Kilépés, leállítás, timeout és megfelelő lifecycle esemény deaktiválja a payloadot.
 
-Az aktív képernyő a VIZIT `HostApduService` komponenst foreground preferred HCE service-ként állítja be, majd kilépéskor visszaállítja a rendszerállapotot.
+Az aktív képernyő dinamikusan regisztrálja a szabványos NDEF AID-t, és best-effort foreground preferred HCE service-ként is beállítja a VIZIT-et. Kilépéskor a dinamikus AID-regisztráció törlődik, így a manifestben lévő inaktív fallback útvonal áll vissza. Az OEM által visszautasított foreground-prioritás önmagában nem minősül hibának, ha a dinamikus AID-regisztráció sikerült.
 
 ## Sikerállapot
 
-A kapcsolat létrejötte önmagában nem siker. A service csak akkor jelez `NFC adat kiolvasva` állapotot, ha az NDEF fájl teljes tartományát kiolvasta a reader. Az utolsó APDU válaszát még 300 ms ideig ki kell szolgálnia, mielőtt a felület kikapcsolja az előtérbeli HCE-szolgáltatást. Ez nem bizonyítja, hogy a fogadó felhasználó a kontaktot el is mentette.
+A kapcsolat létrejötte önmagában nem siker. A service csak akkor jelez `NFC adat kiolvasva` állapotot, ha az NDEF fájl teljes tartományát kiolvasta a reader. A teljes olvasás után 1,5 másodperces settle ablak marad aktív, és egy új NDEF application SELECT megszakítja a függő leállítást. Így az OEM-ek által végzett második SELECT/READ kör nem kap félbeszakított vagy üres taget. Ez nem bizonyítja, hogy a fogadó felhasználó a kontaktot el is mentette.
 
 ## Fotó
 

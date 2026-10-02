@@ -8,15 +8,22 @@ import android.nfc.cardemulation.CardEmulation
 
 object NfcRouting {
     private const val NDEF_APPLICATION_AID = "D2760000850101"
-    private const val INACTIVE_VIZIT_AID = "F056495A495401"
 
+    /**
+     * Drop any dynamic AID registration left behind by a previous process/session.
+     *
+     * The manifest contains a harmless proprietary fallback AID. Removing the dynamic
+     * group lets Android restore that static route, so VIZIT only emulates an NDEF tag
+     * while the user is explicitly on the NFC sharing screen.
+     */
     fun reset(context: Context) {
         withCardEmulation(context) { cardEmulation, component ->
-            cardEmulation.registerAidsForService(
-                component,
-                CardEmulation.CATEGORY_OTHER,
-                listOf(INACTIVE_VIZIT_AID),
-            )
+            runCatching {
+                cardEmulation.removeAidsForService(
+                    component,
+                    CardEmulation.CATEGORY_OTHER,
+                )
+            }
         }
     }
 
@@ -26,17 +33,25 @@ object NfcRouting {
             CardEmulation.CATEGORY_OTHER,
             listOf(NDEF_APPLICATION_AID),
         )
-        registered && cardEmulation.setPreferredService(activity, component)
+        if (!registered) return@withCardEmulation false
+
+        // CATEGORY_OTHER AIDs are routable once registered. Foreground preference is
+        // still requested to win an AID conflict, but some OEMs return false here even
+        // though the dynamic route is already active. Do not turn a valid route into a
+        // false "routing failed" state just because that optional priority call fails.
+        runCatching { cardEmulation.setPreferredService(activity, component) }
+        true
     } ?: false
 
     fun deactivate(activity: Activity) {
         withCardEmulation(activity) { cardEmulation, component ->
             runCatching { cardEmulation.unsetPreferredService(activity) }
-            cardEmulation.registerAidsForService(
-                component,
-                CardEmulation.CATEGORY_OTHER,
-                listOf(INACTIVE_VIZIT_AID),
-            )
+            runCatching {
+                cardEmulation.removeAidsForService(
+                    component,
+                    CardEmulation.CATEGORY_OTHER,
+                )
+            }
         }
     }
 
