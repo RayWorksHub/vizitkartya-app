@@ -126,8 +126,8 @@ fun ProductionVizitRoot(
                     }
                 }
             },
-            onDeleteActiveProfile = { profileId ->
-                if (app.operationBusy) return@RuntimeBindings
+            onDeleteActiveProfile = delete@{ profileId ->
+                if (app.operationBusy) return@delete
                 app.operationBusy = true
                 val epochAtStart = accountEpoch
                 scope.launch {
