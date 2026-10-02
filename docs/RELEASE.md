@@ -9,25 +9,31 @@ A `main` stabil ág. Signing kulcs és jelszó GitHub Secret / biztonságos rele
 Az iPhone teljes Android-szerű NFC kontaktimportjának hiánya nem release blocker, ha a QR és HTTPS profil fallback stabil és dokumentált. Súlyos támogatott Android NFC hiba release blocker.
 
 
-## Egységes alkalmazásverzió
+## Platformonként független alkalmazásverzió
 
-Az Android és az iOS felhasználó által látható verziószáma közös. Az egyetlen forrás:
+Az Android és az iOS verziózása egymástól független:
 
-`config/version.properties`
+- Android: `config/android-version.properties`
+- iOS: `config/ios-version.properties`
 
-Új release esetén kizárólag a `versionName` értékét kell módosítani, majd futtatni:
+Android release esetén:
 
 ```bash
-python3 scripts/sync-version.py --apply
-python3 scripts/sync-version.py --check
+python3 scripts/sync-version.py --apply-android
+python3 scripts/sync-version.py --check-android
 ```
 
-A szinkronizáló script:
+iOS release esetén:
 
-- ugyanazt a `MAJOR.MINOR.PATCH` verziót írja az Android `versionName` és az iOS `MARKETING_VERSION` mezőjébe;
-- az Android `versionCode` értékét determinisztikusan képezi: `MAJOR * 1_000_000 + MINOR * 10_000 + PATCH`;
-- CI-ben hibára fut, ha bármelyik platform verziója eltér a központi értéktől.
+```bash
+python3 scripts/sync-version.py --apply-ios
+python3 scripts/sync-version.py --check-ios
+```
+
+Egyik parancs sem írja át vagy ellenőrzi a másik platform verzióját. Az Android
+`versionCode` külön, monoton növekvő Play buildazonosító.
 
 Az iOS `CURRENT_PROJECT_VERSION` külön buildszám. A TestFlight CI ezt a GitHub Actions futásszámából állítja elő, ezért nem kell megegyeznie az Android `versionCode` értékével.
 
-Jelenlegi közös publikus verzió: **10.0.0**. Android `versionCode`: **10000005**.
+Jelenlegi Android-verzió: **10.0.1** (`versionCode`: **10000006**).
+Jelenlegi iOS-verzió: **10.0.0**.
