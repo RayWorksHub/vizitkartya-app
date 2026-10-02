@@ -50,10 +50,15 @@ fun VizitRoot(vizitViewModel: VizitViewModel, authViewModel: AuthViewModel) {
             )
 
             currentSession is AuthSessionState.RefreshFailed -> {
-                currentSession.cachedUserId?.let { userId ->
-                    vizitViewModel.bindProfileOwner(userId = userId, enableCloudSync = true)
+                val cachedUserId = currentSession.cachedUserId
+                if (cachedUserId != null) {
+                    vizitViewModel.bindProfileOwner(userId = cachedUserId, enableCloudSync = true)
+                } else {
+                    vizitViewModel.clearProfileOwnerBinding()
                 }
             }
+
+            else -> vizitViewModel.clearProfileOwnerBinding()
         }
     }
 
