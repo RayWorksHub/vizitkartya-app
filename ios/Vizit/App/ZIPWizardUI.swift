@@ -1665,7 +1665,7 @@ struct ZIPWizIntro: View {
                         .padding(.bottom, 28)
                         .frame(maxWidth: .infinity, minHeight: g.size.height, alignment: .bottomLeading)
                 }
-                .scrollBounceBehavior(.basedOnSize)
+                .modifier(ZIPScrollBounceCompatibility())
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1925,7 +1925,7 @@ enum ZIPThemeMode: Int, CaseIterable {
 }
 
 extension UIColor {
-    convenience init(zipHex: UInt32, alpha: CGFloat = 1) {
+    convenience init(zipHex hex: UInt32, alpha: CGFloat = 1) {
         let r = CGFloat((hex >> 16) & 0xFF) / 255
         let g = CGFloat((hex >> 8) & 0xFF) / 255
         let b = CGFloat(hex & 0xFF) / 255
@@ -1934,7 +1934,7 @@ extension UIColor {
 }
 
 extension Color {
-    init(zipHex: UInt32, alpha: Double = 1) {
+    init(zipHex hex: UInt32, alpha: Double = 1) {
         self.init(uiColor: UIColor(zipHex: hex, alpha: CGFloat(alpha)))
     }
 
@@ -2668,6 +2668,18 @@ private enum ZIPImagePick {
             let loaded = image
             let error = failure
             DispatchQueue.main.async { done(loaded, error) }
+        }
+    }
+}
+
+/// Preserve the source's size-aware scrolling where supported, without
+/// raising the production app's iOS 16 minimum deployment target.
+private struct ZIPScrollBounceCompatibility: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.scrollBounceBehavior(.basedOnSize)
+        } else {
+            content
         }
     }
 }
