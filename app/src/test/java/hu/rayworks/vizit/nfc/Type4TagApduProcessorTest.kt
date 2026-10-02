@@ -48,6 +48,30 @@ class Type4TagApduProcessorTest {
     }
 
     @Test
+    fun `reader may reselect application and read the NDEF file again`() {
+        val progress = mutableListOf<NdefReadProgress>()
+        val trackedProcessor = Type4TagApduProcessor(
+            ndefMessage = byteArrayOf(0x11, 0x22, 0x33),
+            onNdefReadProgress = progress::add,
+        )
+
+        trackedProcessor.process(hex("00A4040007D276000085010100"))
+        trackedProcessor.process(hex("00A4000C02E104"))
+        trackedProcessor.process(hex("00B0000005"))
+        assertTrue(progress.last().isComplete)
+
+        trackedProcessor.process(hex("00A4040007D276000085010100"))
+        trackedProcessor.process(hex("00A4000C02E104"))
+        trackedProcessor.process(hex("00B0000002"))
+        assertFalse(progress.last().isComplete)
+        assertEquals(2, progress.last().coveredBytes)
+
+        trackedProcessor.process(hex("00B0000203"))
+        assertTrue(progress.last().isComplete)
+        assertEquals(5, progress.last().coveredBytes)
+    }
+
+    @Test
     fun `capability container exposes read only NDEF file`() {
         processor.process(hex("00A4040007D276000085010100"))
         processor.process(hex("00A4000C02E103"))
