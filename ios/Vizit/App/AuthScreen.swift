@@ -44,13 +44,6 @@ struct AuthScreen: View {
 
                         modeSelector
 
-                        if let address = verificationAddress {
-                            VizitBanner(
-                                text: "Új fiók esetén a megerősítő link erre a címre érkezik: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót; ilyenkor új regisztrációs levél nem érkezik.",
-                                tone: .info
-                            )
-                        }
-
                         fields
 
                         if mode == .register { legalSection }
@@ -235,11 +228,6 @@ struct AuthScreen: View {
         .padding(.top, VizitSpace.xs)
     }
 
-    private var verificationAddress: String? {
-        if case .verificationSent(let address) = store.authStatus { return address }
-        return nil
-    }
-
     private var buildVersionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
@@ -339,6 +327,108 @@ struct AuthScreen: View {
         Task {
             if await store.requestPasswordReset(email: email) {
                 passwordResetSent = true
+            }
+        }
+    }
+}
+
+/// The exact ZIP confirmation state: the registration form is gone and only
+/// the address plus the next action remain visible.
+private struct VerificationBrandLockup: View {
+    private static let mark: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "VizitLogoMark", withExtension: "png") else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }()
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.white)
+                if let mark = Self.mark {
+                    Image(uiImage: mark).resizable().scaledToFit().padding(10)
+                } else {
+                    Text("V").font(.system(size: 38, weight: .black)).foregroundStyle(VizitColor.primary)
+                }
+            }
+            .frame(width: 72, height: 72)
+            .accessibilityHidden(true)
+
+            Text("VIZIT")
+                .font(.system(size: 22, weight: .bold))
+                .tracking(3.96)
+                .foregroundStyle(VizitColor.textPrimary)
+            Text("Egy érintés. Egy kapcsolat.")
+                .font(.system(size: 14))
+                .foregroundStyle(VizitColor.textSecondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("VIZIT – Egy érintés. Egy kapcsolat.")
+    }
+}
+
+struct EmailVerificationScreen: View {
+    let email: String
+    let onBackToLogin: () -> Void
+
+    var body: some View {
+        VizitScreen {
+            VStack(spacing: 0) {
+                HStack {
+                    Button(action: onBackToLogin) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(VizitColor.textPrimary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Vissza")
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        VerificationBrandLockup()
+                            .padding(.bottom, 24)
+
+                        Text("Erősítsd meg az e-mail-címedet")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundStyle(VizitColor.textPrimary)
+                            .multilineTextAlignment(.center)
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "envelope")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(VizitColor.primary)
+                            Text(email.isEmpty ? "Ellenőrizd a postafiókodat." : email)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(VizitColor.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: 420)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(VizitColor.primarySubtle)
+                        )
+
+                        Text("Nyisd meg a levélben kapott linket.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(VizitColor.textSecondary)
+                            .multilineTextAlignment(.center)
+
+                        Button("Vissza a bejelentkezéshez", action: onBackToLogin)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(VizitColor.primary)
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("auth.verification.login")
+                    }
+                    .frame(maxWidth: 420)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+                    .padding(.bottom, 28)
+                }
             }
         }
     }
