@@ -87,15 +87,30 @@ fun AuthScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var confirmation by rememberSaveable { mutableStateOf("") }
     var legalAccepted by rememberSaveable { mutableStateOf(false) }
+    var verificationEmail by rememberSaveable { mutableStateOf("") }
     val action = viewModel.actionState
     val loading = action is AuthActionState.Loading
 
     LaunchedEffect(action) {
         when ((action as? AuthActionState.Success)?.operation) {
             AuthOperation.REGISTER -> {
+                verificationEmail = email.trim()
+                name = ""
+                email = ""
                 password = ""
                 confirmation = ""
+                legalAccepted = false
                 mode = AuthScreenMode.EMAIL_VERIFICATION_SENT
+            }
+
+            AuthOperation.EMAIL_CONFIRMATION -> {
+                verificationEmail = ""
+                name = ""
+                email = ""
+                password = ""
+                confirmation = ""
+                legalAccepted = false
+                mode = AuthScreenMode.LOGIN
             }
 
             AuthOperation.PASSWORD_RESET_REQUEST -> mode = AuthScreenMode.PASSWORD_RESET_SENT
@@ -145,7 +160,15 @@ fun AuthScreen(
                     modifier = Modifier.size(36.dp),
                 )
                 Text(
-                    text = if (email.isNotBlank()) email else "Ellenőrizd a postafiókodat.",
+                    text = if (
+                        mode == AuthScreenMode.EMAIL_VERIFICATION_SENT && verificationEmail.isNotBlank()
+                    ) {
+                        verificationEmail
+                    } else if (email.isNotBlank()) {
+                        email
+                    } else {
+                        "Ellenőrizd a postafiókodat."
+                    },
                     style = Vizit.type.bodyStrong,
                     color = colors.textPrimary,
                 )
@@ -261,6 +284,12 @@ fun AuthScreen(
                 canUseDebugLocalProfile = viewModel.canUseDebugLocalProfile,
                 onModeChange = {
                     viewModel.clearActionState()
+                    if (it == AuthScreenMode.LOGIN) {
+                        name = ""
+                        email = ""
+                        legalAccepted = false
+                        verificationEmail = ""
+                    }
                     password = ""
                     confirmation = ""
                     mode = it
