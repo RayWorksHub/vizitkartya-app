@@ -71,7 +71,11 @@ class ZipWizardInstrumentedTest {
 
     private fun capture(name: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val directory = File(context.getExternalFilesDir(null), "zip-wizard-evidence").apply { mkdirs() }
+        // UTP copies this directory before uninstalling the test application.
+        val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+        val directory = if (output != null) File(output, "zip-wizard-evidence")
+            else File(context.getExternalFilesDir(null), "zip-wizard-evidence")
+        check(directory.isDirectory || directory.mkdirs())
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         File(directory, "$name.png").outputStream().use {
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
