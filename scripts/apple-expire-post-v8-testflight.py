@@ -13,6 +13,14 @@ import jwt
 
 API = "https://api.appstoreconnect.apple.com/v1"
 BUNDLE_ID = "hu.rayworks.vizit"
+TARGET_MARKETING_VERSION = os.environ.get("VIZIT_TARGET_MARKETING_VERSION", "").strip()
+TARGET_BUILD_VERSION = os.environ.get("VIZIT_TARGET_BUILD_VERSION", "").strip()
+
+if not TARGET_MARKETING_VERSION or not TARGET_BUILD_VERSION:
+    raise SystemExit(
+        "VIZIT_TARGET_MARKETING_VERSION and VIZIT_TARGET_BUILD_VERSION are required; "
+        "refusing to expire any TestFlight builds"
+    )
 
 
 def token() -> str:
@@ -76,15 +84,27 @@ versions = {
 }
 
 targets: list[tuple[str, str, str]] = []
+active_target_found = False
 for build in response.get("data", []):
     relation = build.get("relationships", {}).get("preReleaseVersion", {}).get("data") or {}
     marketing_version = versions.get(str(relation.get("id", "")), "")
+    build_number = str(build.get("attributes", {}).get("version", ""))
     try:
         major = int(marketing_version.split(".", 1)[0])
     except ValueError:
         continue
     if major >= 9 and not bool(build.get("attributes", {}).get("expired")):
-        targets.append((build["id"], marketing_version, str(build.get("attributes", {}).get("version", ""))))
+        if marketing_version == TARGET_MARKETING_VERSION and build_number == TARGET_BUILD_VERSION:
+            active_target_found = True
+            print(f"Preserving current TestFlight build {marketing_version} ({build_number})")
+            continue
+        targets.append((build["id"], marketing_version, build_number))
+
+if not active_target_found:
+    raise SystemExit(
+        f"Active target TestFlight build {TARGET_MARKETING_VERSION} ({TARGET_BUILD_VERSION}) was not found; "
+        "refusing to expire any builds"
+    )
 
 for build_id, marketing_version, build_number in targets:
     request(
