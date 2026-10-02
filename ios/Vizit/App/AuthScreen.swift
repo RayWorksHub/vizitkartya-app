@@ -334,6 +334,38 @@ struct AuthScreen: View {
 
 /// The exact ZIP confirmation state: the registration form is gone and only
 /// the address plus the next action remain visible.
+private struct VerificationBrandLockup: View {
+    private static let mark: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "VizitLogoMark", withExtension: "png") else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }()
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.white)
+                if let mark = Self.mark {
+                    Image(uiImage: mark).resizable().scaledToFit().padding(10)
+                } else {
+                    Text("V").font(.system(size: 38, weight: .black)).foregroundStyle(VizitColor.primary)
+                }
+            }
+            .frame(width: 72, height: 72)
+            .accessibilityHidden(true)
+
+            Text("VIZIT")
+                .font(.system(size: 22, weight: .bold))
+                .tracking(3.96)
+                .foregroundStyle(VizitColor.textPrimary)
+            Text("Egy érintés. Egy kapcsolat.")
+                .font(.system(size: 14))
+                .foregroundStyle(VizitColor.textSecondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("VIZIT – Egy érintés. Egy kapcsolat.")
+    }
+}
+
 struct EmailVerificationScreen: View {
     let email: String
     let onBackToLogin: () -> Void
@@ -356,23 +388,8 @@ struct EmailVerificationScreen: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        VStack(spacing: 8) {
-                            Image("vizit_logo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 52, height: 52)
-                                .frame(width: 72, height: 72)
-                                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.white))
-                                .accessibilityHidden(true)
-                            Text("VIZIT")
-                                .font(.system(size: 22, weight: .bold))
-                                .tracking(3.96)
-                                .foregroundStyle(VizitColor.textPrimary)
-                            Text("Egy érintés. Egy kapcsolat.")
-                                .font(.system(size: 14))
-                                .foregroundStyle(VizitColor.textSecondary)
-                        }
-                        .padding(.bottom, 24)
+                        VerificationBrandLockup()
+                            .padding(.bottom, 24)
 
                         Text("Erősítsd meg az e-mail-címedet")
                             .font(.system(size: 24, weight: .medium))
