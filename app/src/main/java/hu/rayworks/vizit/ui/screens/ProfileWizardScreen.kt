@@ -20,6 +20,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -769,7 +771,7 @@ private fun WizardHeading(copy: WizardStepCopy) {
 }
 
 @Composable
-private fun WizardBlock(content: @Composable Column.() -> Unit) {
+private fun WizardBlock(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -1032,7 +1034,7 @@ private fun WizardStyleSwatch(
                 .clip(RoundedCornerShape(10.dp))
                 .background(Brush.linearGradient(listOf(Color(colorway.gradientStart), Color(colorway.gradientEnd)))),
         ) {
-            Box(Modifier.size(width = 4.dp, height = 56.dp).background(Color(colorway.accent)))
+            Box(Modifier.width(4.dp).height(56.dp).background(Color(colorway.accent)))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(colorway.label, style = Vizit.type.label, color = Vizit.colors.textPrimary)
