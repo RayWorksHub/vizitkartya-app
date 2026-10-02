@@ -43,7 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Briefcase
+import androidx.compose.material.icons.outlined.BusinessCenter
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Person
@@ -814,7 +814,7 @@ private fun WizardTypeChoice(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                if (business) Icons.Outlined.Briefcase else Icons.Outlined.Person,
+                if (business) Icons.Outlined.BusinessCenter else Icons.Outlined.Person,
                 contentDescription = null,
                 tint = Vizit.colors.primary,
             )
