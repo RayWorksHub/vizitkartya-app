@@ -66,6 +66,7 @@ final class VizitUITests: XCTestCase {
         let app = launchClean()
         XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 10))
         app.buttons["wizard.private"].tap()
+        app.buttons["wizard.primary"].tap()
         let name = app.textFields["wizard.fullName"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap(); name.typeText("Teszt Elek")
@@ -96,18 +97,23 @@ final class VizitUITests: XCTestCase {
         app.buttons["wizard.private"].tap()
         let next = app.buttons["wizard.primary"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
-        XCTAssertFalse(next.isEnabled)
+        XCTAssertTrue(next.isEnabled)
+        next.tap()
+        XCTAssertTrue(app.textFields["wizard.fullName"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["wizard.primary"].isEnabled)
     }
 
     func testBackKeepsDraftWithoutPublishing() {
         let app = launchClean()
         XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 10))
         app.buttons["wizard.private"].tap()
+        app.buttons["wizard.primary"].tap()
         let name = app.textFields["wizard.fullName"]
         name.tap(); name.typeText("Nem mentett adat")
         app.buttons["Vissza"].tap()
         XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 5))
         app.buttons["wizard.private"].tap()
+        app.buttons["wizard.primary"].tap()
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         XCTAssertEqual(name.value as? String, "Nem mentett adat")
         app.terminate()
