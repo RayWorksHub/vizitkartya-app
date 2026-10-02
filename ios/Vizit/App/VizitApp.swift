@@ -314,9 +314,14 @@ final class AppStore: ObservableObject {
                           defaultError: "A regisztráció nem sikerült. Próbáld újra később.") {
             guard let cloud = self.cloud else { return }
             try await cloud.register(name: name, email: email, password: password)
+            self.message = nil
             self.authStatus = .verificationSent(email.trimmingCharacters(in: .whitespacesAndNewlines))
-            self.message = "Ha ez új e-mail-cím, elküldtük a megerősítő levelet. Ha már van fiókod, lépj be vagy kérj új jelszót."
         }
+    }
+
+    func returnToLoginAfterRegistration() {
+        message = nil
+        authStatus = .signedOut
     }
 
     func googleLogin() async {
@@ -350,8 +355,8 @@ final class AppStore: ObservableObject {
             if flow == "signup" {
                 try? await cloud.logout()
                 self.clearUser()
+                self.message = nil
                 self.authStatus = .signedOut
-                self.message = "Az e-mail-címed megerősítve. Most jelentkezz be, és utána létrehozhatod az első profilodat."
                 return
             }
             try self.configureStorage(for: session.user.id)
@@ -1207,8 +1212,15 @@ struct AppGate: View {
             case .launching:
                 LaunchScreen()
 
-            case .signedOut, .verificationSent:
+            case .signedOut:
                 AuthScreen()
+                    .id("auth-login")
+
+            case .verificationSent(let email):
+                VerificationSentScreen(email: email) {
+                    store.returnToLoginAfterRegistration()
+                }
+                .id("auth-verification")
 
             case .passwordRecovery:
                 PasswordChangeScreen()
