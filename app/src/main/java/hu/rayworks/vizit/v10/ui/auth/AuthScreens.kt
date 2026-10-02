@@ -186,6 +186,12 @@ fun AuthScreen(app: AppState, mode: AuthMode, viewModel: AuthViewModel) {
             is AuthActionState.Success -> {
                 when (state.operation) {
                     AuthOperation.REGISTER -> {
+                        // Registration must never leave the filled form behind.
+                        // Keep only the address needed by the confirmation card.
+                        name = ""
+                        pw = ""
+                        pw2 = ""
+                        consent = false
                         app.authBanner = state.message to true
                         app.gate = Gate.Auth(AuthMode.EmailSent)
                     }
@@ -201,6 +207,13 @@ fun AuthScreen(app: AppState, mode: AuthMode, viewModel: AuthViewModel) {
                     AuthOperation.LOGIN,
                     AuthOperation.GOOGLE_SIGN_IN -> app.toast(state.message)
                     AuthOperation.EMAIL_CONFIRMATION -> {
+                        // The confirmation deep link always returns to a clean
+                        // login form on Android, never straight into the wizard.
+                        name = ""
+                        email = ""
+                        pw = ""
+                        pw2 = ""
+                        consent = false
                         app.authBanner = state.message to true
                         app.gate = Gate.Auth(AuthMode.Login)
                     }
@@ -222,6 +235,11 @@ fun AuthScreen(app: AppState, mode: AuthMode, viewModel: AuthViewModel) {
     }
     fun go(m: AuthMode) {
         validationError = null
+        if (m == AuthMode.Login) {
+            name = ""
+            email = ""
+            consent = false
+        }
         pw = ""
         pw2 = ""
         viewModel.clearActionState()
