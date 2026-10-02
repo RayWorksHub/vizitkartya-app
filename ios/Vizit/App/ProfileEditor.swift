@@ -390,22 +390,26 @@ struct ProfileEditor: View {
 
 }
 
-private struct V10WizardVisualGroup {
-    let id: String
+
+private struct WizardStepCopy {
+    let eyebrow: String?
     let title: String
-    let color: Color
-    let steps: Set<String>
+    let subtitle: String?
 }
 
-/// First card flow. Uses the existing AppStore save path and the device's own screen chrome.
+/// Native implementation of the supplied \`vizit-nevjegyvarazslo.html\` phone UI.
+/// The desktop prototype panel, phone bezel and simulated system chrome are
+/// intentionally not part of the app.
 struct ProfileWizard: View {
     var isAdditional = false
     var onSaving: () -> Void = {}
     var onSaveFailed: () -> Void = {}
     var onFinished: () -> Void = {}
     var onCancel: (() -> Void)? = nil
+
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
+
     @State private var draft: ContactProfile = {
         var value = ContactProfile()
         value.isPublic = true
@@ -413,7 +417,9 @@ struct ProfileWizard: View {
     }()
     @State private var kind: String? = nil
     @State private var index = 0
+    @State private var direction = 1
     @State private var selectedStyle: CardColorway = .ink
+    @State private var selectedSocial: Set<SocialPlatform> = []
     @State private var skipped: Set<String> = []
     @State private var returning = false
     @State private var editedSlug = false
@@ -422,251 +428,531 @@ struct ProfileWizard: View {
     @State private var processing = false
     @State private var published = false
     @State private var error: String?
-    @State private var introShown = true
 
     private var path: [String] {
-        kind == "private" ? ["type", "identity", "photo", "contact", "social", "look", "done"]
+        kind == "private"
+            ? ["type", "identity", "photo", "contact", "social", "look", "done"]
             : ["type", "identity", "photo", "logo", "contact", "social", "bio", "look", "done"]
     }
+
     private var step: String { path[min(index, path.count - 1)] }
-    private var previewPresentation: CardPresentation {
-        var value = presentation.value
-        value.colorway = selectedStyle
-        return value
-    }
-    private let titles = ["type": "Névjegy típusa", "identity": "Alapadatok", "photo": "Profilkép",
-                          "logo": "Céges logó", "contact": "Elérhetőségek", "social": "Közösségi profilok",
-                          "bio": "Bemutatkozás", "look": "Stílus", "done": "Befejezés"]
+    private var total: Int { path.count - 1 }
     private let optional: Set<String> = ["photo", "logo", "contact", "social", "bio"]
-    private var visualGroups: [V10WizardVisualGroup] {
-        var groups = [
-            V10WizardVisualGroup(
-                id: "personal", title: "Személyes adatok", color: VizitColor.primary,
-                steps: ["identity", "photo"]
-            )
-        ]
-        if kind != "private" {
-            groups.append(V10WizardVisualGroup(
-                id: "company", title: "Céges adatok", color: V10WizardIntroColor.amber,
-                steps: ["logo", "bio"]
-            ))
-        }
-        groups.append(V10WizardVisualGroup(
-            id: "online", title: "Online elérés", color: V10WizardIntroColor.teal,
-            steps: ["contact", "social"]
-        ))
-        groups.append(V10WizardVisualGroup(
-            id: "done", title: "Befejezés", color: VizitColor.success,
-            steps: ["look", "done"]
-        ))
-        return groups
-    }
-    private var currentVisualGroupIndex: Int {
-        visualGroups.firstIndex(where: { $0.steps.contains(step) }) ?? 0
-    }
+    private let titles = [
+        "photo": "Profilkép",
+        "logo": "Céges logó",
+        "contact": "Elérhetőségek",
+        "social": "Közösségi profilok",
+        "bio": "Bemutatkozás"
+    ]
 
     private var hasValue: Bool {
         switch step {
         case "photo": return !draft.photoBase64.isEmpty
         case "logo": return !draft.logoBase64.isEmpty
-        case "contact": return ![draft.phone,draft.email,draft.website,draft.address].allSatisfy(\.isEmpty)
-        case "social": return draft.socialProfiles.contains { !$0.url.isEmpty }
-        case "bio": return !draft.bio.isEmpty
+        case "contact": return ![draft.phone, draft.email, draft.website, draft.address].allSatisfy(\.isEmpty)
+        case "social": return selectedSocial.contains { !draft.socialURL(for: $0).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        case "bio": return !draft.bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         default: return true
         }
     }
+
     private var valid: Bool {
         switch step {
-        case "type": return kind != nil
-        case "identity": return draft.displayName.count >= 2 && (kind == "private" || !draft.company.trimmingCharacters(in: .whitespaces).isEmpty)
-        case "contact": return draft.email.isEmpty || draft.email.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$"#, options: .regularExpression) != nil
-        case "done": return PublicProfileLink.isValidSlug(draft.publicSlug)
-        default: return true
+        case "type":
+            return kind != nil
+        case "identity":
+            return draft.displayName.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 &&
+                (kind == "private" || !draft.company.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        case "contact":
+            return draft.email.isEmpty ||
+                draft.email.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$"#, options: .regularExpression) != nil
+        case "done":
+            return PublicProfileLink.isValidSlug(draft.publicSlug)
+        default:
+            return true
+        }
+    }
+
+    private var copy: WizardStepCopy {
+        switch step {
+        case "type":
+            return WizardStepCopy(
+                eyebrow: isAdditional ? "Új névjegyed" : "Első névjegyed",
+                title: "Milyen névjegyet készítesz?",
+                subtitle: "Később bármikor létrehozhatsz egy másikat is."
+            )
+        case "identity":
+            return kind == "private"
+                ? WizardStepCopy(eyebrow: nil, title: "Hogy hívnak?", subtitle: "Így jelenik meg a neved a névjegyeden.")
+                : WizardStepCopy(eyebrow: nil, title: "Mutatkozz be", subtitle: "Ez kerül a névjegyed tetejére.")
+        case "photo":
+            return WizardStepCopy(eyebrow: nil, title: "Profilkép", subtitle: "Egy arc többet mond egy névnél. A partnereid könnyebben felismernek.")
+        case "logo":
+            return WizardStepCopy(eyebrow: nil, title: "Céges logó", subtitle: "A profilkép jobb alsó sarkában jelenik meg, a névjegyen és a nyilvános profilon is.")
+        case "contact":
+            return WizardStepCopy(eyebrow: nil, title: "Hol érnek el?", subtitle: "Csak azt add meg, amit nyilvánosan is megosztanál.")
+        case "social":
+            return WizardStepCopy(eyebrow: nil, title: "Közösségi profilok", subtitle: "Koppints arra, amit hozzáadnál. Bármikor bővítheted.")
+        case "bio":
+            return WizardStepCopy(eyebrow: nil, title: "Pár mondat rólad", subtitle: "Mivel foglalkozol, miben tudsz segíteni? A nyilvános profilodon jelenik meg.")
+        case "look":
+            return WizardStepCopy(eyebrow: nil, title: "Válassz stílust", subtitle: "Egyedi színeket és színátmenetet később a Megjelenés menüben állíthatsz be.")
+        default:
+            return WizardStepCopy(eyebrow: "Utolsó lépés", title: "Elkészült a névjegyed", subtitle: "Nézd át, és publikáld. Minden adatot később is módosíthatsz.")
         }
     }
 
     var body: some View {
-        ZStack {
-            VizitScreen {
-            if published {
-                VStack(spacing: VizitSpace.md) {
-                    Text("Elkészült a névjegyed").font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
-                    Text(draft.isPublic ? "A névjegyed publikálva. Most már megoszthatod a profilcímedet." :
-                            "A névjegyed elmentve. A nyilvános profilt később is bekapcsolhatod.")
-                        .foregroundStyle(VizitColor.textSecondary)
-                    VizitButton(title: "Tovább az áttekintéshez") { onFinished() }
-                        .accessibilityIdentifier("wizard.finish")
-                }
-                .frame(maxWidth: 560).frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(VizitSpace.md)
-            } else {
+        VizitScreen {
             VStack(spacing: 0) {
-                V10WizardTopBar(
-                    profileType: kind == "private" ? "Magánszemély" : "Vállalkozói",
-                    group: visualGroups[currentVisualGroupIndex],
-                    groupIndex: currentVisualGroupIndex,
-                    groupCount: visualGroups.count,
-                    canClose: isAdditional && onCancel != nil,
-                    onClose: { onCancel?() },
-                    onChangeType: { introShown = true }
-                )
-                V10WizardProgress(groups: visualGroups, currentIndex: currentVisualGroupIndex)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: VizitSpace.md) {
-                        if step != "type" {
-                            VizitDigitalCard(profile: draft, presentation: previewPresentation)
-                        }
-                        content
-                        if let error { Text(error).foregroundStyle(VizitColor.error).font(VizitFont.bodySmall) }
-                    }
-                    .frame(maxWidth: 560).frame(maxWidth: .infinity)
-                    .padding(VizitSpace.md)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                VStack(spacing: VizitSpace.xs) {
-                    if index > 0 {
-                        VizitButton(title: "Vissza", kind: .tertiary) {
-                            if !returning && index == 1 {
-                                introShown = true
-                            } else {
-                                index = returning ? path.count - 1 : max(1, index - 1)
+                wizardTopBar
+                if published {
+                    publishedContent
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            stepHeading
+                            if step != "type" && step != "done" {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Élő előnézet")
+                                        .font(VizitFont.caption)
+                                        .foregroundStyle(VizitColor.textMuted)
+                                    WizardCompactCard(
+                                        profile: draft,
+                                        colorway: selectedStyle,
+                                        business: kind != "private"
+                                    )
+                                }
                             }
-                            returning = false; error = nil
+
+                            stepBody
+
+                            if let error {
+                                Text(error)
+                                    .font(VizitFont.bodySmall)
+                                    .foregroundStyle(VizitColor.error)
+                            }
                         }
+                        .id(step)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: direction >= 0 ? .trailing : .leading).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .animation(.timingCurve(0.2, 0.7, 0.2, 1, duration: 0.28), value: step)
+                        .frame(maxWidth: 560)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
+                        .padding(.bottom, 24)
                     }
-                    VizitButton(title: step == "done" ? (draft.isPublic ? "Névjegy publikálása" : "Névjegy mentése") : (returning ? "Mentés" : "Tovább"),
-                                isLoading: processing, isEnabled: valid && (!optional.contains(step) || hasValue)) {
-                        if step == "done" { save() } else { advance(skip: false) }
-                    }
-                    .accessibilityIdentifier("wizard.primary")
-                    if optional.contains(step) {
-                        VizitButton(title: "Később állítom be", kind: .tertiary) { advance(skip: true) }
-                            .accessibilityIdentifier("wizard.skip")
-                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    wizardFooter
                 }
-                .padding(VizitSpace.md)
-                .background(VizitColor.surface)
-            }
-            }
-            }
-            .accessibilityHidden(introShown)
-            if !published && introShown {
-                V10WizardIntro(
-                    selectedKind: kind,
-                    canClose: onCancel != nil,
-                    onClose: { onCancel?() },
-                    onPick: selectKind
-                )
-                .transition(.move(edge: .leading))
-                .zIndex(2)
             }
         }
-        .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.38), value: introShown)
-        .statusBarHidden(!published && introShown)
         .task(id: photo) { await process(photo, isLogo: false) }
         .task(id: logo) { await process(logo, isLogo: true) }
     }
 
-    @ViewBuilder private var content: some View {
+    private var wizardTopBar: some View {
+        VStack(spacing: 6) {
+            HStack {
+                if index > 0 && !published {
+                    Button(action: back) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(VizitColor.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Vissza")
+                } else if isAdditional, let onCancel, index == 0 {
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(VizitColor.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Bezárás")
+                } else {
+                    Color.clear.frame(width: 44, height: 44)
+                }
+
+                VStack(spacing: 6) {
+                    HStack(spacing: 4) {
+                        ForEach(0..<max(total, 1), id: \.self) { item in
+                            Capsule()
+                                .fill(item <= min(index, max(total - 1, 0)) || step == "done"
+                                      ? VizitColor.primary : VizitColor.controlTrack)
+                                .frame(height: 4)
+                        }
+                    }
+                    Text(step == "done" ? "Kész" : "\(index + 1) / \(total)")
+                        .font(VizitFont.caption)
+                        .foregroundStyle(VizitColor.textMuted)
+                        .monospacedDigit()
+                }
+
+                Color.clear.frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+            .padding(.bottom, 2)
+        }
+    }
+
+    private var stepHeading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let eyebrow = copy.eyebrow {
+                Text(eyebrow.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(VizitColor.primary)
+            }
+            Text(copy.title)
+                .font(.system(size: 26, weight: .bold))
+                .tracking(-0.4)
+                .foregroundStyle(VizitColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let subtitle = copy.subtitle {
+                Text(subtitle)
+                    .font(VizitFont.body)
+                    .foregroundStyle(VizitColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder private var stepBody: some View {
         switch step {
         case "type":
-            Text(isAdditional ? "Hozzuk létre az új profilodat" : "Hozzuk létre az első profilodat")
-                .font(VizitFont.title)
-            Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.")
-                .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
-            Text("Milyen névjegyet készítesz?").font(VizitFont.h3)
-            choice("Vállalkozói névjegy", detail: "Vállalkozás, beosztás, logó és bemutatkozás", selected: kind == "business") {
-                kind = "business"
+            VStack(spacing: 12) {
+                WizardTypeChoice(
+                    title: "Vállalkozói névjegy",
+                    detail: "Cégnek vagy egyéni vállalkozásnak: vállalkozás neve, beosztás, céges logó, bemutatkozás.",
+                    tags: ["8 lépés", "kb. 2 perc"],
+                    systemImage: "briefcase",
+                    selected: kind == "business"
+                ) { selectKind("business") }
+                .accessibilityIdentifier("wizard.business")
+
+                WizardTypeChoice(
+                    title: "Magánszemély",
+                    detail: "Személyes kapcsolatokhoz. Csak a lényeg, gyorsan kész.",
+                    tags: ["6 lépés", "kb. 1 perc"],
+                    systemImage: "person",
+                    selected: kind == "private"
+                ) { selectKind("private") }
+                .accessibilityIdentifier("wizard.private")
             }
-            .accessibilityIdentifier("wizard.business")
-            choice("Magánszemély", detail: "Személyes kapcsolatokhoz, csak a lényeg", selected: kind == "private") {
-                kind = "private"; draft.company = ""; draft.jobTitle = ""; draft.bio = ""; draft.logoBase64 = ""
-            }
-            .accessibilityIdentifier("wizard.private")
+
         case "identity":
-            Text(kind == "business" ? "Mutatkozz be" : "Hogy hívnak?").font(VizitFont.title)
-            VizitTextField(label: "Teljes név *", text: $draft.fullName, contentType: .name,
-                           identifier: "wizard.fullName")
-            if kind == "business" {
-                VizitTextField(label: "Vállalkozás / szervezet *", text: $draft.company, contentType: .organizationName)
-                VizitTextField(label: "Beosztás · nem kötelező", text: $draft.jobTitle, contentType: .jobTitle)
+            WizardBlock {
+                VizitTextField(
+                    label: "Teljes név *",
+                    text: $draft.fullName,
+                    placeholder: "Pl. Kovács Anna",
+                    contentType: .name,
+                    identifier: "wizard.fullName"
+                )
+                if kind != "private" {
+                    VizitTextField(
+                        label: "Vállalkozás / szervezet *",
+                        text: $draft.company,
+                        placeholder: "Pl. RayWorks Solutions",
+                        contentType: .organizationName
+                    )
+                    VizitTextField(
+                        label: "Beosztás · nem kötelező",
+                        text: $draft.jobTitle,
+                        placeholder: "Pl. ügyvezető",
+                        contentType: .jobTitle
+                    )
+                }
             }
-        case "photo", "logo":
-            Text(step == "photo" ? "Profilkép" : "Céges logó").font(VizitFont.title)
-            Text(step == "photo" ? "A partnereid könnyebben felismernek." : "A logó a profilkép sarkán jelenik meg.")
-            if let data = Data(base64Encoded: step == "photo" ? draft.photoBase64 : draft.logoBase64), let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFit().frame(height: 130)
-                    .accessibilityLabel(step == "photo" ? "Profilkép" : "Céges logó")
+
+        case "photo":
+            WizardBlock {
+                VStack(spacing: 16) {
+                    WizardPhotoAvatar(profile: draft, showLogo: false)
+                    PhotosPicker(selection: $photo, matching: .images) {
+                        Text(draft.photoBase64.isEmpty ? "Kép kiválasztása" : "Másik kép")
+                            .font(VizitFont.label)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(VizitColor.textPrimary)
+                    if !draft.photoBase64.isEmpty {
+                        Button("Eltávolítás") { draft.photoBase64 = ""; photo = nil }
+                            .font(VizitFont.label)
+                            .foregroundStyle(VizitColor.primary)
+                    }
+                    Text("JPG, PNG vagy WebP, legfeljebb 25 MB. A nagy képet automatikusan kisebbre méretezzük.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.textMuted)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
             }
-            if step == "photo" {
-                PhotosPicker(selection: $photo, matching: .images) { Label("Kép kiválasztása", systemImage: "photo").frame(minHeight: 48) }
-                if !draft.photoBase64.isEmpty { Button("Eltávolítás") { draft.photoBase64 = ""; photo = nil } }
-            } else {
-                PhotosPicker(selection: $logo, matching: .images) { Label("Logó kiválasztása", systemImage: "photo").frame(minHeight: 48) }
-                if !draft.logoBase64.isEmpty { Button("Eltávolítás") { draft.logoBase64 = ""; logo = nil } }
+
+        case "logo":
+            WizardBlock {
+                VStack(spacing: 16) {
+                    WizardPhotoAvatar(profile: draft, showLogo: true)
+                    PhotosPicker(selection: $logo, matching: .images) {
+                        Text(draft.logoBase64.isEmpty ? "Logó feltöltése" : "Logó cseréje")
+                            .font(VizitFont.label)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(VizitColor.textPrimary)
+                    if !draft.logoBase64.isEmpty {
+                        Button("Eltávolítás") { draft.logoBase64 = ""; logo = nil }
+                            .font(VizitFont.label)
+                            .foregroundStyle(VizitColor.primary)
+                    }
+                    Text("Átlátszó hátterű PNG mutat a legjobban.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.textMuted)
+                }
+                .frame(maxWidth: .infinity)
             }
+
         case "contact":
-            Text("Hol érnek el?").font(VizitFont.title)
-            Text("Csak azt add meg, amit nyilvánosan is megosztanál.").foregroundStyle(VizitColor.textSecondary)
-            VizitTextField(label: "Nyilvános e-mail", text: $draft.email, keyboard: .emailAddress, autocapitalization: .never)
-            VizitTextField(label: "Telefonszám", text: $draft.phone, keyboard: .phonePad)
-            VizitTextField(label: "Weboldal", text: $draft.website, keyboard: .URL, autocapitalization: .never)
-            if kind == "business" { VizitTextField(label: "Hely / cím", text: $draft.address) }
+            WizardBlock {
+                VizitTextField(label: "Nyilvános e-mail", text: $draft.email, placeholder: "nev@ceg.hu",
+                               keyboard: .emailAddress, autocapitalization: .never)
+                VizitTextField(label: "Telefonszám", text: $draft.phone, placeholder: "+36 30 123 4567",
+                               keyboard: .phonePad)
+                VizitTextField(label: "Weboldal", text: $draft.website, placeholder: "ceg.hu",
+                               keyboard: .URL, autocapitalization: .never)
+                if kind != "private" {
+                    VizitTextField(label: "Hely / cím", text: $draft.address, placeholder: "Budapest")
+                }
+                if !valid {
+                    Text("Ez nem tűnik érvényes e-mail-címnek.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.error)
+                }
+            }
+
         case "social":
-            Text("Közösségi profilok").font(VizitFont.title)
-            Text("Add meg, amelyiket használod. A többit később is hozzáadhatod.")
-            ForEach(SocialPlatform.allCases, id: \.self) { platform in
-                VizitTextField(label: platform.label, text: Binding(
-                    get: { draft.socialURL(for: platform) },
-                    set: { draft.setSocialURL($0, for: platform) }
-                ), keyboard: .URL, autocapitalization: .never)
+            WizardBlock {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
+                    ForEach(SocialPlatform.allCases, id: \.self) { platform in
+                        Button {
+                            if selectedSocial.contains(platform) {
+                                selectedSocial.remove(platform)
+                                draft.setSocialURL("", for: platform)
+                            } else {
+                                selectedSocial.insert(platform)
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: selectedSocial.contains(platform) ? "checkmark" : "plus")
+                                Text(platform.label)
+                            }
+                            .font(.system(size: 14, weight: selectedSocial.contains(platform) ? .semibold : .medium))
+                            .foregroundStyle(selectedSocial.contains(platform) ? VizitColor.primary : VizitColor.textPrimary)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 36)
+                            .background(selectedSocial.contains(platform) ? VizitColor.primarySubtle : VizitColor.surface)
+                            .overlay(
+                                Capsule().stroke(selectedSocial.contains(platform) ? Color.clear : VizitColor.borderStrong, lineWidth: 1)
+                            )
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                ForEach(SocialPlatform.allCases.filter { selectedSocial.contains($0) }, id: \.self) { platform in
+                    VizitTextField(
+                        label: platform.label,
+                        text: Binding(
+                            get: { draft.socialURL(for: platform) },
+                            set: { draft.setSocialURL($0, for: platform) }
+                        ),
+                        placeholder: "https://…",
+                        keyboard: .URL,
+                        autocapitalization: .never
+                    )
+                }
             }
+
         case "bio":
-            Text("Pár mondat rólad").font(VizitFont.title)
-            TextEditor(text: $draft.bio).frame(minHeight: 110)
-                .onChange(of: draft.bio) { newValue in if newValue.count > 420 { draft.bio = String(newValue.prefix(420)) } }
-                .accessibilityLabel("Rövid bemutatkozás")
-            Text("\(draft.bio.count)/420").foregroundStyle(VizitColor.textMuted)
-        case "look":
-            Text("Válassz stílust").font(VizitFont.title)
-            ForEach([CardColorway.ink, .brand, .emerald, .amethyst], id: \.self) { value in
-                choice(value.label, detail: "Kártya színvilága", selected: selectedStyle == value) { selectedStyle = value }
+            WizardBlock {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Rövid bemutatkozás · nem kötelező")
+                        .font(VizitFont.label)
+                        .foregroundStyle(VizitColor.textSecondary)
+                    TextEditor(text: $draft.bio)
+                        .frame(minHeight: 116)
+                        .padding(8)
+                        .background(VizitColor.canvas)
+                        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: VizitRadius.md, style: .continuous)
+                                .stroke(VizitColor.border, lineWidth: 1)
+                        )
+                        .onChange(of: draft.bio) { newValue in
+                            if newValue.count > 420 { draft.bio = String(newValue.prefix(420)) }
+                        }
+                    HStack {
+                        Text("Két-három mondat elég.")
+                        Spacer()
+                        Text("\(draft.bio.count)/420").monospacedDigit()
+                    }
+                    .font(VizitFont.bodySmall)
+                    .foregroundStyle(VizitColor.textMuted)
+                }
             }
+
+        case "look":
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
+                ForEach([CardColorway.ink, .brand, .emerald, .amethyst], id: \.self) { value in
+                    WizardStyleSwatch(colorway: value, selected: selectedStyle == value) {
+                        selectedStyle = value
+                    }
+                }
+            }
+
         default:
-            Text("Elkészült a névjegyed").font(VizitFont.title)
-            Text("Nézd át, és mentsd el. Később minden adatot módosíthatsz.")
-            VizitTextField(label: "Profilcím: vizitkartyam.hu/…", text: Binding(
-                get: { draft.publicSlug }, set: { editedSlug = true; draft.publicSlug = slug($0) }
-            ), autocapitalization: .never)
-            Text("A cím foglaltságát szinkronizáláskor ellenőrizzük.").font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
-            Toggle("Nyilvános profil", isOn: $draft.isPublic).tint(VizitColor.primary)
-            if !skipped.isEmpty {
-                Text("Később beállíthatod").font(VizitFont.label)
-                ForEach(path.filter { skipped.contains($0) }, id: \.self) { missing in
-                    VizitButton(title: (titles[missing] ?? missing) + " · Beállítás", kind: .secondary) {
-                        index = path.firstIndex(of: missing) ?? index; returning = true
+            VStack(spacing: 16) {
+                VizitDigitalCard(profile: draft, presentation: presentation.value.withColorway(selectedStyle))
+                WizardBlock {
+                    VizitTextField(
+                        label: "A névjegyed címe",
+                        text: Binding(
+                            get: { draft.publicSlug },
+                            set: { editedSlug = true; draft.publicSlug = slug($0) }
+                        ),
+                        placeholder: "vizitkartyam.hu/…",
+                        autocapitalization: .never
+                    )
+                    Text("A név alapján javasoltuk. Később is módosítható.")
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.textMuted)
+
+                    Toggle(isOn: $draft.isPublic) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nyilvános profil").font(VizitFont.label)
+                            Text(draft.isPublic
+                                 ? "A névjegy a hivatkozással bárki számára megnyitható."
+                                 : "Csak te látod. QR-rel és NFC-vel ettől még átadhatod.")
+                                .font(VizitFont.bodySmall)
+                                .foregroundStyle(VizitColor.textSecondary)
+                        }
+                    }
+                    .tint(VizitColor.success)
+                }
+
+                let missing = path.filter { skipped.contains($0) }
+                if !missing.isEmpty {
+                    WizardBlock {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("KÉSŐBB BEÁLLÍTHATOD")
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(1.1)
+                                .foregroundStyle(VizitColor.textMuted)
+                                .padding(.bottom, 4)
+                            ForEach(missing, id: \.self) { item in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(titles[item] ?? item).font(VizitFont.body)
+                                        Text(todoHint(item)).font(VizitFont.bodySmall).foregroundStyle(VizitColor.textMuted)
+                                    }
+                                    Spacer()
+                                    Button("Beállítás") {
+                                        direction = -1
+                                        index = path.firstIndex(of: item) ?? index
+                                        returning = true
+                                    }
+                                    .font(VizitFont.label)
+                                    .foregroundStyle(VizitColor.textPrimary)
+                                    .padding(.horizontal, 12)
+                                    .frame(minHeight: 38)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(VizitColor.borderStrong, lineWidth: 1)
+                                    )
+                                }
+                                .padding(.vertical, 8)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    private func choice(_ title: String, detail: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack { VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(VizitFont.label); Text(detail).font(VizitFont.caption)
-            }; Spacer(); if selected { Image(systemName: "checkmark.circle.fill") } }
-            .padding(VizitSpace.md).frame(maxWidth: .infinity)
-            .foregroundStyle(VizitColor.textPrimary)
-            .background(selected ? VizitColor.primarySubtle : VizitColor.surface)
-            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg))
-        }.buttonStyle(.plain)
+    private var wizardFooter: some View {
+        VStack(spacing: 4) {
+            VizitButton(
+                title: step == "done"
+                    ? (draft.isPublic ? "Névjegy publikálása" : "Névjegy mentése")
+                    : (returning ? "Mentés" : "Tovább"),
+                isLoading: processing,
+                isEnabled: valid && (!optional.contains(step) || hasValue)
+            ) {
+                if step == "done" { save() }
+                else { advance(skip: false) }
+            }
+            .accessibilityIdentifier("wizard.primary")
+
+            if optional.contains(step) {
+                VizitButton(title: "Később állítom be", kind: .tertiary) {
+                    advance(skip: true)
+                }
+                .accessibilityIdentifier("wizard.skip")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+        .background(VizitColor.canvas)
+        .overlay(alignment: .top) { Rectangle().fill(VizitColor.divider).frame(height: 1) }
     }
-    private func slug(_ value: String) -> String {
-        let plain = value.applyingTransform(.stripDiacritics, reverse: false)?.lowercased() ?? value.lowercased()
-        return String(plain.replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "-")).prefix(50))
+
+    private var publishedContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(VizitColor.success)
+                    .frame(width: 54, height: 54)
+                    .background(VizitColor.successSubtle)
+                    .clipShape(Circle())
+                Text("Publikálva")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(VizitColor.textPrimary)
+                Text(draft.isPublic
+                     ? "A névjegyed él. Oszd meg a címét, vagy mutasd a QR-kódot."
+                     : "A névjegyed elkészült. A nyilvános profilt a Beállításokban kapcsolhatod be.")
+                    .font(VizitFont.body)
+                    .foregroundStyle(VizitColor.textSecondary)
+                VizitDigitalCard(profile: draft, presentation: presentation.value.withColorway(selectedStyle))
+                VizitButton(title: "Tovább az áttekintéshez") { onFinished() }
+                    .accessibilityIdentifier("wizard.finish")
+            }
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
+            .padding(20)
+        }
     }
+
+    private func todoHint(_ id: String) -> String {
+        switch id {
+        case "photo": return "A névjegy most monogramot mutat."
+        case "logo": return "A logó a profilkép sarkában jelenik meg."
+        case "contact": return "Még nincs nyilvános elérhetőséged."
+        case "social": return "LinkedIn, Instagram és a többi."
+        case "bio": return "Pár mondat a nyilvános profilra."
+        default: return ""
+        }
+    }
+
     private func selectKind(_ value: String) {
         kind = value
         if value == "private" {
@@ -675,27 +961,52 @@ struct ProfileWizard: View {
             draft.bio = ""
             draft.logoBase64 = ""
         }
-        index = min(1, path.count - 1)
-        withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.38)) {
-            introShown = false
-        }
+        error = nil
     }
+
+    private func back() {
+        direction = -1
+        if returning {
+            returning = false
+            index = path.count - 1
+        } else {
+            index = max(0, index - 1)
+        }
+        error = nil
+    }
+
     private func advance(skip: Bool) {
         if skip {
             switch step {
             case "photo": draft.photoBase64 = ""; photo = nil
             case "logo": draft.logoBase64 = ""; logo = nil
             case "contact": draft.email = ""; draft.phone = ""; draft.website = ""; draft.address = ""
-            case "social": for platform in SocialPlatform.allCases { draft.setSocialURL("", for: platform) }
+            case "social":
+                for platform in SocialPlatform.allCases { draft.setSocialURL("", for: platform) }
+                selectedSocial.removeAll()
             case "bio": draft.bio = ""
             default: break
             }
         }
         if skip { skipped.insert(step) } else { skipped.remove(step) }
+        direction = 1
         index = returning ? path.count - 1 : min(index + 1, path.count - 1)
-        returning = false; error = nil
-        if step == "done", !editedSlug { draft.publicSlug = slug(kind == "business" ? draft.company : draft.displayName) }
+        returning = false
+        error = nil
+        if step == "done", !editedSlug {
+            draft.publicSlug = slug(kind == "business" ? draft.company : draft.displayName)
+        }
     }
+
+    private func slug(_ value: String) -> String {
+        let plain = value.applyingTransform(.stripDiacritics, reverse: false)?.lowercased() ?? value.lowercased()
+        return String(
+            plain.replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+                .prefix(50)
+        )
+    }
+
     private func normalizeURLs() -> ContactProfile? {
         var value = draft
         func normalize(_ url: String) -> String? {
@@ -712,8 +1023,12 @@ struct ProfileWizard: View {
         }
         return value
     }
+
     private func save() {
-        guard let prepared = normalizeURLs() else { error = "A hivatkozások teljes, https:// kezdetű címek legyenek."; return }
+        guard let prepared = normalizeURLs() else {
+            error = "A webes és közösségi hivatkozások teljes, https:// kezdetű címek legyenek."
+            return
+        }
         onSaving()
         do {
             var cardPresentation = presentation.value
@@ -726,389 +1041,313 @@ struct ProfileWizard: View {
             }
             presentation.value = cardPresentation
             published = true
+        } catch {
+            onSaveFailed()
+            self.error = error.localizedDescription
         }
-        catch { onSaveFailed(); self.error = error.localizedDescription }
     }
+
     private func process(_ selection: PhotosPickerItem?, isLogo: Bool) async {
         guard let selection else { return }
         processing = true
         defer { processing = false }
         do {
-            guard let bytes = try await selection.loadTransferable(type: Data.self), bytes.count <= 25 * 1024 * 1024,
-                  let source = CGImageSourceCreateWithData(bytes as CFData, nil),
-                  let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            guard
+                let bytes = try await selection.loadTransferable(type: Data.self),
+                bytes.count <= 25 * 1024 * 1024,
+                let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+                let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
                     kCGImageSourceCreateThumbnailWithTransform: true,
                     kCGImageSourceThumbnailMaxPixelSize: 512
-                  ] as CFDictionary),
-                  let jpeg = UIImage(cgImage: thumb).jpegData(compressionQuality: 0.8),
-                  jpeg.count <= 256 * 1024 else { throw ProfileError.invalidPhoto }
+                ] as CFDictionary),
+                let jpeg = UIImage(cgImage: thumb).jpegData(compressionQuality: 0.8),
+                jpeg.count <= 256 * 1024
+            else { throw ProfileError.invalidPhoto }
+
             try Task.checkCancellation()
             if isLogo { draft.logoBase64 = jpeg.base64EncodedString() }
             else { draft.photoBase64 = jpeg.base64EncodedString() }
-        } catch is CancellationError { /* A newer selection owns the preview. */ }
-        catch { self.error = "A kép betöltése nem sikerült. Válassz másik képet." }
-    }
-}
-
-private struct V10WizardTopBar: View {
-    let profileType: String
-    let group: V10WizardVisualGroup
-    let groupIndex: Int
-    let groupCount: Int
-    let canClose: Bool
-    let onClose: () -> Void
-    let onChangeType: () -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Group {
-                if canClose {
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Bezárás")
-                } else {
-                    Color.clear.frame(width: 44, height: 44)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(spacing: 1) {
-                Button(action: onChangeType) {
-                    HStack(spacing: 3) {
-                        Text("\(profileType) · \(groupIndex + 1)/\(groupCount)")
-                            .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(VizitColor.textMuted)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(VizitColor.textMuted)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                }
-                .buttonStyle(.plain)
-                HStack(spacing: 7) {
-                    Circle().fill(group.color).frame(width: 9, height: 9)
-                    Text(group.title)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(VizitColor.textPrimary)
-                        .lineLimit(1)
-                }
-            }
-            .layoutPriority(1)
-
-            Color.clear
-                .frame(width: 44, height: 44)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+        } catch is CancellationError {
+            // A newer selection owns the preview.
+        } catch {
+            self.error = "A kép betöltése nem sikerült. Válassz másik képet."
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 2)
-        .padding(.bottom, 6)
     }
 }
 
-private struct V10WizardProgress: View {
-    let groups: [V10WizardVisualGroup]
-    let currentIndex: Int
+private struct WizardBlock<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(groups.indices, id: \.self) { index in
-                GeometryReader { geo in
-                    let lineHeight: CGFloat = index == currentIndex ? 6 : 2
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: index == currentIndex ? 3 : 1)
-                            .fill(index < currentIndex ? groups[index].color : VizitColor.controlTrack)
-                        if index == currentIndex {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(groups[index].color)
-                                .frame(width: geo.size.width * 0.45)
-                        }
-                    }
-                    .frame(height: lineHeight)
-                    .frame(maxHeight: .infinity, alignment: .center)
-                }
-                .frame(height: 14)
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            content
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-        .animation(.easeInOut(duration: 0.25), value: currentIndex)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(VizitColor.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous)
+                .stroke(VizitColor.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
     }
 }
 
-private enum V10WizardIntroColor {
-    static let navy = Color(uiColor: UIColor(hex: 0x0C2C63))
-    static let blue = Color(uiColor: UIColor(hex: 0x2A5BD7))
-    static let cyanGlow = Color(uiColor: UIColor(hex: 0x4FB3D9)).opacity(0.38)
-    static let blueGlow = Color(uiColor: UIColor(hex: 0x2A5BD7)).opacity(0.60)
-    static let amber = Color(uiColor: UIColor { traits in
-        UIColor(hex: traits.userInterfaceStyle == .dark ? 0xE3A04A : 0xB86F0E)
-    })
-    static let teal = Color(uiColor: UIColor { traits in
-        UIColor(hex: traits.userInterfaceStyle == .dark ? 0x3DC1D1 : 0x0E8494)
-    })
-}
-
-/// The supplied V10 wizard cover: a theme-independent navy canvas, NFC waves,
-/// four block markers and the exact 0.38-second horizontal hand-off.
-private struct V10WizardIntro: View {
-    let selectedKind: String?
-    let canClose: Bool
-    let onClose: () -> Void
-    let onPick: (String) -> Void
+private struct WizardTypeChoice: View {
+    let title: String
+    let detail: String
+    let tags: [String]
+    let systemImage: String
+    let selected: Bool
+    let action: () -> Void
 
     var body: some View {
-        ZStack(alignment: .top) {
-            GeometryReader { geo in
-                ZStack {
-                    V10WizardIntroColor.navy
-                    LinearGradient(
-                        stops: [
-                            .init(color: V10WizardIntroColor.blue.opacity(0), location: 0.45),
-                            .init(color: V10WizardIntroColor.blue.opacity(0.65), location: 1),
-                        ],
-                        startPoint: UnitPoint(x: 0.37, y: 0),
-                        endPoint: UnitPoint(x: 0.63, y: 1)
-                    )
-                    V10WizardEllipticalGlow(
-                        colors: [V10WizardIntroColor.blueGlow, .clear],
-                        transparentStop: 0.65
-                    )
-                    .frame(width: 1.8 * geo.size.width, height: 1.2 * geo.size.height)
-                    .position(x: -0.1 * geo.size.width, y: 1.05 * geo.size.height)
-                    V10WizardEllipticalGlow(
-                        colors: [V10WizardIntroColor.cyanGlow, .clear],
-                        transparentStop: 0.60
-                    )
-                    .frame(width: 2.4 * geo.size.width, height: 1.4 * geo.size.height)
-                    .position(x: 1.05 * geo.size.width, y: -0.05 * geo.size.height)
-                }
-            }
-            .clipped()
-            .ignoresSafeArea()
-
-            V10WizardIntroWaves()
-                .frame(width: 260, height: 284)
-                .offset(x: 40, y: 70)
-                .frame(maxWidth: .infinity, alignment: .topTrailing)
-                .allowsHitTesting(false)
-
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    if canClose {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                                .background(Circle().fill(.white.opacity(0.10)))
-                        }
-                        .buttonStyle(V10WizardIntroPressStyle(scale: 0.97))
-                        .accessibilityLabel("Bezárás")
-                    } else {
-                        Color.clear.frame(width: 44, height: 44)
-                    }
-                    Text("VIZIT")
-                        .font(.system(size: 13, weight: .heavy))
-                        .tracking(3.9)
-                        .foregroundStyle(.white.opacity(0.65))
-                        .frame(maxWidth: .infinity)
-                    Color.clear.frame(width: 44, height: 44)
-                }
-                .padding(.horizontal, 10)
-                .padding(.top, 8)
-
-                GeometryReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Kezdjük meg a profilod létrehozását!")
-                                .font(.system(size: 34, weight: .medium))
-                                .tracking(-0.34)
-                                .foregroundStyle(.white)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text("Milyen profil lesz?")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.70))
-                                .padding(.top, 6)
-                                .padding(.bottom, 2)
-                            VStack(spacing: 10) {
-                                V10WizardTypePick(
-                                    checked: selectedKind == "business",
-                                    kind: "business",
-                                    icon: "briefcase",
-                                    label: "Vállalkozói",
-                                    bars: [VizitColor.primary, V10WizardIntroColor.amber,
-                                           V10WizardIntroColor.teal, VizitColor.success],
-                                    onTap: onPick
-                                )
-                                .accessibilityIdentifier("wizard.business")
-                                V10WizardTypePick(
-                                    checked: selectedKind == "private",
-                                    kind: "private",
-                                    icon: "person",
-                                    label: "Magánszemély",
-                                    bars: [VizitColor.primary, V10WizardIntroColor.teal, VizitColor.success],
-                                    onTap: onPick
-                                )
-                                .accessibilityIdentifier("wizard.private")
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .padding(.bottom, 28)
-                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .bottomLeading)
-                    }
-                }
-            }
-        }
-        .contentShape(Rectangle())
-    }
-}
-
-private struct V10WizardEllipticalGlow: View {
-    let colors: [Color]
-    let transparentStop: CGFloat
-
-    var body: some View {
-        GeometryReader { geometry in
-            RadialGradient(
-                stops: [
-                    .init(color: colors[0], location: 0),
-                    .init(color: colors[1], location: transparentStop),
-                ],
-                center: .center,
-                startRadius: 0,
-                endRadius: min(geometry.size.width, geometry.size.height) / 2
-            )
-            .scaleEffect(
-                x: geometry.size.width / max(geometry.size.height, 1),
-                y: 1,
-                anchor: .center
-            )
-            .frame(width: geometry.size.height, height: geometry.size.height)
-            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-private struct V10WizardTypePick: View {
-    let checked: Bool
-    let kind: String
-    let icon: String
-    let label: String
-    let bars: [Color]
-    let onTap: (String) -> Void
-
-    var body: some View {
-        Button { onTap(kind) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(.white)
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(VizitColor.primary)
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(checked ? V10WizardIntroColor.blue : .white.opacity(0.15)))
-                VStack(alignment: .leading, spacing: 9) {
-                    Text(label)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(checked ? VizitColor.ink : .white)
-                    HStack(spacing: 4) {
-                        ForEach(Array(bars.enumerated()), id: \.offset) { item in
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(item.element)
-                                .frame(width: 22, height: 5)
+                    .background(VizitColor.primarySubtle)
+                    .clipShape(RoundedRectangle(cornerRadius: VizitRadius.md))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.system(size: 17, weight: .semibold))
+                    Text(detail)
+                        .font(VizitFont.bodySmall)
+                        .foregroundStyle(VizitColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) {
+                        ForEach(tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(VizitColor.textSecondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(VizitColor.sunken)
+                                .clipShape(Capsule())
                         }
                     }
+                    .padding(.top, 6)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+
+                Spacer(minLength: 4)
+
+                Image(systemName: selected ? "checkmark" : "")
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(checked ? V10WizardIntroColor.blue : .white.opacity(0.15)))
+                    .frame(width: 22, height: 22)
+                    .background(selected ? VizitColor.primary : Color.clear)
+                    .overlay(Circle().stroke(selected ? VizitColor.primary : VizitColor.borderStrong, lineWidth: 1.5))
+                    .clipShape(Circle())
             }
-            .padding(.leading, 14)
-            .padding(.trailing, 12)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(checked ? VizitColor.surface : .white.opacity(0.10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(checked ? VizitColor.surface : .white.opacity(0.22), lineWidth: 1)
-                    )
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .foregroundStyle(VizitColor.textPrimary)
+            .background(VizitColor.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous)
+                    .stroke(selected ? VizitColor.primary : VizitColor.border, lineWidth: selected ? 2 : 1)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+            .scaleEffect(selected ? 0.995 : 1)
         }
-        .buttonStyle(V10WizardIntroPressStyle(scale: 0.985))
-        .animation(.easeOut(duration: 0.15), value: checked)
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.15), value: selected)
     }
 }
 
-private struct V10WizardIntroPressStyle: ButtonStyle {
-    let scale: CGFloat
+private struct WizardCompactCard: View {
+    let profile: ContactProfile
+    let colorway: CardColorway
+    let business: Bool
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    private var subtitle: String {
+        business ? [profile.jobTitle, profile.company].filter { !$0.isEmpty }.joined(separator: " · ") : ""
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            LinearGradient(
+                colors: [
+                    Color(uiColor: UIColor(hex: colorway.gradient.start)),
+                    Color(uiColor: UIColor(hex: colorway.gradient.end))
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Rectangle()
+                .fill(Color(uiColor: UIColor(hex: colorway.accent)))
+                .frame(width: 4)
+
+            HStack(spacing: 14) {
+                WizardMiniAvatar(profile: profile)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(profile.displayName.isEmpty ? "A neved" : profile.displayName)
+                        .font(VizitFont.h3)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(VizitFont.bodySmall)
+                            .foregroundStyle(.white.opacity(0.68))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    if !profile.phone.isEmpty {
+                        Text(profile.phone).font(VizitFont.caption).foregroundStyle(.white.opacity(0.82))
+                    }
+                    if !profile.email.isEmpty {
+                        Text(profile.email)
+                            .font(VizitFont.caption)
+                            .foregroundStyle(.white.opacity(0.82))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
+                VStack {
+                    Spacer()
+                    Text("VIZIT")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.1)
+                        .foregroundStyle(Color(uiColor: UIColor(hex: colorway.accent)))
+                }
+            }
+            .padding(.leading, 20)
+            .padding(.trailing, 16)
+            .padding(.vertical, 14)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 112)
+        .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+        .vizitShadow(VizitElevation.card)
     }
 }
 
-private struct V10WizardIntroWaves: View {
+private struct WizardMiniAvatar: View {
+    let profile: ContactProfile
+
     var body: some View {
         ZStack {
-            V10WizardWaveDot().fill(.white.opacity(0.15))
-            V10WizardWaveArcs().stroke(
-                .white.opacity(0.15),
-                style: StrokeStyle(lineWidth: 14.2, lineCap: .round, lineJoin: .round)
-            )
-        }
-    }
-}
-
-private struct V10WizardWaveDot: Shape {
-    func path(in rect: CGRect) -> Path {
-        let scale = rect.width / 220
-        return Path(ellipseIn: CGRect(
-            x: rect.minX + 27 * scale,
-            y: rect.minY + 107 * scale,
-            width: 26 * scale,
-            height: 26 * scale
-        ))
-    }
-}
-
-private struct V10WizardWaveArcs: Shape {
-    func path(in rect: CGRect) -> Path {
-        let scale = rect.width / 220
-        let arcs: [(x: CGFloat, y0: CGFloat, y1: CGFloat, radius: CGFloat)] = [
-            (78, 62, 178, 82),
-            (112, 30, 210, 124),
-            (146, -2, 242, 166),
-        ]
-        var path = Path()
-        for arc in arcs {
-            let half = (arc.y1 - arc.y0) / 2
-            let distance = sqrt(arc.radius * arc.radius - half * half)
-            let centerX = arc.x - distance
-            let centerY = (arc.y0 + arc.y1) / 2
-            let sweep = atan2(Double(half), Double(distance))
-            for index in 0...40 {
-                let angle = -sweep + 2 * sweep * Double(index) / 40
-                let point = CGPoint(
-                    x: rect.minX + (centerX + arc.radius * CGFloat(cos(angle))) * scale,
-                    y: rect.minY + (centerY + arc.radius * CGFloat(sin(angle))) * scale
-                )
-                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            Circle().fill(Color.white.opacity(0.12))
+            Circle().stroke(Color.white.opacity(0.22), lineWidth: 1)
+            if let data = Data(base64Encoded: profile.photoBase64), let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill().clipShape(Circle())
+            } else {
+                Text(profile.initials.isEmpty ? "V" : profile.initials)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.92))
             }
         }
-        return path
+        .frame(width: 44, height: 44)
+        .overlay(alignment: .bottomTrailing) {
+            if let data = Data(base64Encoded: profile.logoBase64), let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(2)
+                    .frame(width: 18, height: 18)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+        }
+    }
+}
+
+private struct WizardPhotoAvatar: View {
+    let profile: ContactProfile
+    let showLogo: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(VizitColor.primarySubtle)
+                .frame(width: 132, height: 132)
+            if let data = Data(base64Encoded: profile.photoBase64), let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 132, height: 132)
+                    .clipShape(Circle())
+            } else {
+                Text(profile.initials.isEmpty ? "V" : profile.initials)
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundStyle(VizitColor.primary)
+            }
+
+            if showLogo {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(VizitColor.surface)
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(VizitColor.borderStrong, style: StrokeStyle(lineWidth: 1.5, dash: [5]))
+                    if let data = Data(base64Encoded: profile.logoBase64), let image = UIImage(data: data) {
+                        Image(uiImage: image).resizable().scaledToFit().padding(5)
+                    } else {
+                        Image(systemName: "plus").foregroundStyle(VizitColor.textMuted)
+                    }
+                }
+                .frame(width: 50, height: 50)
+                .offset(x: 48, y: 48)
+            }
+        }
+        .frame(width: 148, height: 148)
+    }
+}
+
+private struct WizardStyleSwatch: View {
+    let colorway: CardColorway
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                LinearGradient(
+                    colors: [
+                        Color(uiColor: UIColor(hex: colorway.gradient.start)),
+                        Color(uiColor: UIColor(hex: colorway.gradient.end))
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(height: 56)
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(Color(uiColor: UIColor(hex: colorway.accent))).frame(width: 4)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                HStack {
+                    Text(colorway.label).font(VizitFont.label)
+                    Spacer()
+                    if colorway == .ink {
+                        Text("Alap").font(.system(size: 11, weight: .semibold)).foregroundStyle(VizitColor.textMuted)
+                    }
+                }
+            }
+            .padding(10)
+            .foregroundStyle(VizitColor.textPrimary)
+            .background(VizitColor.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: VizitRadius.lg)
+                    .stroke(selected ? VizitColor.primary : VizitColor.border, lineWidth: selected ? 2 : 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private extension CardPresentation {
+    func withColorway(_ colorway: CardColorway) -> CardPresentation {
+        var value = self
+        value.colorway = colorway
+        return value
     }
 }
