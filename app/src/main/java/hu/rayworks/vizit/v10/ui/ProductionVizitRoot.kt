@@ -7,9 +7,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import hu.rayworks.vizit.NfcSharePhase
@@ -39,7 +39,12 @@ import kotlinx.coroutines.withContext
 
 private const val LOCAL_DEBUG_PROFILE_OWNER_ID = "local-dev-profile"
 
-/** Az éles állapotkezelők és a ZIP-ből átvett teljes Compose felület közötti híd. */
+/**
+ * Production bridge for the exact Android UI delivered in VizitTeljes(3).zip.
+ *
+ * The ZIP owns presentation, navigation and animation. The current production
+ * ViewModels remain the single source of truth for account, sync, NFC and cards.
+ */
 @Composable
 fun ProductionVizitRoot(
     vizitViewModel: VizitViewModel,
@@ -57,24 +62,31 @@ fun ProductionVizitRoot(
     var boundOwnerId by remember { mutableStateOf<String?>(null) }
     var accountEpoch by remember { mutableStateOf(0L) }
 
+    fun selectIfNeeded(profileId: String) {
+        if (vizitViewModel.activeBusinessCardId != profileId) {
+            vizitViewModel.selectBusinessCard(profileId)
+        }
+    }
+
     val runtime = remember(vizitViewModel, authViewModel, context, scope) {
         RuntimeBindings(
-            onProfileSelected = vizitViewModel::switchProfile,
+            onProfileSelected = vizitViewModel::selectBusinessCard,
             onSaveProfile = save@{ profile ->
-                if (app.operationBusy || vizitViewModel.profileCatalogBusy) return@save
+                if (app.operationBusy) return@save
                 app.operationBusy = true
                 val epochAtStart = accountEpoch
                 scope.launch {
-                    if (accountEpoch != epochAtStart) return@launch
                     try {
+                        if (accountEpoch != epochAtStart) return@launch
+                        selectIfNeeded(profile.id)
                         val issue = runCatching {
-                            vizitViewModel.saveProfile(profile.toContactProfile(context), profile.id, profile.toCardPresentation())
+                            vizitViewModel.saveProfile(profile.toContactProfile(context))
                         }.getOrElse { it.localizedMessage ?: "A mentés nem sikerült." }
                         if (accountEpoch != epochAtStart) return@launch
                         if (issue == null) {
+                            vizitViewModel.updateCardPresentation(profile.toCardPresentation())
                             app.confirmSaved(profile)
                             app.sheet = null
-                            if (app.wizardOpen) app.closeWizard(force = true)
                             app.toast("A névjegy mentve.")
                         } else {
                             app.toast(issue)
@@ -84,23 +96,28 @@ fun ProductionVizitRoot(
                     }
                 }
             },
-            onBeginAdditionalProfile = vizitViewModel::beginAdditionalProfile,
-            onCancelAdditionalProfile = vizitViewModel::cancelAdditionalProfile,
+            // The current repository reserves no remote row before the wizard is
+            // completed, so opening/cancelling an additional card is UI-only.
+            onBeginAdditionalProfile = { null },
+            onCancelAdditionalProfile = {},
             onCreateAdditionalProfile = create@{ profile, isPublic ->
                 if (app.operationBusy) return@create
                 app.operationBusy = true
                 val epochAtStart = accountEpoch
                 scope.launch {
-                    if (accountEpoch != epochAtStart) return@launch
                     try {
+                        if (accountEpoch != epochAtStart) return@launch
                         val publishable = profile.copy(isPublic = isPublic)
                         val issue = runCatching {
-                            vizitViewModel.createAdditionalProfile(publishable.toContactProfile(context), publishable.toCardPresentation())
-                        }.getOrElse { it.localizedMessage ?: "Az új profil nem hozható létre." }
+                            vizitViewModel.createBusinessCard(publishable.toContactProfile(context))
+                        }.getOrElse { it.localizedMessage ?: "Az új névjegy nem hozható létre." }
                         if (accountEpoch != epochAtStart) return@launch
                         if (issue == null) {
+                            // The repository observation will replace the catalog
+                            // with the server-owned card immediately afterwards.
+                            vizitViewModel.updateCardPresentation(publishable.toCardPresentation())
                             app.closeWizard(force = true)
-                            app.toast(if (isPublic) "Az új profil elkészült és publikus." else "Az új profil elkészült.")
+                            app.toast(if (isPublic) "Az új névjegy elkészült és publikus." else "Az új névjegy elkészült.")
                         } else {
                             app.toast(issue)
                         }
@@ -109,12 +126,38 @@ fun ProductionVizitRoot(
                     }
                 }
             },
-            onDeleteActiveProfile = vizitViewModel::deleteProfile,
-            onPresentationChanged = { vizitViewModel.updateCardPresentation(it.id, it.toCardPresentation()) },
+            onDeleteActiveProfile = { profileId ->
+                if (app.operationBusy) return@RuntimeBindings
+                app.operationBusy = true
+                val epochAtStart = accountEpoch
+                scope.launch {
+                    try {
+                        if (accountEpoch != epochAtStart) return@launch
+                        selectIfNeeded(profileId)
+                        val issue = vizitViewModel.deleteActiveBusinessCard()
+                        if (accountEpoch != epochAtStart) return@launch
+                        if (issue == null) {
+                            app.sheet = null
+                            app.toast("A névjegy törölve.")
+                        } else {
+                            app.toast(issue)
+                        }
+                    } finally {
+                        if (accountEpoch == epochAtStart) app.operationBusy = false
+                    }
+                }
+            },
+            onPresentationChanged = { profile ->
+                selectIfNeeded(profile.id)
+                vizitViewModel.updateCardPresentation(profile.toCardPresentation())
+            },
             onAutomaticSyncChanged = vizitViewModel::updateAutomaticSyncEnabled,
             onRetrySync = vizitViewModel::retryProfileSync,
             onResolveConflict = vizitViewModel::resolveProfileConflict,
-            onStartNfcShare = vizitViewModel::startNfcShare,
+            onStartNfcShare = { profileId ->
+                selectIfNeeded(profileId)
+                vizitViewModel.startNfcShare()
+            },
             onStopNfcShare = vizitViewModel::stopNfcShare,
             onOpenNfcSettings = {
                 runCatching {
@@ -183,32 +226,52 @@ fun ProductionVizitRoot(
                 (session as AuthSessionState.RefreshFailed).cachedUserId?.let { userId ->
                     vizitViewModel.bindProfileOwner(userId = userId, enableCloudSync = true)
                 }
-            else -> vizitViewModel.unbindProfileOwner()
+            else -> vizitViewModel.clearProfileOwnerBinding()
         }
     }
 
-    if (!authViewModel.debugLocalProfile && vizitViewModel.accountState.ownerId == boundOwnerId) {
-        AccountProfileBridge(app, vizitViewModel.accountState)
-    } else if (authViewModel.debugLocalProfile) {
-        LaunchedEffect(vizitViewModel.profile, vizitViewModel.cardPresentation) {
-            app.replaceProfiles(listOf(vizitViewModel.profile.toV10Profile(
-                id = "local-profile", label = vizitViewModel.profile.resolvedDisplayName,
-                presentation = vizitViewModel.cardPresentation,
-            )), "local-profile")
+    // Current multi-card repository -> exact ZIP card model.
+    LaunchedEffect(
+        vizitViewModel.businessCards,
+        vizitViewModel.activeBusinessCardId,
+        authViewModel.debugLocalProfile,
+        vizitViewModel.profile,
+        vizitViewModel.cardPresentation,
+    ) {
+        if (authViewModel.debugLocalProfile) {
+            val local = vizitViewModel.profile
+            if (local.resolvedDisplayName.isNotBlank()) {
+                app.replaceProfiles(
+                    listOf(
+                        local.toV10Profile(
+                            id = "local-profile",
+                            label = local.resolvedDisplayName,
+                            presentation = vizitViewModel.cardPresentation,
+                        ),
+                    ),
+                    "local-profile",
+                )
+            }
+        } else {
+            val ownerId = boundOwnerId
+            if (ownerId != null) {
+                val cards = vizitViewModel.businessCards
+                    .filter { it.ownerId == ownerId }
+                    .map { card ->
+                        card.profile.toV10Profile(
+                            id = card.profileId,
+                            label = card.profile.resolvedDisplayName,
+                            presentation = card.presentation,
+                        ).copy(cloudSynced = vizitViewModel.profileSyncState.status == ProfileSyncStatus.SYNCED)
+                    }
+                app.replaceProfiles(cards, vizitViewModel.activeBusinessCardId)
+            }
         }
     }
 
     SideEffect {
-        app.accountName = when (val identity = session) {
-            is AuthSessionState.Authenticated -> identity.displayName.ifBlank { "Fiókod" }
-            is AuthSessionState.RefreshFailed -> identity.displayName.ifBlank { "Fiókod" }
-            else -> ""
-        }
-        app.accountEmail = when (val identity = session) {
-            is AuthSessionState.Authenticated -> identity.email
-            is AuthSessionState.RefreshFailed -> identity.email
-            else -> ""
-        }
+        app.accountName = vizitViewModel.profile.resolvedDisplayName
+        app.accountEmail = vizitViewModel.profile.email
         app.offline = session is AuthSessionState.RefreshFailed
         app.sync = when (vizitViewModel.profileSyncState.status) {
             ProfileSyncStatus.LOCAL_ONLY -> SyncStatus.LocalOnly
@@ -242,27 +305,37 @@ fun ProductionVizitRoot(
         authViewModel.debugLocalProfile,
         authViewModel.passwordRecovery,
         authViewModel.registrationConfirmationInProgress,
+        authViewModel.actionState,
         vizitViewModel.profileLoadStatus,
-        vizitViewModel.hasOfflineProfileSession,
-        vizitViewModel.needsFirstProfile,
+        vizitViewModel.businessCards,
+        vizitViewModel.profile,
     ) {
         app.gate = when {
             authViewModel.registrationConfirmationInProgress -> Gate.Loading
-            authViewModel.passwordRecovery && session !is AuthSessionState.SignedOut -> Gate.Auth(AuthMode.NewPassword)
+            authViewModel.passwordRecovery &&
+                (session is AuthSessionState.Authenticated ||
+                    session is AuthSessionState.LegalAcceptanceRequired ||
+                    session is AuthSessionState.LegalAcceptanceCheckFailed) ->
+                Gate.Auth(AuthMode.NewPassword)
+
             authViewModel.debugLocalProfile -> when (vizitViewModel.profileLoadStatus) {
                 ProfileLoadStatus.READY -> null
                 ProfileLoadStatus.UNAVAILABLE -> Gate.ProfileError
                 else -> Gate.Loading
             }
+
             session is AuthSessionState.Authenticated -> when (vizitViewModel.profileLoadStatus) {
                 ProfileLoadStatus.READY -> null
                 ProfileLoadStatus.UNAVAILABLE -> Gate.ProfileError
                 else -> Gate.Loading
             }
+
             session is AuthSessionState.LegalAcceptanceRequired -> Gate.Auth(AuthMode.Legal)
             session is AuthSessionState.LegalAcceptanceCheckFailed -> Gate.LegalFailed
+
             session is AuthSessionState.RefreshFailed ->
                 if (vizitViewModel.hasOfflineProfileSession) null else Gate.SessionExpired
+
             session is AuthSessionState.SignedOut -> {
                 val current = app.gate as? Gate.Auth
                 if (current?.mode in listOf(AuthMode.Register, AuthMode.EmailSent, AuthMode.Forgot, AuthMode.ResetSent)) {
@@ -271,30 +344,28 @@ fun ProductionVizitRoot(
                     Gate.Auth(AuthMode.Login)
                 }
             }
+
             session is AuthSessionState.BackendUnavailable -> {
                 app.authBanner = "A VIZIT backend ebben a buildben nincs konfigurálva." to false
                 Gate.Auth(AuthMode.Login)
             }
+
             else -> Gate.Loading
         }
 
-        if (
-            app.gate == null &&
-            vizitViewModel.needsFirstProfile
-        ) {
+        val authenticatedReady =
+            (session is AuthSessionState.Authenticated || authViewModel.debugLocalProfile) &&
+                vizitViewModel.profileLoadStatus == ProfileLoadStatus.READY
+        val hasAnyCard = if (authViewModel.debugLocalProfile) {
+            vizitViewModel.profile.resolvedDisplayName.isNotBlank()
+        } else {
+            vizitViewModel.businessCards.isNotEmpty()
+        }
+        if (app.gate == null && authenticatedReady && !hasAnyCard) {
             app.openInitialProfileWizard()
         }
     }
 
-    LaunchedEffect(vizitViewModel.profileCatalogMessage) {
-        vizitViewModel.profileCatalogMessage?.let {
-            app.toast(it)
-            vizitViewModel.clearProfileCatalogMessage()
-        }
-    }
-    LaunchedEffect(vizitViewModel.conflictResolutionMessage) {
-        vizitViewModel.conflictResolutionMessage?.let(app::toast)
-    }
     LaunchedEffect(vizitViewModel.nfcSharePhase) {
         if (vizitViewModel.nfcSharePhase == NfcSharePhase.IDLE && app.pages.lastOrNull() == Page.NfcSend) {
             app.pop()
@@ -302,17 +373,4 @@ fun ProductionVizitRoot(
     }
 
     VizitApp(app = app, authViewModel = authViewModel)
-}
-
-/** The whole catalog comes from complete, independently stored owner/profile records. */
-@Composable
-internal fun AccountProfileBridge(app: AppState, state: hu.rayworks.vizit.data.account.AccountProfileState) {
-    LaunchedEffect(state.profiles, state.activeId, state.ownerId) {
-        val profiles = state.profiles.map { owned ->
-            check(owned.ownerId == state.ownerId)
-            owned.profile.toV10Profile(id = owned.id, label = owned.profile.resolvedDisplayName,
-                presentation = owned.presentation).copy(cloudSynced = owned.status == ProfileSyncStatus.SYNCED)
-        }
-        app.replaceProfiles(profiles, state.activeId)
-    }
 }
