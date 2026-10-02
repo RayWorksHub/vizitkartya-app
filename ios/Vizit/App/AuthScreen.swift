@@ -44,13 +44,6 @@ struct AuthScreen: View {
 
                         modeSelector
 
-                        if let address = verificationAddress {
-                            VizitBanner(
-                                text: "Új fiók esetén a megerősítő link erre a címre érkezik: \(address). Ha már van fiókod, lépj be vagy kérj új jelszót; ilyenkor új regisztrációs levél nem érkezik.",
-                                tone: .info
-                            )
-                        }
-
                         fields
 
                         if mode == .register { legalSection }
@@ -235,11 +228,6 @@ struct AuthScreen: View {
         .padding(.top, VizitSpace.xs)
     }
 
-    private var verificationAddress: String? {
-        if case .verificationSent(let address) = store.authStatus { return address }
-        return nil
-    }
-
     private var buildVersionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
@@ -340,6 +328,66 @@ struct AuthScreen: View {
             if await store.requestPasswordReset(email: email) {
                 passwordResetSent = true
             }
+        }
+    }
+}
+
+struct VerificationSentScreen: View {
+    let email: String
+    let onBackToLogin: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                VStack(spacing: VizitSpace.xl) {
+                    Spacer()
+
+                    VizitIconChip(
+                        systemImage: "envelope.badge",
+                        tint: VizitColor.primary,
+                        background: VizitColor.primarySubtle,
+                        size: 72
+                    )
+
+                    VStack(spacing: VizitSpace.sm) {
+                        Text("Ellenőrizd az e-mail-fiókodat")
+                            .font(VizitFont.h1)
+                            .foregroundStyle(VizitColor.textPrimary)
+                            .multilineTextAlignment(.center)
+
+                        Text("Elküldtük a megerősítő hivatkozást erre a címre:")
+                            .font(VizitFont.body)
+                            .foregroundStyle(VizitColor.textSecondary)
+                            .multilineTextAlignment(.center)
+
+                        Text(email)
+                            .font(VizitFont.label)
+                            .foregroundStyle(VizitColor.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .textSelection(.enabled)
+
+                        Text("A link megnyitása után a VIZIT visszavisz a bejelentkezési képernyőre. Ott jelentkezz be az új fiókoddal.")
+                            .font(VizitFont.bodySmall)
+                            .foregroundStyle(VizitColor.textMuted)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VizitButton(
+                        title: "Vissza a bejelentkezéshez",
+                        systemImage: "arrow.left",
+                        kind: .secondary,
+                        action: onBackToLogin
+                    )
+                    .accessibilityIdentifier("auth.verification.login")
+
+                    Spacer()
+                }
+                .padding(.horizontal, VizitSpace.xl)
+                .frame(maxWidth: 540)
+                .frame(maxWidth: .infinity)
+            }
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 }
