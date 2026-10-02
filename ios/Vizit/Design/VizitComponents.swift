@@ -26,10 +26,10 @@ struct VizitButton: View {
         if let containerOverride { return pressed ? containerOverride.opacity(0.86) : containerOverride }
         guard active else { return VizitColor.controlDisabled }
         switch kind {
-        case .primary: return pressed ? VizitColor.primaryPressed : VizitColor.primary
+        case .primary: return VizitColor.primaryFill
         case .secondary: return pressed ? VizitColor.sunken : VizitColor.surface
         case .tertiary: return pressed ? VizitColor.primarySubtle : .clear
-        case .destructive: return VizitColor.error
+        case .destructive: return VizitColor.errorFill
         }
     }
 
@@ -38,7 +38,7 @@ struct VizitButton: View {
         guard active else { return VizitColor.textDisabled }
         switch kind {
         case .primary, .destructive: return VizitColor.textOnBrand
-        case .secondary: return VizitColor.textPrimary
+        case .secondary: return VizitColor.primary
         case .tertiary: return VizitColor.primary
         }
     }
@@ -51,21 +51,29 @@ struct VizitButton: View {
                 } else if let systemImage {
                     Image(systemName: systemImage).font(.system(size: 17, weight: .semibold))
                 }
-                Text(title).font(VizitFont.button)
+                Text(title)
+                    .font(kind == .primary || kind == .destructive
+                          ? .system(size: 17, weight: .bold)
+                          : .system(size: 16, weight: .semibold))
             }
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .frame(minHeight: VizitMetrics.controlHeight)
             .padding(.horizontal, VizitSpace.lg)
             .background(container)
-            .clipShape(RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 if kind == .secondary, active, containerOverride == nil {
-                    RoundedRectangle(cornerRadius: VizitRadius.lg, style: .continuous)
-                        .stroke(VizitColor.borderStrong, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(VizitColor.border, lineWidth: 1)
                 }
             }
-            .scaleEffect(pressed && active ? 0.97 : 1)
+            .shadow(
+                color: kind == .primary && active ? VizitColor.primaryFill.opacity(0.35) : .clear,
+                radius: 8, y: 6
+            )
+            .scaleEffect(pressed && active ? 0.98 : 1)
+            .opacity(pressed && active ? 0.85 : 1)
             .animation(.easeOut(duration: 0.12), value: pressed)
         }
         .buttonStyle(.plain)

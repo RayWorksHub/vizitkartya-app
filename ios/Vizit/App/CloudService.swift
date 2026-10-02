@@ -82,9 +82,12 @@ struct RemoteProfile: Decodable, Sendable {
     let customDomain: String?
     let customDomainVerified: Bool?
     let updatedAt: String
+    let createdAt: String?
+    let isPrimary: Bool?
     let avatarURL: String?
     let appearance: ProfileAppearance?
     let theme: String
+    let accentColor: String?
     var linkedIn = ""
     var facebook = ""
     var instagram = ""
@@ -158,6 +161,9 @@ struct RemoteProfile: Decodable, Sendable {
         case customDomainVerified = "custom_domain_verified"
         case avatarURL = "avatar_url"
         case appearance, theme
+        case accentColor = "accent_color"
+        case createdAt = "created_at"
+        case isPrimary = "is_primary"
         case updatedAt = "updated_at"
     }
 }
@@ -166,6 +172,10 @@ private struct RemoteLink: Decodable {
     let id: UUID
     let platform: String
     let url: String
+}
+
+private struct DeletedProfile: Decodable {
+    let id: UUID
 }
 
 private struct ProfileWrite: Encodable {
@@ -274,6 +284,13 @@ final class CloudService: @unchecked Sendable {
     var cachedSession: Session? { client.auth.currentSession }
 
     func validSession() async throws -> Session { try await client.auth.session }
+
+    @discardableResult
+    private func requireOwnerSession(_ ownerID: UUID) async throws -> Session {
+        let session = try await validSession()
+        guard session.user.id == ownerID else { throw CloudError.accountMismatch }
+        return session
+    }
 
     func login(email: String, password: String) async throws -> Session {
         try await client.auth.signIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
@@ -384,14 +401,60 @@ final class CloudService: @unchecked Sendable {
         try await client.functions.invoke("delete-account")
     }
 
-    func fetchProfile(ownerID: UUID, preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
-        let query = [
+    func fetchProfile(ownerID: UUID, profileID: UUID? = nil,
+                      preserving local: ContactProfile, loadPhoto: Bool = true) async throws -> (RemoteProfile, ContactProfile)? {
+        try await requireOwnerSession(ownerID)
+        var query = [
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme"),
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,created_at,updated_at,is_primary,avatar_url,appearance,theme,accent_color"),
             URLQueryItem(name: "limit", value: "1")
         ]
+        if let profileID {
+            query.append(URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"))
+        } else {
+            query.append(URLQueryItem(name: "is_primary", value: "eq.true"))
+        }
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
         guard var remote = rows.first else { return nil }
+        guard remote.ownerID == ownerID, profileID == nil || remote.id == profileID else {
+            throw CloudError.accountMismatch
+        }
+        let profile = try await hydrate(remote: &remote, preserving: local, loadPhoto: loadPhoto)
+        try await requireOwnerSession(ownerID)
+        return (remote, profile)
+    }
+
+    /// Loads every card owned by the active account. The explicit owner filter,
+    /// RLS, and the response-side owner check are all intentional: no public or
+    /// previously cached card from another account may enter the local catalog.
+    func fetchProfiles(ownerID: UUID,
+                       preserving local: [UUID: ContactProfile] = [:]) async throws -> [(RemoteProfile, ContactProfile)] {
+        try await requireOwnerSession(ownerID)
+        let query = [
+            URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,created_at,updated_at,is_primary,avatar_url,appearance,theme,accent_color"),
+            URLQueryItem(name: "order", value: "is_primary.desc,created_at.asc,id.asc")
+        ]
+        let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], query: query)
+        guard rows.allSatisfy({ $0.ownerID == ownerID }) else { throw CloudError.accountMismatch }
+
+        var values: [(RemoteProfile, ContactProfile)] = []
+        values.reserveCapacity(rows.count)
+        for row in rows {
+            var remote = row
+            let profile = try await hydrate(
+                remote: &remote,
+                preserving: local[row.id] ?? ContactProfile(),
+                loadPhoto: true
+            )
+            values.append((remote, profile))
+        }
+        try await requireOwnerSession(ownerID)
+        return values
+    }
+
+    private func hydrate(remote: inout RemoteProfile, preserving local: ContactProfile,
+                         loadPhoto: Bool) async throws -> ContactProfile {
         let links: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query: [
             URLQueryItem(name: "profile_id", value: "eq.\(remote.id.uuidString.lowercased())"),
             URLQueryItem(name: "select", value: "id,platform,url")
@@ -428,10 +491,11 @@ final class CloudService: @unchecked Sendable {
             profile.logoBase64 = ""
             profile.logoSyncInitialized = true
         }
-        return (remote, profile)
+        return profile
     }
 
     func createProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile) async throws -> RemoteProfile {
+        try await requireOwnerSession(ownerID)
         let candidates = ProfileSlug.creationCandidates(
             requested: profile.publicSlug,
             displayName: profile.displayName,
@@ -450,31 +514,40 @@ final class CloudService: @unchecked Sendable {
 
     private func insertProfile(ownerID: UUID, profileID: UUID,
                                profile: ContactProfile, slug: String) async throws -> RemoteProfile {
-        let payload = try await write(profile, profileID: profileID, ownerID: ownerID, slug: slug)
+        let payload = try await write(
+            profile, profileID: profileID, ownerID: ownerID, storageOwnerID: ownerID, slug: slug
+        )
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "POST",
-            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")],
+            query: [URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,created_at,updated_at,is_primary,avatar_url,appearance,theme,accent_color")],
             body: payload, prefer: "return=representation")
         guard let remote = rows.first else { throw CloudError.emptyResponse }
+        guard remote.ownerID == ownerID, remote.id == profileID else { throw CloudError.accountMismatch }
+        try await requireOwnerSession(ownerID)
         return remote
     }
 
     func updateProfile(ownerID: UUID, profileID: UUID, profile: ContactProfile,
                        expectedUpdatedAt: String, previousAppearance: ProfileAppearance? = nil,
                        previousLogoBase64: String = "", theme: String = "midnight") async throws -> RemoteProfile? {
-        let payload = try await write(profile, profileID: nil, ownerID: nil, slug: profile.publicSlug,
+        try await requireOwnerSession(ownerID)
+        let payload = try await write(profile, profileID: nil, ownerID: nil, storageOwnerID: ownerID,
+                                      slug: profile.publicSlug,
                                       previousAppearance: previousAppearance,
                                       previousLogoBase64: previousLogoBase64, theme: theme)
         let rows: [RemoteProfile] = try await request(path: ["rest", "v1", "profiles"], method: "PATCH", query: [
             URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
             URLQueryItem(name: "updated_at", value: "eq.\(expectedUpdatedAt)"),
-            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,updated_at,avatar_url,appearance,theme")
+            URLQueryItem(name: "select", value: "id,owner_id,slug,display_name,job_title,company,bio,public_email,phone,website,address,is_public,custom_domain,custom_domain_verified,created_at,updated_at,is_primary,avatar_url,appearance,theme,accent_color")
         ], body: payload, prefer: "return=representation")
         guard let remote = rows.first else { return nil }
+        guard remote.ownerID == ownerID, remote.id == profileID else { throw CloudError.accountMismatch }
+        try await requireOwnerSession(ownerID)
         return remote
     }
 
-    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?, slug: String,
+    private func write(_ profile: ContactProfile, profileID: UUID?, ownerID: UUID?,
+                       storageOwnerID: UUID, slug: String,
                        previousAppearance: ProfileAppearance? = nil, previousLogoBase64: String = "",
                        theme: String = "midnight") async throws -> ProfileWrite {
         let p = profile.normalized
@@ -484,9 +557,9 @@ final class CloudService: @unchecked Sendable {
                 if appearance != nil { appearance?.logoURL = nil }
             } else {
                 guard let data = Data(base64Encoded: p.logoBase64), data.count <= 256 * 1024,
-                      data.starts(with: [0xff, 0xd8, 0xff]), let owner = ownerID ?? cachedSession?.user.id
+                      data.starts(with: [0xff, 0xd8, 0xff])
                 else { throw ProfileError.invalidPhoto }
-                let path = "\(owner.uuidString.lowercased())/logo-\(UUID().uuidString.lowercased()).jpg"
+                let path = "\(storageOwnerID.uuidString.lowercased())/logo-\(UUID().uuidString.lowercased()).jpg"
                 try await client.storage.from("avatars").upload(
                     path: path, file: data,
                     options: FileOptions(cacheControl: "3600", contentType: "image/jpeg", upsert: false)
@@ -504,7 +577,9 @@ final class CloudService: @unchecked Sendable {
                             avatarURL: try ProfilePhoto.inlineURL(p.photoBase64), appearance: appearance)
     }
 
-    func syncSocialProfiles(profileID: UUID, value: ContactProfile, expected: ContactProfile) async throws {
+    func syncSocialProfiles(ownerID: UUID, profileID: UUID,
+                            value: ContactProfile, expected: ContactProfile) async throws {
+        try await requireOwnerSession(ownerID)
         let existing: [RemoteLink] = try await request(path: ["rest", "v1", "social_links"], query: [
             URLQueryItem(name: "profile_id", value: "eq.\(profileID.uuidString.lowercased())"),
             URLQueryItem(name: "select", value: "id,platform,url")
@@ -538,6 +613,26 @@ final class CloudService: @unchecked Sendable {
                     body: payload, prefer: "return=minimal")
             }
         }
+        try await requireOwnerSession(ownerID)
+    }
+
+    func deleteProfile(ownerID: UUID, profileID: UUID) async throws -> Bool {
+        try await requireOwnerSession(ownerID)
+        let rows: [DeletedProfile] = try await request(
+            path: ["rest", "v1", "profiles"],
+            method: "DELETE",
+            query: [
+                URLQueryItem(name: "id", value: "eq.\(profileID.uuidString.lowercased())"),
+                URLQueryItem(name: "owner_id", value: "eq.\(ownerID.uuidString.lowercased())"),
+                URLQueryItem(name: "select", value: "id")
+            ],
+            prefer: "return=representation"
+        )
+        guard rows.count <= 1, rows.first?.id == profileID || rows.isEmpty else {
+            throw CloudError.accountMismatch
+        }
+        try await requireOwnerSession(ownerID)
+        return rows.first?.id == profileID
     }
 
     private func readProfilePhoto(_ avatar: String) async throws -> String {
@@ -635,7 +730,7 @@ private struct AnyEncodable: Encodable {
 
 enum CloudError: LocalizedError {
     case invalidCallback, invalidRequest, emptyResponse, emailConfirmationDisabled, providerUnavailable
-    case profileConflict
+    case profileConflict, accountMismatch
     case passwordResetCooldown(Int)
     case server(status: Int, code: String?)
 
@@ -648,6 +743,7 @@ enum CloudError: LocalizedError {
         switch self {
         case .invalidCallback: return "A bejelentkezési hivatkozás érvénytelen."
         case .profileConflict: return "A profil közben másik eszközön megváltozott. Válaszd ki a megtartandó változatot."
+        case .accountMismatch: return "A munkamenet megváltozott. A névjegyadatokat biztonsági okból nem töltöttük be."
         case .invalidRequest: return "A kérés most nem küldhető el. Próbáld újra."
         case .emptyResponse: return "A kiszolgáló nem adott vissza mentett profilt."
         case .emailConfirmationDisabled: return "A kiszolgálón nincs kötelező e-mail-megerősítés. A munkamenetet biztonsági okból megszakítottuk."

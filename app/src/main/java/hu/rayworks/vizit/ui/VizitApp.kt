@@ -11,6 +11,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,15 +30,30 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContactPage
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.BusinessCenter
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,13 +76,21 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import hu.rayworks.vizit.VizitViewModel
 import hu.rayworks.vizit.auth.AuthViewModel
+import hu.rayworks.vizit.data.AppFeatureFlags
+import hu.rayworks.vizit.data.ContactProfile
 import hu.rayworks.vizit.data.sync.ProfileSyncStatus
+import hu.rayworks.vizit.data.cards.OwnedBusinessCard
 import hu.rayworks.vizit.data.remote.NodeBackendApi
 import hu.rayworks.vizit.data.remote.SupabaseProvider
 import hu.rayworks.vizit.ui.design.Vizit
 import hu.rayworks.vizit.ui.design.VizitMinTouchTarget
 import hu.rayworks.vizit.ui.design.components.VizitBanner
+import hu.rayworks.vizit.ui.design.components.VizitDivider
+import hu.rayworks.vizit.ui.design.components.VizitGroup
+import hu.rayworks.vizit.ui.design.components.VizitRow
+import hu.rayworks.vizit.ui.design.components.VizitStatusPill
 import hu.rayworks.vizit.ui.design.components.VizitTone
+import hu.rayworks.vizit.ui.design.components.VizitUserBadge
 import hu.rayworks.vizit.ui.design.components.vizitReduceMotion
 import hu.rayworks.vizit.ui.screens.BusinessHubScreen
 import hu.rayworks.vizit.ui.screens.AnalyticsScreen
@@ -78,9 +103,13 @@ import hu.rayworks.vizit.ui.screens.QrScanScreen
 import hu.rayworks.vizit.ui.screens.SettingsScreen
 import hu.rayworks.vizit.ui.screens.ShareScreen
 import hu.rayworks.vizit.ui.screens.ProfileWizardScreen
+import hu.rayworks.vizit.qr.QrPayloadFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /**
  * Four primary destinations. Everything that is not a top-level task — the
@@ -106,12 +135,15 @@ fun VizitApp(
     var showCardAppearance by rememberSaveable { mutableStateOf(false) }
     var showDataVisibility by rememberSaveable { mutableStateOf(false) }
     var showScanner by rememberSaveable { mutableStateOf(false) }
+    var showMenu by rememberSaveable { mutableStateOf(false) }
+    var showProfiles by rememberSaveable { mutableStateOf(false) }
     var creatingAdditionalCard by rememberSaveable { mutableStateOf(false) }
     var wizardSaving by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = vizitReduceMotion()
     val sectionStateHolder = rememberSaveableStateHolder()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var exportMessage by remember { mutableStateOf<String?>(null) }
     var exportError by remember { mutableStateOf(false) }
@@ -147,8 +179,20 @@ fun VizitApp(
         }
     }
 
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && viewModel.usesBusinessCardCatalog) {
+                viewModel.retryProfileSync()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     BackHandler(
         enabled = viewModel.isNfcShareActive ||
+            showProfiles ||
+            showMenu ||
             showKnowledgeHub ||
             showAnalytics ||
             showCardAppearance ||
@@ -158,6 +202,8 @@ fun VizitApp(
     ) {
         when {
             viewModel.isNfcShareActive -> viewModel.stopNfcShare()
+            showProfiles -> showProfiles = false
+            showMenu -> showMenu = false
             showScanner -> showScanner = false
             showDataVisibility -> showDataVisibility = false
             showCardAppearance -> showCardAppearance = false
@@ -275,6 +321,13 @@ fun VizitApp(
                         syncState = viewModel.profileSyncState,
                         onStartNfcShare = viewModel::startNfcShare,
                         onOpenCard = { selectedSection = AppSection.CARD },
+                        onOpenMenu = { showMenu = true },
+                        onOpenProfile = {
+                            val synchronized = viewModel.profileSyncState.status == ProfileSyncStatus.SYNCED &&
+                                !viewModel.profileSyncState.pendingChanges
+                            QrPayloadFactory.profileUrl(viewModel.sharedProfile, synchronized)?.let(uriHandler::openUri)
+                                ?: run { selectedSection = AppSection.CARD }
+                        },
                         onOpenShare = { selectedSection = AppSection.SHARE },
                         onOpenKnowledgeHub = { showKnowledgeHub = true },
                         onOpenAnalytics = { showAnalytics = true },
@@ -339,13 +392,253 @@ fun VizitApp(
                 }
             }
         }
+    }
 
-        VizitBottomBar(
-            selected = selectedSection,
-            onSelect = { selectedSection = it },
+    if (showMenu) {
+        V10MenuSheet(
+            profile = viewModel.profile,
+            cards = viewModel.businessCards,
+            syncStatus = viewModel.profileSyncState.status,
+            featureFlags = viewModel.featureFlags,
+            onDismiss = { showMenu = false },
+            onProfiles = { showMenu = false; showProfiles = true },
+            onEdit = { showMenu = false; selectedSection = AppSection.CARD },
+            onVisibility = { showMenu = false; showDataVisibility = true },
+            onAppearance = { showMenu = false; showCardAppearance = true },
+            onScan = { showMenu = false; showScanner = true },
+            onAnalytics = { showMenu = false; showAnalytics = true },
+            onHub = { showMenu = false; showKnowledgeHub = true },
+            onEditor = {
+                showMenu = false
+                uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fprofile")
+            },
+            onCRM = {
+                showMenu = false
+                uriHandler.openUri("https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2Fcrm")
+            },
+            onSettings = { showMenu = false; selectedSection = AppSection.SETTINGS },
+        )
+    }
+
+    if (showProfiles) {
+        V10ProfilesSheet(
+            cards = viewModel.businessCards,
+            activeProfileId = viewModel.activeBusinessCardId,
+            onDismiss = { showProfiles = false },
+            onSelect = {
+                viewModel.selectBusinessCard(it)
+                showProfiles = false
+            },
+            onCreate = { showProfiles = false; creatingAdditionalCard = true },
+            onDelete = viewModel::deleteActiveBusinessCard,
         )
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun V10MenuSheet(
+    profile: ContactProfile,
+    cards: List<OwnedBusinessCard>,
+    syncStatus: ProfileSyncStatus,
+    featureFlags: AppFeatureFlags,
+    onDismiss: () -> Unit,
+    onProfiles: () -> Unit,
+    onEdit: () -> Unit,
+    onVisibility: () -> Unit,
+    onAppearance: () -> Unit,
+    onScan: () -> Unit,
+    onAnalytics: () -> Unit,
+    onHub: () -> Unit,
+    onEditor: () -> Unit,
+    onCRM: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Vizit.colors.canvas,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                VizitUserBadge(
+                    displayName = profile.resolvedDisplayName,
+                    initials = profile.initials,
+                    photoBase64 = profile.photoBase64,
+                    modifier = Modifier.weight(1f),
+                )
+                VizitStatusPill(
+                    text = syncStatus.v10Label,
+                    tone = syncStatus.v10Tone,
+                )
+            }
+
+            VizitGroup {
+                VizitRow(
+                    label = "Profiljaid",
+                    value = cards.size.toString(),
+                    icon = Icons.Outlined.People,
+                    onClick = onProfiles,
+                )
+                VizitDivider()
+                VizitRow(label = "Profil szerkesztése", icon = Icons.Outlined.Edit, onClick = onEdit)
+                VizitDivider()
+                VizitRow(label = "Adatok láthatósága", icon = Icons.Outlined.Visibility, onClick = onVisibility)
+                VizitDivider()
+                VizitRow(label = "Kártya megjelenése", icon = Icons.Outlined.Palette, onClick = onAppearance)
+            }
+
+            VizitGroup {
+                if (featureFlags.qrScanner) {
+                    VizitRow(label = "Névjegy beolvasása", icon = Icons.Outlined.QrCodeScanner, onClick = onScan)
+                    VizitDivider()
+                }
+                if (featureFlags.analytics) {
+                    VizitRow(
+                        label = "Statisztikák",
+                        supporting = "Megtekintések, mentések és kattintások",
+                        icon = Icons.Outlined.BarChart,
+                        onClick = onAnalytics,
+                    )
+                    VizitDivider()
+                }
+                if (featureFlags.businessPortal) {
+                    VizitRow(
+                        label = "Vállalkozói Portál",
+                        supporting = "VOSZ, edukáció, digitális segítség",
+                        icon = Icons.Outlined.MenuBook,
+                        onClick = onHub,
+                    )
+                }
+            }
+
+            VizitGroup {
+                if (featureFlags.onlineEditor) {
+                    VizitRow(
+                        label = "Online szerkesztő",
+                        supporting = "Színek, logó, közösségi linkek",
+                        icon = Icons.Outlined.Language,
+                        onClick = onEditor,
+                    )
+                    VizitDivider()
+                }
+                if (featureFlags.crm) {
+                    VizitRow(
+                        label = "CRM",
+                        supporting = "Partnerek, ügyletek, feladatok",
+                        icon = Icons.Outlined.BusinessCenter,
+                        onClick = onCRM,
+                    )
+                    VizitDivider()
+                }
+                VizitRow(label = "Beállítások", icon = Icons.Outlined.Settings, onClick = onSettings)
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun V10ProfilesSheet(
+    cards: List<OwnedBusinessCard>,
+    activeProfileId: String?,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+    onCreate: () -> Unit,
+    onDelete: suspend () -> String?,
+) {
+    val scope = rememberCoroutineScope()
+    var deleting by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Vizit.colors.canvas,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Profiljaid", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
+            VizitGroup {
+                cards.forEachIndexed { index, card ->
+                    if (index > 0) VizitDivider()
+                    VizitRow(
+                        label = card.profile.company.ifBlank { card.profile.resolvedDisplayName },
+                        value = if (card.isPrimary) "Elsődleges" else null,
+                        supporting = if (card.profile.isPublic) {
+                            "vizitkartyam.hu/${card.profile.publicSlug}"
+                        } else {
+                            card.profile.resolvedDisplayName
+                        },
+                        icon = if (card.profileId == activeProfileId) {
+                            Icons.Outlined.CheckCircle
+                        } else {
+                            Icons.Outlined.ContactPage
+                        },
+                        onClick = { onSelect(card.profileId) },
+                    )
+                }
+                if (cards.isNotEmpty()) VizitDivider()
+                VizitRow(label = "Új profil", icon = Icons.Outlined.Add, onClick = onCreate)
+            }
+
+            if (activeProfileId != null) {
+                VizitGroup(danger = true) {
+                    VizitRow(
+                        label = if (deleting) "Profil törlése…" else "Aktív profil törlése",
+                        supporting = error,
+                        icon = Icons.Outlined.DeleteOutline,
+                        destructive = true,
+                        enabled = !deleting,
+                        showChevron = false,
+                        onClick = {
+                            scope.launch {
+                                deleting = true
+                                error = onDelete()
+                                deleting = false
+                            }
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+}
+
+private val ProfileSyncStatus.v10Label: String
+    get() = when (this) {
+        ProfileSyncStatus.SYNCED -> "Szinkronizálva"
+        ProfileSyncStatus.SYNCING -> "Szinkronizálás…"
+        ProfileSyncStatus.PENDING -> "Feltöltésre vár"
+        ProfileSyncStatus.RETRY_SCHEDULED -> "Újrapróbálásra vár"
+        ProfileSyncStatus.CONFLICT -> "Ütközés"
+        ProfileSyncStatus.LOCAL_ONLY -> "Helyi"
+    }
+
+private val ProfileSyncStatus.v10Tone: VizitTone
+    get() = when (this) {
+        ProfileSyncStatus.SYNCED -> VizitTone.Success
+        ProfileSyncStatus.CONFLICT -> VizitTone.Error
+        ProfileSyncStatus.PENDING,
+        ProfileSyncStatus.RETRY_SCHEDULED -> VizitTone.Warning
+        ProfileSyncStatus.SYNCING,
+        ProfileSyncStatus.LOCAL_ONLY -> VizitTone.Info
+    }
 
 @Composable
 private fun VizitBottomBar(

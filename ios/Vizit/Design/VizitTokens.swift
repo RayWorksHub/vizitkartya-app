@@ -17,51 +17,54 @@ enum VizitColor {
     }
 
     // Background & surface
-    static let canvas = dynamic(light: 0xF6F7F9, dark: 0x0A0F1C)
-    static let surface = dynamic(light: 0xFFFFFF, dark: 0x131B2C)
-    static let elevated = dynamic(light: 0xFFFFFF, dark: 0x1B2437)
-    static let sunken = dynamic(light: 0xEDEFF3, dark: 0x060A14)
-    static let inverse = dynamic(light: 0x061B46, dark: 0xE8ECF2)
+    static let canvas = dynamic(light: 0xF3F5F9, dark: 0x0F1115)
+    static let surface = dynamic(light: 0xFFFFFF, dark: 0x1B1E26)
+    static let elevated = dynamic(light: 0xFFFFFF, dark: 0x20242C)
+    static let sunken = dynamic(light: 0xF3F5F9, dark: 0x111318)
+    static let inverse = dynamic(light: 0x0E1733, dark: 0xE4E7EF)
     /// Icon chips sit on white in light mode, per the design brief.
-    static let iconSurface = dynamic(light: 0xFFFFFF, dark: 0x1B2437)
+    static let iconSurface = dynamic(light: 0xFFFFFF, dark: 0x20242C)
 
     // Brand
-    static let primary = dynamic(light: 0x0B5CE8, dark: 0x4A90FF)
-    static let primaryPressed = dynamic(light: 0x0848BC, dark: 0x6BA5FF)
-    static let primarySubtle = dynamic(light: 0xE8F0FE, dark: 0x14264A)
-    static let onPrimary = dynamic(light: 0xFFFFFF, dark: 0x04122E)
+    static let primary = dynamic(light: 0x2A5BD7, dark: 0x8FAEFF)
+    static let primaryFill = dynamic(light: 0x2A5BD7, dark: 0x3F6FE8)
+    static let primaryPressed = dynamic(light: 0x204AB6, dark: 0xA9BFFF)
+    static let primarySubtle = dynamic(light: 0xE8EEFC, dark: 0x243150)
+    static let onPrimary = Color.white
     static let accent = dynamic(light: 0x0FBEE6, dark: 0x38D6FF)
-    static let onAccent = dynamic(light: 0x04122E, dark: 0x04122E)
+    static let onAccent = dynamic(light: 0xFFFFFF, dark: 0x111318)
     /// Constant in both themes — the card ink is the brand.
-    static let ink = Color(uiColor: UIColor(hex: 0x061B46))
+    static let ink = Color(uiColor: UIColor(hex: 0x0E1733))
 
     // Text
-    static let textPrimary = dynamic(light: 0x0C1729, dark: 0xF2F5FA)
-    static let textSecondary = dynamic(light: 0x4A5568, dark: 0xA3AFC2)
-    static let textMuted = dynamic(light: 0x6B7688, dark: 0x8592A6)
+    static let textPrimary = dynamic(light: 0x0E1733, dark: 0xE4E7EF)
+    static let textSecondary = dynamic(light: 0x677087, dark: 0x9AA2B3)
+    static let textMuted = dynamic(light: 0x677087, dark: 0x9AA2B3)
     static let textOnBrand = Color.white
-    static let textDisabled = dynamic(light: 0xA6AEBB, dark: 0x5A6577)
+    static let textDisabled = dynamic(light: 0x8A90A0, dark: 0x6E7587)
 
     // Border
-    static let border = dynamic(light: 0xE2E6EC, dark: 0x263149)
-    static let borderStrong = dynamic(light: 0xC9D0DA, dark: 0x35415C)
-    static let borderFocus = dynamic(light: 0x0B5CE8, dark: 0x4A90FF)
-    static let divider = dynamic(light: 0xEDEFF3, dark: 0x1E2739)
+    static let border = dynamic(light: 0xE3E7EF, dark: 0x2C313C)
+    static let borderStrong = dynamic(light: 0xC7CCD8, dark: 0x4A5060)
+    static let outline = dynamic(light: 0x79808F, dark: 0x8C92A0)
+    static let borderFocus = dynamic(light: 0x2A5BD7, dark: 0x8FAEFF)
+    static let divider = dynamic(light: 0xE3E7EF, dark: 0x2C313C)
 
     // State
-    static let success = dynamic(light: 0x12855A, dark: 0x34D399)
-    static let successSubtle = dynamic(light: 0xE4F6EE, dark: 0x0E2C22)
-    static let warning = dynamic(light: 0xA8690A, dark: 0xFBBF24)
-    static let warningSubtle = dynamic(light: 0xFDF3E0, dark: 0x33260A)
-    static let error = dynamic(light: 0xC62828, dark: 0xFF6B6B)
-    static let errorSubtle = dynamic(light: 0xFDEAEA, dark: 0x3A1516)
-    static let info = dynamic(light: 0x0B5CE8, dark: 0x4A90FF)
-    static let infoSubtle = dynamic(light: 0xE8F0FE, dark: 0x14264A)
+    static let success = dynamic(light: 0x1F9D57, dark: 0x5CCB8C)
+    static let successSubtle = dynamic(light: 0xE4F6EE, dark: 0x1D3A2B)
+    static let warning = dynamic(light: 0xB86F0E, dark: 0xF0B35C)
+    static let warningSubtle = dynamic(light: 0xFBF0DF, dark: 0x3D2E17)
+    static let error = dynamic(light: 0xD13B3B, dark: 0xFF8A80)
+    static let errorFill = dynamic(light: 0xD13B3B, dark: 0xC8453F)
+    static let errorSubtle = dynamic(light: 0xFDECEC, dark: 0x45201F)
+    static let info = dynamic(light: 0x2A5BD7, dark: 0x8FAEFF)
+    static let infoSubtle = dynamic(light: 0xE8EEFC, dark: 0x243150)
 
     // Control
-    static let controlTrack = dynamic(light: 0xDDE2E9, dark: 0x2A3548)
-    static let controlDisabled = dynamic(light: 0xEDEFF3, dark: 0x1A2334)
-    static let skeletonBase = dynamic(light: 0xE8EBF0, dark: 0x1A2334)
+    static let controlTrack = dynamic(light: 0xE3E5EA, dark: 0x2E333D)
+    static let controlDisabled = dynamic(light: 0xE3E5EA, dark: 0x2E333D)
+    static let skeletonBase = dynamic(light: 0xEEF1F6, dark: 0x262B35)
 }
 
 /// 4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48 — no other values are permitted.
@@ -97,14 +100,14 @@ enum VizitElevation {
     }
 
     static let raised = Shadow(color: VizitColor.ink.opacity(0.06), radius: 3, y: 1)
-    static let floating = Shadow(color: VizitColor.ink.opacity(0.10), radius: 20, y: 8)
-    static let card = Shadow(color: VizitColor.ink.opacity(0.18), radius: 28, y: 16)
+    static let floating = Shadow(color: VizitColor.ink.opacity(0.08), radius: 12, y: 10)
+    static let card = Shadow(color: VizitColor.ink.opacity(0.12), radius: 18, y: 12)
 }
 
 /// Minimum interactive target — 44pt is the iOS HIG floor.
 enum VizitMetrics {
     static let minTouchTarget: CGFloat = 44
-    static let controlHeight: CGFloat = 52
+    static let controlHeight: CGFloat = 54
     static let fieldHeight: CGFloat = 52
 }
 

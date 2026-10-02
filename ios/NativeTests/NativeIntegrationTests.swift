@@ -75,6 +75,86 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(try store.load(), ProfileSyncMetadata())
     }
 
+    func testBusinessCardCatalogRoundTripKeepsCardsSeparate() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VIZIT-card-catalog-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ownerID = UUID()
+        let primaryID = UUID()
+        let secondaryID = UUID()
+        let store = BusinessCardCatalogStore(directory: directory, ownerID: ownerID)
+        var secondaryPresentation = CardPresentation()
+        secondaryPresentation.colorway = .amethyst
+        let expected = BusinessCardCatalog(
+            ownerID: ownerID,
+            cards: [
+                BusinessCardCatalogEntry(
+                    profileID: secondaryID, ownerID: ownerID, isPrimary: false,
+                    createdAt: "2026-10-01T11:00:00Z", updatedAt: "2026-10-01T11:00:00Z",
+                    presentation: secondaryPresentation
+                ),
+                BusinessCardCatalogEntry(
+                    profileID: primaryID, ownerID: ownerID, isPrimary: true,
+                    createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-01T10:00:00Z",
+                    presentation: CardPresentation()
+                )
+            ],
+            activeProfileID: secondaryID
+        )
+
+        try store.save(expected)
+        let loaded = try store.load()
+
+        XCTAssertEqual(loaded.ownerID, ownerID)
+        XCTAssertEqual(loaded.cards.map(\.profileID), [primaryID, secondaryID])
+        XCTAssertEqual(loaded.activeProfileID, secondaryID)
+        XCTAssertEqual(loaded.cards.last?.presentation, secondaryPresentation)
+        XCTAssertNotEqual(store.cardDirectory(primaryID), store.cardDirectory(secondaryID))
+    }
+
+    func testBusinessCardCatalogRejectsAnotherAccount() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VIZIT-card-owner-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let firstOwner = UUID()
+        let secondOwner = UUID()
+        let profileID = UUID()
+        let firstStore = BusinessCardCatalogStore(directory: directory, ownerID: firstOwner)
+        try firstStore.save(BusinessCardCatalog(
+            ownerID: firstOwner,
+            cards: [BusinessCardCatalogEntry(
+                profileID: profileID, ownerID: firstOwner, isPrimary: true,
+                createdAt: "", updatedAt: "", presentation: CardPresentation()
+            )],
+            activeProfileID: profileID
+        ))
+
+        let secondStore = BusinessCardCatalogStore(directory: directory, ownerID: secondOwner)
+        XCTAssertThrowsError(try secondStore.load()) { error in
+            XCTAssertEqual(error as? ProfileError, .damagedFile)
+        }
+    }
+
+    func testBusinessCardCatalogRejectsMixedOwnerRows() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VIZIT-card-mixed-owner-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ownerID = UUID()
+        let store = BusinessCardCatalogStore(directory: directory, ownerID: ownerID)
+        let poisoned = BusinessCardCatalog(
+            ownerID: ownerID,
+            cards: [BusinessCardCatalogEntry(
+                profileID: UUID(), ownerID: UUID(), isPrimary: true,
+                createdAt: "", updatedAt: "", presentation: CardPresentation()
+            )]
+        )
+
+        XCTAssertThrowsError(try store.save(poisoned)) { error in
+            XCTAssertEqual(error as? ProfileError, .damagedFile)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.fileURL.path))
+    }
+
     func testAppleContactsImportsEmbeddedProfilePhoto() throws {
         var p = profile()
         let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 24)).image { context in

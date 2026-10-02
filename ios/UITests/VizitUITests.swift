@@ -56,7 +56,7 @@ final class VizitUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["auth.forgotPassword"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["auth.version"].exists)
-        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 8.7.5"))
+        XCTAssertTrue(app.staticTexts["auth.version"].label.contains("VIZIT 10.0.0"))
         app.buttons["auth.forgotPassword"].tap()
         XCTAssertTrue(app.textFields["auth.reset.email"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["auth.reset.submit"].exists)
@@ -66,7 +66,6 @@ final class VizitUITests: XCTestCase {
         let app = launchClean()
         XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 10))
         app.buttons["wizard.private"].tap()
-        app.buttons["wizard.primary"].tap()
         let name = app.textFields["wizard.fullName"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap(); name.typeText("Teszt Elek")
@@ -83,7 +82,7 @@ final class VizitUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["card.name"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["card.name"].label, "Teszt Elek")
-        app.tabBars.buttons["Megosztás"].tap()
+        app.buttons["Megosztás"].tap()
         XCTAssertTrue(app.images["share.qr"].waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "VIZIT-contact-QR"
@@ -93,12 +92,10 @@ final class VizitUITests: XCTestCase {
 
     func testEmptyProfileShowsValidation() {
         let app = launchClean()
-        let next = app.buttons["wizard.primary"]
-        XCTAssertTrue(next.waitForExistence(timeout: 10))
-        XCTAssertFalse(next.isEnabled)
+        XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 10))
         app.buttons["wizard.private"].tap()
-        XCTAssertTrue(next.isEnabled)
-        next.tap()
+        let next = app.buttons["wizard.primary"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
         XCTAssertFalse(next.isEnabled)
     }
 
@@ -106,12 +103,11 @@ final class VizitUITests: XCTestCase {
         let app = launchClean()
         XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 10))
         app.buttons["wizard.private"].tap()
-        app.buttons["wizard.primary"].tap()
         let name = app.textFields["wizard.fullName"]
         name.tap(); name.typeText("Nem mentett adat")
         app.buttons["Vissza"].tap()
         XCTAssertTrue(app.buttons["wizard.private"].waitForExistence(timeout: 5))
-        app.buttons["wizard.primary"].tap()
+        app.buttons["wizard.private"].tap()
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         XCTAssertEqual(name.value as? String, "Nem mentett adat")
         app.terminate()

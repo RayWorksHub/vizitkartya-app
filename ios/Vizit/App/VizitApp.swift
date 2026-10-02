@@ -5,6 +5,7 @@ import Supabase
 struct VizitApp: App {
     @StateObject private var store = AppStore()
     @StateObject private var presentation = CardPresentationStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -13,6 +14,9 @@ struct VizitApp: App {
                 .environmentObject(presentation)
                 .tint(VizitColor.primary)
                 .onOpenURL { url in Task { await store.handleCallback(url) } }
+                .onChange(of: scenePhase) { phase in
+                    if phase == .active { Task { await store.refreshBusinessCards() } }
+                }
         }
     }
 }
@@ -49,6 +53,8 @@ enum ProfileLoadStatus: Equatable {
 @MainActor
 final class AppStore: ObservableObject {
     @Published private(set) var profile = ContactProfile()
+    @Published private(set) var businessCards: [OwnedBusinessCard] = []
+    @Published private(set) var activeBusinessCardID: UUID?
     @Published private(set) var authStatus: AuthStatus = .launching
     @Published private(set) var syncStatus: SyncStatus = .localOnly
     @Published private(set) var profileLoadStatus: ProfileLoadStatus = .loading
@@ -61,11 +67,15 @@ final class AppStore: ObservableObject {
     private var cloud: CloudService?
     private var fileStore: ProfileFileStore?
     private var syncStore: ProfileSyncStore?
+    private var catalogStore: BusinessCardCatalogStore?
+    private var catalog: BusinessCardCatalog?
     private var userID: UUID?
     private var userEmail = ""
     private var profileRevision = 0
     private var syncInFlight = false
     private var syncAgain = false
+    private var catalogRefreshInFlight = false
+    private var pendingCatalogSyncInFlight = false
     private var syncFailureMessage: String?
     private let uiTesting: Bool
 
@@ -77,15 +87,15 @@ final class AppStore: ObservableObject {
         #endif
         if uiTesting {
             do {
-                let directory = try Self.applicationDirectory().appendingPathComponent("UITests", isDirectory: true)
-                let storage = ProfileFileStore(directory: directory)
-                fileStore = storage
-                syncStore = ProfileSyncStore(directory: directory)
+                let ownerID = UUID(uuidString: "00000000-0000-4000-8000-000000000010")!
+                let directory = try Self.applicationDirectory()
+                    .appendingPathComponent("UITests", isDirectory: true)
                 if ProcessInfo.processInfo.arguments.contains("--reset-test-profile") {
-                    try storage.reset()
-                    try? syncStore?.reset()
+                    try? BusinessCardCatalogStore(directory: directory, ownerID: ownerID).reset()
+                    try? ProfileFileStore(directory: directory).reset()
+                    try? ProfileSyncStore(directory: directory).reset()
                 }
-                profile = try storage.load()
+                try configureStorage(for: ownerID)
                 authStatus = .authenticated
                 syncStatus = .localOnly
                 profileLoadStatus = .ready
@@ -108,7 +118,12 @@ final class AppStore: ObservableObject {
 
     var hasProfile: Bool { !profile.displayName.isEmpty }
     var accountEmail: String { userEmail }
+    var accountID: UUID? { userID }
     var isOnline: Bool { authStatus == .authenticated }
+    var activeCardPresentation: CardPresentation {
+        businessCards.first(where: { $0.profileID == activeBusinessCardID })?.presentation
+            ?? CardPresentation()
+    }
 
     private static func applicationDirectory() throws -> URL {
         try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -116,21 +131,136 @@ final class AppStore: ObservableObject {
             .appendingPathComponent("VIZIT", isDirectory: true)
     }
 
-    private func configureStorage(for id: UUID) throws {
-        profileLoadStatus = .loading
-        let directory = try Self.applicationDirectory()
+    private func accountDirectory(for id: UUID) throws -> URL {
+        let root = try Self.applicationDirectory()
+        if uiTesting { return root.appendingPathComponent("UITests", isDirectory: true) }
+        return root
             .appendingPathComponent("users", isDirectory: true)
             .appendingPathComponent(id.uuidString.lowercased(), isDirectory: true)
-        let profileStore = ProfileFileStore(directory: directory)
-        let metadataStore = ProfileSyncStore(directory: directory)
-        fileStore = profileStore
-        syncStore = metadataStore
+    }
+
+    private func configureStorage(for id: UUID) throws {
+        profileLoadStatus = .loading
+        let directory = try accountDirectory(for: id)
+        let indexStore = BusinessCardCatalogStore(directory: directory, ownerID: id)
+        var index = try indexStore.load()
+
+        // One-time migration from the pre-V10 single-card files. The original
+        // files are deliberately left intact until the migrated card has been
+        // uploaded and verified, so rollback never destroys an unsent edit.
+        if index.cards.isEmpty {
+            let legacyProfileStore = ProfileFileStore(directory: directory)
+            let legacySyncStore = ProfileSyncStore(directory: directory)
+            let legacyMetadata = try legacySyncStore.load()
+            let legacyProfile = try legacyMetadata.pendingProfile ?? legacyProfileStore.load()
+            if legacyMetadata.profileID != nil || !legacyProfile.displayName.isEmpty {
+                let profileID = legacyMetadata.profileID ?? UUID()
+                let cardDirectory = indexStore.cardDirectory(profileID)
+                let migratedProfileStore = ProfileFileStore(directory: cardDirectory)
+                let migratedSyncStore = ProfileSyncStore(directory: cardDirectory)
+                if !legacyProfile.displayName.isEmpty { try migratedProfileStore.save(legacyProfile) }
+                var metadata = legacyMetadata
+                metadata.profileID = profileID
+                try migratedSyncStore.save(metadata)
+                index.cards = [BusinessCardCatalogEntry(
+                    profileID: profileID,
+                    ownerID: id,
+                    isPrimary: true,
+                    createdAt: legacyMetadata.remoteUpdatedAt ?? "",
+                    updatedAt: legacyMetadata.remoteUpdatedAt ?? "",
+                    presentation: CardPresentationStore().value
+                )]
+                index.activeProfileID = profileID
+                try indexStore.save(index)
+            }
+        }
+
+        catalogStore = indexStore
+        catalog = index
         userID = id
-        let metadata = try metadataStore.load()
-        profile = try metadata.pendingProfile ?? profileStore.load()
-        try profile.validateIfPresent()
-        profileRevision &+= 1
+        if let active = index.activeProfileID ?? index.cards.first?.profileID {
+            try activateBusinessCard(active, persistSelection: false)
+        } else {
+            fileStore = nil
+            syncStore = nil
+            profile = ContactProfile()
+            activeBusinessCardID = nil
+            syncStatus = .localOnly
+            profileRevision &+= 1
+        }
+        try reloadBusinessCards()
         storageError = nil
+    }
+
+    private func activateBusinessCard(_ profileID: UUID, persistSelection: Bool = true) throws {
+        guard let ownerID = userID,
+              var index = catalog,
+              let entry = index.cards.first(where: { $0.profileID == profileID && $0.ownerID == ownerID }),
+              let catalogStore else { throw ProfileError.damagedFile }
+        let directory = catalogStore.cardDirectory(entry.profileID)
+        let nextProfileStore = ProfileFileStore(directory: directory)
+        let nextSyncStore = ProfileSyncStore(directory: directory)
+        let metadata = try nextSyncStore.load()
+        guard metadata.profileID == nil || metadata.profileID == profileID else {
+            throw ProfileError.damagedFile
+        }
+        let loaded = try metadata.pendingProfile ?? nextProfileStore.load()
+        try loaded.validateIfPresent()
+        fileStore = nextProfileStore
+        syncStore = nextSyncStore
+        profile = loaded
+        activeBusinessCardID = profileID
+        syncStatus = metadata.conflict ? .conflict
+            : (metadata.pendingUpload ? .pending : (metadata.remoteUpdatedAt == nil ? .localOnly : .synced))
+        profileRevision &+= 1
+        if persistSelection && index.activeProfileID != profileID {
+            index.activeProfileID = profileID
+            try catalogStore.save(index)
+            catalog = index
+        }
+    }
+
+    private func reloadBusinessCards() throws {
+        guard let ownerID = userID, let index = catalog, let catalogStore else {
+            businessCards = []
+            return
+        }
+        businessCards = try index.cards.map { entry in
+            guard entry.ownerID == ownerID else { throw ProfileError.damagedFile }
+            let directory = catalogStore.cardDirectory(entry.profileID)
+            let metadata = try ProfileSyncStore(directory: directory).load()
+            guard metadata.profileID == nil || metadata.profileID == entry.profileID else {
+                throw ProfileError.damagedFile
+            }
+            let stored = try ProfileFileStore(directory: directory).load()
+            let value = try metadata.pendingProfile ?? stored
+            try value.validateIfPresent()
+            return OwnedBusinessCard(
+                ownerID: ownerID,
+                profileID: entry.profileID,
+                profile: value,
+                fingerprint: metadata.remoteFingerprint,
+                isPrimary: entry.isPrimary,
+                createdAt: entry.createdAt,
+                updatedAt: entry.updatedAt,
+                presentation: entry.presentation
+            )
+        }
+    }
+
+    private func updateActiveCardSnapshot() throws {
+        guard let ownerID = userID, let profileID = activeBusinessCardID,
+              var index = catalog, let catalogStore,
+              let position = index.cards.firstIndex(where: {
+                  $0.profileID == profileID && $0.ownerID == ownerID
+              }) else { return }
+        let metadata = try syncStore?.load() ?? ProfileSyncMetadata()
+        if let updatedAt = metadata.remoteUpdatedAt {
+            index.cards[position].updatedAt = updatedAt
+        }
+        try catalogStore.save(index)
+        catalog = index
+        try reloadBusinessCards()
     }
 
     private func bootstrap() async {
@@ -250,8 +380,11 @@ final class AppStore: ObservableObject {
         } catch {
             // The SDK removes the local token before its best-effort server call.
         }
-        // Keep only unsent edits; signed-out UI has no access to another account's files.
-        if (try? syncStore?.load().pendingUpload) == false {
+        // Keep the account-scoped cache only when at least one card still has
+        // an unsent edit. Signed-out and other-account UI never receives a
+        // reference to this directory.
+        if !hasPendingBusinessCardUploads() {
+            try? catalogStore?.reset()
             try? fileStore?.reset()
             try? syncStore?.reset()
         }
@@ -264,6 +397,7 @@ final class AppStore: ObservableObject {
         await performAuth(defaultError: "A fiók törlése nem sikerült; semmilyen helyi adatot nem töröltünk.") {
             guard let cloud = self.cloud else { return }
             try await cloud.deleteAccount()
+            try self.catalogStore?.reset()
             try self.fileStore?.reset()
             try self.syncStore?.reset()
             try? await cloud.logout()
@@ -274,8 +408,11 @@ final class AppStore: ObservableObject {
     }
 
     func save(_ draft: ContactProfile) throws {
-        guard let storage = fileStore, let metadataStore = syncStore else { throw ProfileError.damagedFile }
         try draft.validate()
+        if fileStore == nil || syncStore == nil || activeBusinessCardID == nil {
+            try createLocalBusinessCard(presentation: CardPresentationStore().value)
+        }
+        guard let storage = fileStore, let metadataStore = syncStore else { throw ProfileError.damagedFile }
         var metadata = try metadataStore.load()
         _ = try storage.load()
         metadata.pendingUpload = !uiTesting
@@ -287,7 +424,135 @@ final class AppStore: ObservableObject {
         profileRevision &+= 1
         storageError = nil
         syncStatus = uiTesting ? .localOnly : .pending
-        if !uiTesting { Task { await synchronize() } }
+        try updateActiveCardSnapshot()
+        if !uiTesting { Task { await synchronizeAllBusinessCards() } }
+    }
+
+    func createBusinessCard(_ draft: ContactProfile, presentation: CardPresentation = CardPresentation()) throws {
+        try draft.validate()
+        guard uiTesting || authStatus == .authenticated else { throw CloudError.invalidRequest }
+        if !uiTesting && syncInFlight { throw CloudError.invalidRequest }
+        try createLocalBusinessCard(presentation: presentation)
+        try save(draft)
+    }
+
+    private func createLocalBusinessCard(presentation: CardPresentation) throws {
+        let ownerID: UUID
+        if let signedInOwner = userID {
+            ownerID = signedInOwner
+        } else if uiTesting {
+            ownerID = UUID(uuidString: "00000000-0000-4000-8000-000000000010")!
+            userID = ownerID
+        } else {
+            throw ProfileError.damagedFile
+        }
+
+        let indexStore: BusinessCardCatalogStore
+        if let catalogStore {
+            indexStore = catalogStore
+        } else {
+            let directory = try accountDirectory(for: ownerID)
+            indexStore = BusinessCardCatalogStore(directory: directory, ownerID: ownerID)
+            catalogStore = indexStore
+        }
+        var index: BusinessCardCatalog
+        if let catalog {
+            index = catalog
+        } else {
+            index = try indexStore.load()
+        }
+        guard index.ownerID == ownerID else { throw ProfileError.damagedFile }
+        let profileID = UUID()
+        index.cards.append(BusinessCardCatalogEntry(
+            profileID: profileID,
+            ownerID: ownerID,
+            isPrimary: index.cards.isEmpty,
+            createdAt: "",
+            updatedAt: "",
+            presentation: presentation
+        ))
+        index.activeProfileID = profileID
+        index.normalize()
+        try indexStore.save(index)
+        catalog = index
+        let directory = indexStore.cardDirectory(profileID)
+        var metadata = ProfileSyncMetadata()
+        metadata.profileID = profileID
+        try ProfileSyncStore(directory: directory).save(metadata)
+        try activateBusinessCard(profileID, persistSelection: false)
+        try reloadBusinessCards()
+    }
+
+    func selectBusinessCard(_ profileID: UUID) {
+        guard profileID != activeBusinessCardID else { return }
+        do {
+            try activateBusinessCard(profileID)
+            try reloadBusinessCards()
+            if !uiTesting { Task { await synchronizeAllBusinessCards() } }
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    func updateActiveCardPresentation(_ presentation: CardPresentation) {
+        guard let ownerID = userID, let profileID = activeBusinessCardID,
+              var index = catalog, let catalogStore,
+              let position = index.cards.firstIndex(where: {
+                  $0.ownerID == ownerID && $0.profileID == profileID
+              }) else { return }
+        guard index.cards[position].presentation != presentation else { return }
+        index.cards[position].presentation = presentation
+        do {
+            try catalogStore.save(index)
+            catalog = index
+            try reloadBusinessCards()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func deleteActiveBusinessCard() async -> Bool {
+        guard !busy, let ownerID = userID, let profileID = activeBusinessCardID,
+              var index = catalog, let catalogStore,
+              let entry = index.cards.first(where: {
+                  $0.ownerID == ownerID && $0.profileID == profileID
+              }) else { return false }
+        busy = true
+        defer { busy = false }
+        do {
+            let metadata = try syncStore?.load() ?? ProfileSyncMetadata()
+            if !uiTesting {
+                guard authStatus == .authenticated, let cloud else { throw CloudError.invalidRequest }
+                let deleted = try await cloud.deleteProfile(ownerID: ownerID, profileID: profileID)
+                if !deleted && metadata.remoteUpdatedAt != nil { throw CloudError.emptyResponse }
+            }
+            let directory = catalogStore.cardDirectory(entry.profileID)
+            if FileManager.default.fileExists(atPath: directory.path) {
+                try FileManager.default.removeItem(at: directory)
+            }
+            index.cards.removeAll { $0.profileID == profileID }
+            index.normalize()
+            try catalogStore.save(index)
+            catalog = index
+            if let next = index.activeProfileID {
+                try activateBusinessCard(next, persistSelection: false)
+            } else {
+                fileStore = nil
+                syncStore = nil
+                profile = ContactProfile()
+                activeBusinessCardID = nil
+                syncStatus = .localOnly
+                profileRevision &+= 1
+            }
+            try reloadBusinessCards()
+            if !uiTesting { try? await refreshBusinessCardCatalog() }
+            message = "A névjegyet töröltük."
+            return true
+        } catch {
+            message = error.localizedDescription
+            return false
+        }
     }
 
     func retrySync() {
@@ -302,24 +567,163 @@ final class AppStore: ObservableObject {
                     return
                 }
             }
-            await synchronize()
+            do {
+                try await refreshBusinessCardCatalog()
+            } catch {
+                message = error.localizedDescription
+            }
+            await synchronizeAllBusinessCards()
             await refreshFeatureFlags()
             profileLoadStatus = hasProfile || syncStatus != .failed ? .ready : .unavailable
         }
     }
 
-    func reset() throws {
-        guard let storage = fileStore else { throw ProfileError.damagedFile }
-        if try syncStore?.load().pendingUpload == true {
-            message = "Van még fel nem töltött módosítás. Előbb szinkronizálj vagy oldd fel az ütközést."
-            return
+    /// Reconciles the owner-scoped catalog whenever the app becomes active or
+    /// the user pulls to refresh. This is what makes a card created on Android,
+    /// the web, or another iPhone appear without signing out and back in.
+    func refreshBusinessCards() async {
+        guard !uiTesting, !busy, authStatus == .authenticated else { return }
+        do {
+            try await refreshBusinessCardCatalog()
+            await synchronizeAllBusinessCards()
+            profileLoadStatus = .ready
+        } catch {
+            if businessCards.isEmpty { profileLoadStatus = .unavailable }
+            message = error.localizedDescription
         }
-        try storage.reset()
-        try syncStore?.reset()
+    }
+
+    private func refreshBusinessCardCatalog() async throws {
+        guard !uiTesting, authStatus == .authenticated,
+              let cloud, let ownerID = userID,
+              var index = catalog, let catalogStore else { return }
+        guard !catalogRefreshInFlight else { return }
+        catalogRefreshInFlight = true
+        defer { catalogRefreshInFlight = false }
+
+        var localProfiles: [UUID: ContactProfile] = [:]
+        for entry in index.cards where entry.ownerID == ownerID {
+            let directory = catalogStore.cardDirectory(entry.profileID)
+            let metadata = try ProfileSyncStore(directory: directory).load()
+            let stored = try ProfileFileStore(directory: directory).load()
+            localProfiles[entry.profileID] = try metadata.pendingProfile ?? stored
+        }
+
+        let remoteCards = try await cloud.fetchProfiles(ownerID: ownerID, preserving: localProfiles)
+        guard userID == ownerID else { throw CloudError.accountMismatch }
+        let remoteIDs = Set(remoteCards.map { $0.0.id })
+
+        for (remote, downloaded) in remoteCards {
+            guard remote.ownerID == ownerID else { throw CloudError.accountMismatch }
+            let directory = catalogStore.cardDirectory(remote.id)
+            let profileStore = ProfileFileStore(directory: directory)
+            let metadataStore = ProfileSyncStore(directory: directory)
+            var metadata = try metadataStore.load()
+            guard metadata.profileID == nil || metadata.profileID == remote.id else {
+                throw ProfileError.damagedFile
+            }
+
+            if metadata.pendingUpload {
+                if !ProfileRevisionPolicy.mayUpload(
+                    localID: metadata.profileID,
+                    localRevision: metadata.remoteUpdatedAt,
+                    localFingerprint: metadata.remoteFingerprint,
+                    remoteID: remote.id,
+                    remoteRevision: remote.updatedAt,
+                    remoteFingerprint: remote.fingerprint
+                ) {
+                    metadata.conflict = true
+                    try metadataStore.save(metadata)
+                }
+            } else {
+                try downloaded.validate()
+                try profileStore.save(downloaded)
+                metadata.profileID = remote.id
+                metadata.remoteUpdatedAt = remote.updatedAt
+                metadata.remoteFingerprint = remote.fingerprint
+                metadata.pendingProfile = nil
+                metadata.pendingUpload = false
+                metadata.conflict = false
+                try metadataStore.save(metadata)
+            }
+
+            if let position = index.cards.firstIndex(where: { $0.profileID == remote.id }) {
+                index.cards[position].isPrimary = remote.isPrimary == true
+                index.cards[position].createdAt = remote.createdAt ?? index.cards[position].createdAt
+                index.cards[position].updatedAt = remote.updatedAt
+            } else {
+                index.cards.append(BusinessCardCatalogEntry(
+                    profileID: remote.id,
+                    ownerID: ownerID,
+                    isPrimary: remote.isPrimary == true,
+                    createdAt: remote.createdAt ?? remote.updatedAt,
+                    updatedAt: remote.updatedAt,
+                    presentation: CardPresentation()
+                ))
+            }
+        }
+
+        let locallyDeleted = index.cards.filter { !remoteIDs.contains($0.profileID) }
+        for entry in locallyDeleted {
+            let directory = catalogStore.cardDirectory(entry.profileID)
+            let metadata = try ProfileSyncStore(directory: directory).load()
+            if !metadata.pendingUpload {
+                if FileManager.default.fileExists(atPath: directory.path) {
+                    try FileManager.default.removeItem(at: directory)
+                }
+                index.cards.removeAll { $0.profileID == entry.profileID }
+            }
+        }
+
+        index.normalize()
+        try catalogStore.save(index)
+        catalog = index
+        if let active = index.activeProfileID {
+            try activateBusinessCard(active, persistSelection: false)
+        } else {
+            fileStore = nil
+            syncStore = nil
+            profile = ContactProfile()
+            activeBusinessCardID = nil
+            syncStatus = .localOnly
+            profileRevision &+= 1
+        }
+        try reloadBusinessCards()
+    }
+
+    func reset() throws {
+        guard let ownerID = userID, let catalogStore, let index = catalog else {
+            throw ProfileError.damagedFile
+        }
+        for entry in index.cards where entry.ownerID == ownerID {
+            let metadata = try ProfileSyncStore(directory: catalogStore.cardDirectory(entry.profileID)).load()
+            if metadata.pendingUpload {
+                message = "Van még fel nem töltött módosítás. Előbb szinkronizálj vagy oldd fel az ütközést."
+                return
+            }
+        }
+        try catalogStore.reset()
+        catalog = BusinessCardCatalog(ownerID: ownerID)
+        businessCards = []
+        activeBusinessCardID = nil
+        fileStore = nil
+        syncStore = nil
         profile = ContactProfile()
         profileRevision &+= 1
         storageError = nil
         syncStatus = .localOnly
+        if !uiTesting && authStatus == .authenticated {
+            profileLoadStatus = .loading
+            Task {
+                do {
+                    try await refreshBusinessCardCatalog()
+                    profileLoadStatus = .ready
+                } catch {
+                    profileLoadStatus = .unavailable
+                    message = error.localizedDescription
+                }
+            }
+        }
     }
 
     func synchronize() async {
@@ -344,7 +748,8 @@ final class AppStore: ObservableObject {
         syncStatus = .syncing
         do {
             var metadata = try metadataStore.load()
-            let remoteBundle = try await cloud.fetchProfile(ownerID: id, preserving: localProfile,
+            let remoteBundle = try await cloud.fetchProfile(ownerID: id, profileID: metadata.profileID,
+                                                           preserving: localProfile,
                                                            loadPhoto: !metadata.pendingUpload)
             guard userID == id else { return }
             guard profileRevision == revision else {
@@ -415,7 +820,7 @@ final class AppStore: ObservableObject {
                         syncStatus = .pending
                         return
                     }
-                    try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
+                    try await cloud.syncSocialProfiles(ownerID: id, profileID: remote.id, value: localProfile,
                                                        expected: remoteBundle.1)
                 } else {
                     let reservedID = metadata.profileID ?? UUID()
@@ -452,7 +857,7 @@ final class AppStore: ObservableObject {
                     local.customDomainVerified = remote.customDomainVerified == true
                     try storage.save(local)
                     profile = local
-                    try await cloud.syncSocialProfiles(profileID: remote.id, value: localProfile,
+                    try await cloud.syncSocialProfiles(ownerID: id, profileID: remote.id, value: localProfile,
                                                        expected: ContactProfile())
                 }
                 guard userID == id else { return }
@@ -464,7 +869,8 @@ final class AppStore: ObservableObject {
                     syncStatus = .pending
                     return
                 }
-                let verified = try await cloud.fetchProfile(ownerID: id, preserving: profile, loadPhoto: false)
+                let verified = try await cloud.fetchProfile(ownerID: id, profileID: metadata.profileID,
+                                                            preserving: profile, loadPhoto: false)
                 guard userID == id else { return }
                 metadata = try metadataStore.load()
                 guard profileRevision == revision else { syncAgain = true; syncStatus = .pending; return }
@@ -505,6 +911,7 @@ final class AppStore: ObservableObject {
                     if !metadata.conflict { syncAgain = true }
                 } else { syncStatus = .localOnly }
             }
+            try updateActiveCardSnapshot()
         } catch let error as CloudError {
             guard userID == id else { return }
             if case .profileConflict = error {
@@ -526,6 +933,126 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// Uploads the active card first, then drains pending edits belonging to
+    /// the same signed-in owner without changing the card visible in the UI.
+    /// This closes the offline edge case where a user edits one card, switches
+    /// to another, and later expects both changes to appear on Android or web.
+    private func synchronizeAllBusinessCards() async {
+        await synchronize()
+        guard !syncInFlight else { return }
+        await synchronizeInactiveBusinessCards()
+    }
+
+    private func synchronizeInactiveBusinessCards() async {
+        guard !uiTesting, !pendingCatalogSyncInFlight, !syncInFlight,
+              authStatus == .authenticated, let cloud, let ownerID = userID,
+              let catalogStore, let currentCatalog = catalog else { return }
+        pendingCatalogSyncInFlight = true
+        defer { pendingCatalogSyncInFlight = false }
+
+        let activeID = activeBusinessCardID
+        let candidates = currentCatalog.cards.filter {
+            $0.ownerID == ownerID && $0.profileID != activeID
+        }
+        for entry in candidates {
+            guard userID == ownerID, authStatus == .authenticated else { return }
+            let directory = catalogStore.cardDirectory(entry.profileID)
+            let profileStore = ProfileFileStore(directory: directory)
+            let metadataStore = ProfileSyncStore(directory: directory)
+            do {
+                var metadata = try metadataStore.load()
+                guard metadata.pendingUpload else { continue }
+                guard metadata.profileID == nil || metadata.profileID == entry.profileID else {
+                    throw ProfileError.damagedFile
+                }
+                var local = try metadata.pendingProfile ?? profileStore.load()
+                try local.validate()
+                let remoteBundle = try await cloud.fetchProfile(
+                    ownerID: ownerID, profileID: entry.profileID,
+                    preserving: local, loadPhoto: false
+                )
+                guard userID == ownerID else { throw CloudError.accountMismatch }
+
+                if let remoteBundle {
+                    guard ProfileRevisionPolicy.mayUpload(
+                        localID: metadata.profileID,
+                        localRevision: metadata.remoteUpdatedAt,
+                        localFingerprint: metadata.remoteFingerprint,
+                        remoteID: remoteBundle.0.id,
+                        remoteRevision: remoteBundle.0.updatedAt,
+                        remoteFingerprint: remoteBundle.0.fingerprint
+                    ) else { throw CloudError.profileConflict }
+                    guard let updated = try await cloud.updateProfile(
+                        ownerID: ownerID, profileID: entry.profileID, profile: local,
+                        expectedUpdatedAt: remoteBundle.0.updatedAt,
+                        previousAppearance: remoteBundle.0.appearance,
+                        previousLogoBase64: remoteBundle.1.logoBase64,
+                        theme: remoteBundle.0.theme
+                    ) else { throw CloudError.profileConflict }
+                    guard updated.ownerID == ownerID, updated.id == entry.profileID else {
+                        throw CloudError.accountMismatch
+                    }
+                    try await cloud.syncSocialProfiles(
+                        ownerID: ownerID, profileID: entry.profileID,
+                        value: local, expected: remoteBundle.1
+                    )
+                } else {
+                    // A known server revision disappearing is a deletion
+                    // conflict; only a never-uploaded local card may be created.
+                    guard metadata.remoteUpdatedAt == nil else { throw CloudError.profileConflict }
+                    let created = try await cloud.createProfile(
+                        ownerID: ownerID, profileID: entry.profileID, profile: local
+                    )
+                    guard created.ownerID == ownerID, created.id == entry.profileID else {
+                        throw CloudError.accountMismatch
+                    }
+                    local.publicSlug = created.slug
+                    local.customDomain = created.customDomain ?? ""
+                    local.customDomainVerified = created.customDomainVerified == true
+                    try await cloud.syncSocialProfiles(
+                        ownerID: ownerID, profileID: entry.profileID,
+                        value: local, expected: ContactProfile()
+                    )
+                }
+
+                let verified = try await cloud.fetchProfile(
+                    ownerID: ownerID, profileID: entry.profileID,
+                    preserving: local, loadPhoto: false
+                )
+                guard userID == ownerID, let verified,
+                      verified.0.ownerID == ownerID,
+                      verified.0.id == entry.profileID,
+                      verified.0.matches(local, remoteLogo: verified.1.logoBase64) else {
+                    throw CloudError.profileConflict
+                }
+                local.publicSlug = verified.1.publicSlug
+                local.customDomain = verified.1.customDomain
+                local.customDomainVerified = verified.1.customDomainVerified
+                local.photoSyncInitialized = true
+                local.logoSyncInitialized = true
+                try profileStore.save(local)
+                metadata.profileID = entry.profileID
+                metadata.remoteUpdatedAt = verified.0.updatedAt
+                metadata.remoteFingerprint = verified.0.fingerprint
+                metadata.pendingProfile = nil
+                metadata.pendingUpload = false
+                metadata.conflict = false
+                try metadataStore.save(metadata)
+            } catch let error as CloudError {
+                guard userID == ownerID else { return }
+                if case .profileConflict = error, var metadata = try? metadataStore.load() {
+                    metadata.conflict = true
+                    try? metadataStore.save(metadata)
+                }
+                // Keep the journal pending. Selecting this card surfaces the
+                // exact conflict/failure state and its normal resolution UI.
+            } catch {
+                guard userID == ownerID else { return }
+            }
+        }
+        if userID == ownerID { try? reloadBusinessCards() }
+    }
+
     func resolveSyncConflict(keepLocal: Bool) async {
         guard syncStatus == .conflict, !syncInFlight, authStatus == .authenticated,
               let cloud, let id = userID, let storage = fileStore, let metadataStore = syncStore else { return }
@@ -535,9 +1062,10 @@ final class AppStore: ObservableObject {
         defer { syncInFlight = false }
         syncStatus = .syncing
         do {
-            let remote = try await cloud.fetchProfile(ownerID: id, preserving: ContactProfile(), loadPhoto: !keepLocal)
-            guard revision == profileRevision, userID == id else { syncStatus = .pending; return }
             var metadata = try metadataStore.load()
+            let remote = try await cloud.fetchProfile(ownerID: id, profileID: metadata.profileID,
+                                                      preserving: ContactProfile(), loadPhoto: !keepLocal)
+            guard revision == profileRevision, userID == id else { syncStatus = .pending; return }
             metadata.profileID = remote?.0.id
             metadata.remoteUpdatedAt = remote?.0.updatedAt
             metadata.remoteFingerprint = remote?.0.fingerprint
@@ -563,6 +1091,7 @@ final class AppStore: ObservableObject {
                 metadata.pendingProfile = nil
                 try metadataStore.save(metadata)
                 syncStatus = .synced
+                try updateActiveCardSnapshot()
             }
         } catch {
             syncStatus = .conflict
@@ -573,7 +1102,15 @@ final class AppStore: ObservableObject {
     func dismissMessage() { message = nil }
 
     private func completeInitialProfileLoad() async {
-        await synchronize()
+        do {
+            try await refreshBusinessCardCatalog()
+        } catch {
+            if businessCards.isEmpty {
+                syncStatus = .failed
+                message = error.localizedDescription
+            }
+        }
+        await synchronizeAllBusinessCards()
         await refreshFeatureFlags()
         profileLoadStatus = hasProfile || syncStatus != .failed ? .ready : .unavailable
     }
@@ -585,15 +1122,33 @@ final class AppStore: ObservableObject {
 
     private func clearUser() {
         profile = ContactProfile()
+        businessCards = []
+        activeBusinessCardID = nil
         profileRevision &+= 1
         fileStore = nil
         syncStore = nil
+        catalogStore = nil
+        catalog = nil
         userID = nil
         userEmail = ""
         storageError = nil
         syncStatus = .localOnly
         profileLoadStatus = .loading
         featureFlags = AppFeatureFlags()
+        syncInFlight = false
+        syncAgain = false
+        catalogRefreshInFlight = false
+        pendingCatalogSyncInFlight = false
+        syncFailureMessage = nil
+    }
+
+    private func hasPendingBusinessCardUploads() -> Bool {
+        guard let ownerID = userID, let catalogStore, let catalog else { return false }
+        return catalog.cards.contains { entry in
+            guard entry.ownerID == ownerID else { return true }
+            return (try? ProfileSyncStore(directory: catalogStore.cardDirectory(entry.profileID))
+                .load().pendingUpload) != false
+        }
     }
 
     @discardableResult
@@ -732,39 +1287,18 @@ private struct LaunchScreen: View {
 
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
     @Binding var themeMode: ThemeMode
-    @State private var selection: RootTab = .home
 
     var body: some View {
-        TabView(selection: $selection) {
-            HomeScreen(selectedTab: $selection)
-                .tabItem { Label("Kezdőlap", systemImage: "house") }
-                .tag(RootTab.home)
-
-            CardScreen(selectedTab: $selection)
-                .tabItem { Label("Névjegy", systemImage: "person.crop.rectangle") }
-                .tag(RootTab.card)
-
-            ShareScreen()
-                .tabItem { Label("Megosztás", systemImage: "square.and.arrow.up") }
-                .tag(RootTab.share)
-
-            SettingsScreen(themeMode: $themeMode)
-                .tabItem { Label("Beállítások", systemImage: "gearshape") }
-                .tag(RootTab.settings)
+        HomeScreen(themeMode: $themeMode)
+            .tint(VizitColor.primary)
+        .onAppear { presentation.value = store.activeCardPresentation }
+        .onChange(of: store.activeBusinessCardID) { _ in
+            presentation.value = store.activeCardPresentation
         }
-        .tint(VizitColor.primary)
-        .toolbarBackground(VizitColor.surface, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
-        .overlay(alignment: .top) {
-            if store.authStatus == .offline {
-                VizitBanner(
-                    text: "Offline mód – a helyi névjegyed olvasható és szerkeszthető.",
-                    tone: .info
-                )
-                .padding(.horizontal, VizitSpace.md)
-                .padding(.top, VizitSpace.xxs)
-            }
+        .onChange(of: presentation.value) { value in
+            store.updateActiveCardPresentation(value)
         }
     }
 }

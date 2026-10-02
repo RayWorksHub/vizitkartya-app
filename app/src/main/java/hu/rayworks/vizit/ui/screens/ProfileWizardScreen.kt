@@ -4,10 +4,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +28,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,9 +80,12 @@ fun ProfileWizardScreen(
     var error by remember { mutableStateOf("") }
     var skipped by remember { mutableStateOf(setOf<String>()) }
     var returnToReview by remember { mutableStateOf(false) }
+    var introShown by rememberSaveable { mutableStateOf(true) }
     val steps = if (type == "private") listOf("type", "identity", "photo", "contact", "social", "look", "done")
         else listOf("type", "identity", "photo", "logo", "contact", "social", "bio", "look", "done")
     val key = steps[step.coerceIn(steps.indices)]
+    val visualGroups = v10WizardVisualGroups(type)
+    val currentVisualGroupIndex = visualGroups.indexOfFirst { key in it.steps }.coerceAtLeast(0)
     val names = mapOf("type" to "Névjegy típusa", "identity" to "Alapadatok", "photo" to "Profilkép",
         "logo" to "Céges logó", "contact" to "Elérhetőségek", "social" to "Közösségi profilok",
         "bio" to "Bemutatkozás", "look" to "Stílus", "done" to "Befejezés")
@@ -126,6 +135,16 @@ fun ProfileWizardScreen(
         if (steps[step] == "done" && !slugEdited) draft = draft.copy(publicSlug = wizardSlug(
             if (type == "business") draft.company else draft.fullName))
     }
+    fun selectType(selected: String) {
+        type = selected
+        if (selected == "private") {
+            draft = draft.copy(company = "", jobTitle = "", bio = "", logoBase64 = "")
+        }
+        step = 1
+        returnToReview = false
+        error = ""
+        introShown = false
+    }
     if (published) {
         Column(Modifier.fillMaxSize().background(Vizit.colors.canvas)
             .windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars)
@@ -140,20 +159,30 @@ fun ProfileWizardScreen(
         }
         return
     }
-    BackHandler(enabled = step > 0 || onCancel != null) {
-        if (step == 0) onCancel?.invoke()
-        else {
-            step = if (returnToReview) steps.lastIndex else step - 1
+    BackHandler(enabled = (introShown && onCancel != null) || (!introShown && (step > 0 || onCancel != null))) {
+        if (introShown) {
+            onCancel?.invoke()
+        } else if (!returnToReview && step <= 1) {
+            introShown = true
+        } else {
+            step = if (returnToReview) steps.lastIndex else (step - 1).coerceAtLeast(1)
             returnToReview = false
             error = ""
         }
     }
-    Column(Modifier.fillMaxSize().background(Vizit.colors.canvas).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars).imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(names[key].orEmpty(), style = Vizit.type.h2, color = Vizit.colors.textPrimary)
-            Text(if (key == "done") "Kész" else "${step + 1} / ${steps.lastIndex}", color = Vizit.colors.textMuted)
-        }
-        LinearProgressIndicator(progress = { (step + 1f) / steps.lastIndex.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+    val contentAccessibility = if (introShown) Modifier.clearAndSetSemantics { } else Modifier
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(Vizit.colors.canvas).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars).imePadding().then(contentAccessibility)) {
+        V10WizardTopBar(
+            profileType = if (type == "private") "Magánszemély" else "Vállalkozói",
+            group = visualGroups[currentVisualGroupIndex],
+            groupIndex = currentVisualGroupIndex,
+            groupCount = visualGroups.size,
+            canClose = isAdditional && onCancel != null,
+            onClose = { onCancel?.invoke() },
+            onChangeType = { introShown = true },
+        )
+        V10WizardProgress(groups = visualGroups, currentIndex = currentVisualGroupIndex)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (key != "type") ProfileCard(profile = draft, presentation = presentation.copy(colorway = style))
             when (key) {
@@ -253,7 +282,9 @@ fun ProfileWizardScreen(
                 )
             }
             if (step > 0) VizitButton("Vissza", onClick = {
-                step = if (returnToReview) steps.lastIndex else step - 1; returnToReview = false; error = ""
+                if (!returnToReview && step == 1) introShown = true
+                else step = if (returnToReview) steps.lastIndex else (step - 1).coerceAtLeast(1)
+                returnToReview = false; error = ""
             }, style = VizitButtonStyle.Tertiary, modifier = Modifier.fillMaxWidth())
             VizitButton(if (key == "done") (if (draft.isPublic) "Névjegy publikálása" else "Névjegy mentése")
                 else (if (returnToReview) "Mentés" else "Tovább"), onClick = {
@@ -270,6 +301,20 @@ fun ProfileWizardScreen(
             }, enabled = valid && (key !in optional || has) && !loading, loading = loading, modifier = Modifier.fillMaxWidth())
             if (key in optional) VizitButton("Később állítom be", onClick = { advance(true) }, style = VizitButtonStyle.Tertiary,
                 modifier = Modifier.fillMaxWidth(), enabled = !loading)
+        }
+    }
+        val wizardEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
+        AnimatedVisibility(
+            visible = introShown,
+            enter = slideInHorizontally(tween(380, easing = wizardEasing)) { -it },
+            exit = slideOutHorizontally(tween(380, easing = wizardEasing)) { -it },
+        ) {
+            V10ProfileWizardIntro(
+                selectedType = type,
+                canClose = onCancel != null,
+                onClose = { onCancel?.invoke() },
+                onPick = ::selectType,
+            )
         }
     }
 }

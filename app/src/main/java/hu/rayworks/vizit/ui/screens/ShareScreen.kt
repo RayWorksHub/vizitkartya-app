@@ -352,7 +352,7 @@ private fun QrIsland(bitmap: Bitmap, caption: String) {
 }
 
 @Composable
-private fun FullScreenQrDialog(bitmap: Bitmap, onDismiss: () -> Unit) {
+internal fun FullScreenQrDialog(bitmap: Bitmap, onDismiss: () -> Unit) {
     val activity = LocalContext.current.findActivity()
     DisposableEffect(activity) {
         val original = activity?.window?.attributes?.screenBrightness

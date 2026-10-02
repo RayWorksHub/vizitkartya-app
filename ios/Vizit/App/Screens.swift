@@ -6,10 +6,664 @@ import WebKit
 
 // MARK: - Home
 
+/// V10's default B layout: one focused screen, the swipeable card stack from
+/// the supplied prototype, and every production feature reachable from the
+/// avatar menu. No sample or prototype state enters this view.
+struct HomeScreen: View {
+    @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var presentation: CardPresentationStore
+    @Environment(\.openURL) private var openURL
+    @Binding var themeMode: ThemeMode
+    @State private var sheet: V10HomeSheet?
+    @State private var showScanner = false
+    @State private var creatingCard = false
+    @State private var fullScreenQR: V10QRPreview?
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 16) {
+                    V10HomeHeader(profile: store.profile) { sheet = .menu }
+                        .padding(.horizontal, 16)
+
+                    if let issue = store.storageError {
+                        VizitBanner(text: issue, tone: .error).padding(.horizontal, 16)
+                    } else if store.authStatus == .offline || [.pending, .conflict, .failed].contains(store.syncStatus) {
+                        VizitBanner(text: store.syncStatus.label, tone: store.syncStatus.tone)
+                            .padding(.horizontal, 16)
+                    }
+
+                    Spacer(minLength: 0)
+                    V10ProfileStack(
+                        cards: store.businessCards,
+                        activeID: store.activeBusinessCardID,
+                        configuration: store.configuration,
+                        width: min(geometry.size.width, 620),
+                        onSelect: store.selectBusinessCard,
+                        onCreate: { creatingCard = true },
+                        onQR: showQR
+                    )
+                    Spacer(minLength: 0)
+
+                    VStack(spacing: 10) {
+                        VizitButton(
+                            title: "Megosztás", systemImage: "square.and.arrow.up",
+                            isEnabled: store.activeBusinessCardID != nil
+                        ) { openSheet(.share) }
+                        VizitButton(
+                            title: "Profil megnyitása", systemImage: "arrow.up.right.square",
+                            kind: .secondary, isEnabled: store.activeBusinessCardID != nil
+                        ) { openActiveProfile() }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.bottom, 18)
+                .frame(minHeight: geometry.size.height)
+                .frame(maxWidth: 620)
+                .frame(maxWidth: .infinity)
+            }
+            .background(VizitColor.canvas)
+            .refreshable { await store.refreshBusinessCards() }
+        }
+        .background(VizitColor.canvas.ignoresSafeArea())
+        .sheet(item: $sheet) { destination in sheetView(destination) }
+        .fullScreenCover(isPresented: $showScanner) { ScanFlow() }
+        .fullScreenCover(isPresented: $creatingCard) {
+            ProfileWizard(
+                isAdditional: true,
+                onSaveFailed: {},
+                onFinished: { creatingCard = false },
+                onCancel: { creatingCard = false }
+            )
+        }
+        .fullScreenCover(item: $fullScreenQR) { preview in
+            FullScreenQRView(image: preview.image, title: preview.title) { fullScreenQR = nil }
+        }
+    }
+
+    @ViewBuilder
+    private func sheetView(_ destination: V10HomeSheet) -> some View {
+        switch destination {
+        case .menu:
+            V10HomeMenu(
+                store: store,
+                onProfiles: { openSheet(.profiles) },
+                onEdit: { openSheet(.edit) },
+                onVisibility: { openSheet(.visibility) },
+                onAppearance: { openSheet(.appearance) },
+                onScan: { sheet = nil; showScanner = true },
+                onPortal: { openSheet(.portal) },
+                onAnalytics: { sheet = nil; openDashboard("analytics") },
+                onEditor: { sheet = nil; openDashboard("profile") },
+                onCRM: { sheet = nil; openDashboard("crm") },
+                onSettings: { openSheet(.settings) }
+            )
+        case .profiles:
+            V10ProfilesSheet(onCreate: { sheet = nil; creatingCard = true })
+        case .edit:
+            ProfileEditor(draft: store.profile)
+        case .visibility:
+            DataVisibilityScreen(store: presentation, profile: store.profile, isPublicProfile: store.profile.isPublic)
+        case .appearance:
+            CardAppearanceScreen(store: presentation, profile: store.profile)
+        case .share:
+            ShareScreen()
+        case .portal:
+            BusinessHubScreen()
+        case .card:
+            CardScreen(selectedTab: Binding(
+                get: { .card },
+                set: { if $0 == .share { openSheet(.share) } }
+            ))
+        case .settings:
+            SettingsScreen(themeMode: $themeMode)
+        }
+    }
+
+    private func openSheet(_ destination: V10HomeSheet) {
+        guard sheet != destination else { return }
+        if sheet != nil {
+            sheet = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) { sheet = destination }
+        } else {
+            sheet = destination
+        }
+    }
+
+    private func openDashboard(_ destination: String) {
+        if let url = URL(string: "https://www.vizitkartyam.hu/auth/sign-in?next=%2Fdashboard%2F\(destination)") {
+            openURL(url)
+        }
+    }
+
+    private func openActiveProfile() {
+        guard let base = store.configuration?.publicProfileBaseURL,
+              let url = PublicProfileLink.preferred(
+                baseURL: base,
+                slug: store.profile.publicSlug,
+                customDomain: store.profile.customDomain,
+                customDomainVerified: store.profile.customDomainVerified
+              ), store.profile.isPublic else {
+            openSheet(.card)
+            return
+        }
+        openURL(url)
+    }
+
+    private func showQR(_ card: OwnedBusinessCard) {
+        guard let payload = V10ProfileCard.qrPayload(card, configuration: store.configuration),
+              let image = QRImage.make(payload) else {
+            openSheet(.share)
+            return
+        }
+        fullScreenQR = V10QRPreview(image: image, title: card.profile.displayName)
+    }
+}
+
+private enum V10HomeSheet: String, Identifiable {
+    case menu, profiles, edit, visibility, appearance, share, portal, card, settings
+    var id: String { rawValue }
+}
+
+private struct V10QRPreview: Identifiable {
+    let id = UUID()
+    let image: UIImage
+    let title: String
+}
+
+private struct V10HomeHeader: View {
+    let profile: ContactProfile
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("VIZIT")
+                .font(.system(size: 26, weight: .heavy))
+                .tracking(5.2)
+                .foregroundStyle(VizitColor.textPrimary)
+            Spacer(minLength: 0)
+            Button(action: action) {
+                VizitAvatar(profile: profile, size: 44)
+                    .padding(2)
+                    .background(Circle().fill(VizitColor.surface))
+                    .padding(1.5)
+                    .background(Circle().fill(VizitColor.border))
+            }
+            .buttonStyle(V10PressStyle())
+            .accessibilityLabel("Menü")
+        }
+        .frame(minHeight: 58)
+        .padding(.top, 4)
+    }
+}
+
+private struct V10PressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private struct V10ProfileStack: View {
+    let cards: [OwnedBusinessCard]
+    let activeID: UUID?
+    let configuration: AppConfiguration?
+    let width: CGFloat
+    let onSelect: (UUID) -> Void
+    let onCreate: () -> Void
+    let onQR: (OwnedBusinessCard) -> Void
+    @State private var legacyPosition = 0
+
+    private var selected: Int {
+        cards.firstIndex(where: { $0.profileID == activeID }) ?? 0
+    }
+
+    @ViewBuilder var body: some View {
+        if cards.isEmpty {
+            V10NewProfileCard(template: nil, configuration: configuration, onCreate: onCreate)
+                .padding(.horizontal, 28)
+        } else if #available(iOS 17.0, *) {
+            V10ProfileStack17(
+                cards: cards, activeID: activeID, configuration: configuration, width: width,
+                onSelect: onSelect, onCreate: onCreate, onQR: onQR
+            )
+        } else {
+            VStack(spacing: 0) {
+                TabView(selection: Binding(
+                    get: { legacyPosition },
+                    set: { index in
+                        legacyPosition = index
+                        if index < cards.count { onSelect(cards[index].profileID) }
+                    }
+                )) {
+                    ForEach(Array(cards.enumerated()), id: \.element.profileID) { index, card in
+                        V10ProfileCard(card: card, configuration: configuration, onQR: { onQR(card) })
+                            .tag(index)
+                            .padding(.horizontal, 28)
+                    }
+                    V10NewProfileCard(template: cards.first, configuration: configuration, onCreate: onCreate)
+                        .padding(.horizontal, 28)
+                        .tag(cards.count)
+                }
+                .frame(height: 330)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                V10Dots(count: cards.count, selected: legacyPosition) { index in
+                    legacyPosition = index
+                    if index < cards.count { onSelect(cards[index].profileID) }
+                }
+            }
+            .onAppear { legacyPosition = selected }
+            .onChange(of: activeID) { next in
+                guard let next, let index = cards.firstIndex(where: { $0.profileID == next }) else { return }
+                legacyPosition = index
+            }
+        }
+    }
+}
+
+@available(iOS 17.0, *)
+private struct V10ProfileStack17: View {
+    let cards: [OwnedBusinessCard]
+    let activeID: UUID?
+    let configuration: AppConfiguration?
+    let width: CGFloat
+    let onSelect: (UUID) -> Void
+    let onCreate: () -> Void
+    let onQR: (OwnedBusinessCard) -> Void
+    @State private var position: Int?
+
+    private var selected: Int {
+        position ?? cards.firstIndex(where: { $0.profileID == activeID }) ?? 0
+    }
+
+    var body: some View {
+        let cardWidth = max(width - 56, 220)
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(0...cards.count, id: \.self) { index in
+                        Group {
+                            if index < cards.count {
+                                let card = cards[index]
+                                V10ProfileCard(card: card, configuration: configuration, onQR: { onQR(card) })
+                            } else {
+                                V10NewProfileCard(
+                                    template: cards.first,
+                                    configuration: configuration,
+                                    onCreate: onCreate
+                                )
+                            }
+                        }
+                        .frame(width: cardWidth)
+                        .id(index)
+                    }
+                }
+                .padding(.top, 6)
+                .padding(.bottom, 20)
+                .scrollTargetLayout()
+            }
+            .contentMargins(.horizontal, 28, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            .scrollPosition(id: $position)
+            .scrollClipDisabled()
+
+            V10Dots(count: cards.count, selected: selected) { index in
+                withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.32)) { position = index }
+            }
+        }
+        .onAppear { position = cards.firstIndex(where: { $0.profileID == activeID }) ?? 0 }
+        .onChange(of: position) { next in
+            guard let next else { return }
+            if next < cards.count { onSelect(cards[next].profileID) }
+        }
+        .onChange(of: activeID) { next in
+            guard let next,
+                  let index = cards.firstIndex(where: { $0.profileID == next }),
+                  position != index else { return }
+            withAnimation(.easeOut(duration: 0.2)) { position = index }
+        }
+    }
+}
+
+private struct V10ProfileCard: View {
+    let card: OwnedBusinessCard
+    let configuration: AppConfiguration?
+    let onQR: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                HStack(spacing: 7) {
+                    Circle().fill(accent).frame(width: 9, height: 9)
+                    Text(label).font(.system(size: 13, weight: .bold)).lineLimit(1)
+                }
+                .padding(.leading, 9)
+                .padding(.trailing, 11)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(VizitColor.skeletonBase))
+                Spacer(minLength: 0)
+                if card.isPrimary {
+                    Text("ELSŐDLEGES")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(0.6)
+                        .foregroundStyle(VizitColor.primary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(VizitColor.primarySubtle))
+                }
+            }
+
+            Button(action: onQR) {
+                Group {
+                    if let payload = Self.qrPayload(card, configuration: configuration),
+                       let image = QRImage.make(payload) {
+                        Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
+                    } else {
+                        Image(systemName: "qrcode")
+                            .resizable().scaledToFit().padding(28)
+                            .foregroundStyle(Color(uiColor: UIColor(hex: 0x0B1330)))
+                    }
+                }
+                .padding(4)
+                .frame(width: 184, height: 184)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(V10PressStyle())
+            .accessibilityLabel("QR-kód teljes képernyőn")
+
+            VStack(spacing: 2) {
+                Text(card.profile.displayName)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(VizitColor.textPrimary)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("card.name")
+                Text(shortAddress)
+                    .font(.system(size: 13))
+                    .foregroundStyle(VizitColor.textSecondary)
+                    .lineLimit(1)
+            }
+            .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(VizitColor.surface))
+        .shadow(color: VizitColor.ink.opacity(0.05), radius: 1, y: 1)
+        .shadow(color: VizitColor.ink.opacity(0.08), radius: 12, y: 10)
+    }
+
+    private var label: String {
+        card.profile.company.isEmpty ? "Személyes" : card.profile.company
+    }
+
+    private var shortAddress: String {
+        if card.profile.isPublic, !card.profile.publicSlug.isEmpty {
+            return "vizitkartyam.hu/\(card.profile.publicSlug)"
+        }
+        return card.profile.email.isEmpty ? card.profile.phone : card.profile.email
+    }
+
+    private var accent: Color {
+        Color(uiColor: UIColor(hex: card.presentation.colorway.accent))
+    }
+
+    static func qrPayload(_ card: OwnedBusinessCard, configuration: AppConfiguration?) -> String? {
+        if let base = configuration?.publicProfileBaseURL, card.profile.isPublic,
+           let url = PublicProfileLink.preferred(
+            baseURL: base,
+            slug: card.profile.publicSlug,
+            customDomain: card.profile.customDomain,
+            customDomainVerified: card.profile.customDomainVerified
+           ) {
+            return url.absoluteString
+        }
+        return try? VCard.qrPayload(card.profile.visible(through: card.presentation))
+    }
+}
+
+private struct V10NewProfileCard: View {
+    let template: OwnedBusinessCard?
+    let configuration: AppConfiguration?
+    let onCreate: () -> Void
+
+    var body: some View {
+        ZStack {
+            if let template {
+                V10ProfileCard(card: template, configuration: configuration, onQR: {})
+                    .hidden()
+                    .accessibilityHidden(true)
+            } else {
+                Color.clear.frame(height: 304)
+            }
+            VStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(VizitColor.primary)
+                    .frame(width: 64, height: 64)
+                    .background(Circle().fill(VizitColor.primarySubtle))
+                Text("Új profil")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(VizitColor.textPrimary)
+                Button("Létrehozás", action: onCreate)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(VizitColor.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(VizitColor.primarySubtle))
+                    .buttonStyle(V10PressStyle())
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(VizitColor.border, style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .onTapGesture(perform: onCreate)
+    }
+}
+
+private struct V10Dots: View {
+    let count: Int
+    let selected: Int
+    let onPick: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0...count, id: \.self) { index in
+                let current = index == selected
+                let add = index == count
+                Capsule()
+                    .fill(current ? VizitColor.textPrimary : (add ? Color.clear : VizitColor.borderStrong))
+                    .overlay {
+                        Capsule().stroke(add && !current ? VizitColor.borderStrong : .clear, lineWidth: 1.5)
+                    }
+                    .frame(width: current ? 22 : 8, height: 8)
+                    .padding(.horizontal, 3)
+                    .frame(height: 20)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onPick(index) }
+                    .accessibilityLabel(add ? "Új profil" : "\(index + 1). profil")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(.easeOut(duration: 0.2), value: selected)
+    }
+}
+
+private struct V10HomeMenu: View {
+    @ObservedObject var store: AppStore
+    let onProfiles: () -> Void
+    let onEdit: () -> Void
+    let onVisibility: () -> Void
+    let onAppearance: () -> Void
+    let onScan: () -> Void
+    let onPortal: () -> Void
+    let onAnalytics: () -> Void
+    let onEditor: () -> Void
+    let onCRM: () -> Void
+    let onSettings: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 12) {
+                            VizitAvatar(profile: store.profile, size: 48)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(store.profile.displayName)
+                                    .font(VizitFont.h3)
+                                    .foregroundStyle(VizitColor.textPrimary)
+                                    .lineLimit(1)
+                                Text(store.accountEmail)
+                                    .font(VizitFont.caption)
+                                    .foregroundStyle(VizitColor.textSecondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            VizitStatusPill(text: store.syncStatus.label, tone: store.syncStatus.tone)
+                        }
+                        .padding(.top, 16)
+                        .padding(.horizontal, 4)
+
+                        VizitGroup {
+                            VizitRow(
+                                label: "Profiljaid", systemImage: "person.2",
+                                value: "\(store.businessCards.count)", action: onProfiles
+                            )
+                            VizitDivider()
+                            VizitRow(label: "Profil szerkesztése", systemImage: "pencil", action: onEdit)
+                            VizitDivider()
+                            VizitRow(label: "Adatok láthatósága", systemImage: "eye", action: onVisibility)
+                            VizitDivider()
+                            VizitRow(label: "Kártya megjelenése", systemImage: "paintpalette", action: onAppearance)
+                        }
+
+                        VizitGroup {
+                            if store.featureFlags.qrScanner {
+                                VizitRow(label: "Névjegy beolvasása", systemImage: "qrcode.viewfinder", action: onScan)
+                                VizitDivider()
+                            }
+                            if store.featureFlags.analytics {
+                                VizitRow(
+                                    label: "Statisztikák", systemImage: "chart.bar",
+                                    supporting: "Megtekintések, mentések és kattintások", action: onAnalytics
+                                )
+                                VizitDivider()
+                            }
+                            if store.featureFlags.businessPortal {
+                                VizitRow(
+                                    label: "Vállalkozói Portál", systemImage: "book.closed",
+                                    supporting: "VOSZ, edukáció, digitális segítség", action: onPortal
+                                )
+                            }
+                        }
+
+                        VizitGroup {
+                            if store.featureFlags.onlineEditor {
+                                VizitRow(
+                                    label: "Online szerkesztő", systemImage: "globe",
+                                    supporting: "Színek, logó, közösségi linkek", action: onEditor
+                                )
+                                VizitDivider()
+                            }
+                            if store.featureFlags.crm {
+                                VizitRow(
+                                    label: "CRM", systemImage: "person.2",
+                                    supporting: "Partnerek, ügyletek, feladatok", action: onCRM
+                                )
+                                VizitDivider()
+                            }
+                            VizitRow(label: "Beállítások", systemImage: "gearshape", action: onSettings)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 30)
+                    .frame(maxWidth: 620)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationTitle("Menü")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+private struct V10ProfilesSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    let onCreate: () -> Void
+    @State private var confirmDelete = false
+
+    var body: some View {
+        NavigationStack {
+            VizitScreen {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        VizitGroup {
+                            ForEach(Array(store.businessCards.enumerated()), id: \.element.profileID) { index, card in
+                                if index > 0 { VizitDivider() }
+                                VizitRow(
+                                    label: card.profile.company.isEmpty
+                                        ? card.profile.displayName : card.profile.company,
+                                    systemImage: card.profileID == store.activeBusinessCardID
+                                        ? "checkmark.circle.fill" : "line.3.horizontal",
+                                    value: card.isPrimary ? "Elsődleges" : nil,
+                                    supporting: card.profile.isPublic
+                                        ? "vizitkartyam.hu/\(card.profile.publicSlug)"
+                                        : card.profile.displayName
+                                ) {
+                                    store.selectBusinessCard(card.profileID)
+                                    dismiss()
+                                }
+                            }
+                            if !store.businessCards.isEmpty { VizitDivider() }
+                            VizitRow(label: "Új profil", systemImage: "plus", action: onCreate)
+                        }
+                        if store.activeBusinessCardID != nil {
+                            VizitGroup(danger: true) {
+                                VizitRow(
+                                    label: "Aktív profil törlése", systemImage: "trash",
+                                    destructive: true, showsChevron: false
+                                ) { confirmDelete = true }
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Profiljaid")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Kész") { dismiss() } }
+            }
+            .confirmationDialog(
+                "Biztosan törlöd ezt a profilt?",
+                isPresented: $confirmDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Profil törlése", role: .destructive) {
+                    Task { _ = await store.deleteActiveBusinessCard() }
+                }
+                Button("Mégse", role: .cancel) {}
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 /// Home answers four questions immediately: who is signed in, what their card
 /// looks like, how to hand it over, and whether anything needs attention.
 /// One primary action, three shortcuts, then status.
-struct HomeScreen: View {
+private struct LegacyHomeScreen: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @Environment(\.openURL) private var openURL

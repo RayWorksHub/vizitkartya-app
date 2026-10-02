@@ -59,27 +59,27 @@ fun VizitButton(
 ) {
     val colors = Vizit.colors
     val active = enabled && !loading
-    val shape = RoundedCornerShape(Vizit.radius.lg)
+    val shape = RoundedCornerShape(26.dp)
 
     val container: Color = when {
         containerOverride != null -> containerOverride
         !active -> colors.controlDisabled
-        style == VizitButtonStyle.Primary -> colors.primary
-        style == VizitButtonStyle.Secondary -> colors.surface
+        style == VizitButtonStyle.Primary -> colors.primaryFill
+        style == VizitButtonStyle.Secondary -> Color.Transparent
         style == VizitButtonStyle.Tertiary -> Color.Transparent
-        else -> colors.error
+        else -> colors.errorFill
     }
     val content: Color = when {
         contentOverride != null -> contentOverride
         !active -> colors.textDisabled
-        style == VizitButtonStyle.Primary -> colors.textOnBrand
-        style == VizitButtonStyle.Secondary -> colors.textPrimary
+        style == VizitButtonStyle.Primary -> colors.onPrimary
+        style == VizitButtonStyle.Secondary -> colors.primary
         style == VizitButtonStyle.Tertiary -> colors.primary
-        else -> colors.textOnBrand
+        else -> colors.onPrimary
     }
     val border: BorderStroke? = when {
         containerOverride != null -> null
-        style == VizitButtonStyle.Secondary && active -> BorderStroke(1.dp, colors.borderStrong)
+        style == VizitButtonStyle.Secondary && active -> BorderStroke(1.dp, colors.outline)
         else -> null
     }
 

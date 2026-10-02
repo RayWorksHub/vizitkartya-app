@@ -390,11 +390,20 @@ struct ProfileEditor: View {
 
 }
 
+private struct V10WizardVisualGroup {
+    let id: String
+    let title: String
+    let color: Color
+    let steps: Set<String>
+}
+
 /// First card flow. Uses the existing AppStore save path and the device's own screen chrome.
 struct ProfileWizard: View {
+    var isAdditional = false
     var onSaving: () -> Void = {}
     var onSaveFailed: () -> Void = {}
     var onFinished: () -> Void = {}
+    var onCancel: (() -> Void)? = nil
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var presentation: CardPresentationStore
     @State private var draft: ContactProfile = {
@@ -413,6 +422,7 @@ struct ProfileWizard: View {
     @State private var processing = false
     @State private var published = false
     @State private var error: String?
+    @State private var introShown = true
 
     private var path: [String] {
         kind == "private" ? ["type", "identity", "photo", "contact", "social", "look", "done"]
@@ -428,6 +438,32 @@ struct ProfileWizard: View {
                           "logo": "Céges logó", "contact": "Elérhetőségek", "social": "Közösségi profilok",
                           "bio": "Bemutatkozás", "look": "Stílus", "done": "Befejezés"]
     private let optional: Set<String> = ["photo", "logo", "contact", "social", "bio"]
+    private var visualGroups: [V10WizardVisualGroup] {
+        var groups = [
+            V10WizardVisualGroup(
+                id: "personal", title: "Személyes adatok", color: VizitColor.primary,
+                steps: ["identity", "photo"]
+            )
+        ]
+        if kind != "private" {
+            groups.append(V10WizardVisualGroup(
+                id: "company", title: "Céges adatok", color: V10WizardIntroColor.amber,
+                steps: ["logo", "bio"]
+            ))
+        }
+        groups.append(V10WizardVisualGroup(
+            id: "online", title: "Online elérés", color: V10WizardIntroColor.teal,
+            steps: ["contact", "social"]
+        ))
+        groups.append(V10WizardVisualGroup(
+            id: "done", title: "Befejezés", color: VizitColor.success,
+            steps: ["look", "done"]
+        ))
+        return groups
+    }
+    private var currentVisualGroupIndex: Int {
+        visualGroups.firstIndex(where: { $0.steps.contains(step) }) ?? 0
+    }
 
     private var hasValue: Bool {
         switch step {
@@ -450,7 +486,8 @@ struct ProfileWizard: View {
     }
 
     var body: some View {
-        VizitScreen {
+        ZStack {
+            VizitScreen {
             if published {
                 VStack(spacing: VizitSpace.md) {
                     Text("Elkészült a névjegyed").font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
@@ -464,15 +501,16 @@ struct ProfileWizard: View {
                 .padding(VizitSpace.md)
             } else {
             VStack(spacing: 0) {
-                HStack {
-                    Text(titles[step] ?? "Névjegy").font(VizitFont.title).foregroundStyle(VizitColor.textPrimary)
-                    Spacer()
-                    Text(step == "done" ? "Kész" : "\(index + 1) / \(path.count - 1)")
-                        .font(VizitFont.caption).foregroundStyle(VizitColor.textMuted)
-                }
-                .padding(.horizontal, VizitSpace.md).padding(.top, VizitSpace.md)
-                ProgressView(value: Double(index + 1), total: Double(path.count - 1))
-                    .tint(VizitColor.primary).padding(.horizontal, VizitSpace.md).padding(.vertical, VizitSpace.sm)
+                V10WizardTopBar(
+                    profileType: kind == "private" ? "Magánszemély" : "Vállalkozói",
+                    group: visualGroups[currentVisualGroupIndex],
+                    groupIndex: currentVisualGroupIndex,
+                    groupCount: visualGroups.count,
+                    canClose: isAdditional && onCancel != nil,
+                    onClose: { onCancel?() },
+                    onChangeType: { introShown = true }
+                )
+                V10WizardProgress(groups: visualGroups, currentIndex: currentVisualGroupIndex)
                 ScrollView {
                     VStack(alignment: .leading, spacing: VizitSpace.md) {
                         if step != "type" {
@@ -488,7 +526,11 @@ struct ProfileWizard: View {
                 VStack(spacing: VizitSpace.xs) {
                     if index > 0 {
                         VizitButton(title: "Vissza", kind: .tertiary) {
-                            index = returning ? path.count - 1 : max(0, index - 1)
+                            if !returning && index == 1 {
+                                introShown = true
+                            } else {
+                                index = returning ? path.count - 1 : max(1, index - 1)
+                            }
                             returning = false; error = nil
                         }
                     }
@@ -506,7 +548,21 @@ struct ProfileWizard: View {
                 .background(VizitColor.surface)
             }
             }
+            }
+            .accessibilityHidden(introShown)
+            if !published && introShown {
+                V10WizardIntro(
+                    selectedKind: kind,
+                    canClose: onCancel != nil,
+                    onClose: { onCancel?() },
+                    onPick: selectKind
+                )
+                .transition(.move(edge: .leading))
+                .zIndex(2)
+            }
         }
+        .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.38), value: introShown)
+        .statusBarHidden(!published && introShown)
         .task(id: photo) { await process(photo, isLogo: false) }
         .task(id: logo) { await process(logo, isLogo: true) }
     }
@@ -514,7 +570,8 @@ struct ProfileWizard: View {
     @ViewBuilder private var content: some View {
         switch step {
         case "type":
-            Text("Hozzuk létre az első profilodat").font(VizitFont.title)
+            Text(isAdditional ? "Hozzuk létre az új profilodat" : "Hozzuk létre az első profilodat")
+                .font(VizitFont.title)
             Text("Először válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.")
                 .font(VizitFont.body).foregroundStyle(VizitColor.textSecondary)
             Text("Milyen névjegyet készítesz?").font(VizitFont.h3)
@@ -610,6 +667,19 @@ struct ProfileWizard: View {
         return String(plain.replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-")).prefix(50))
     }
+    private func selectKind(_ value: String) {
+        kind = value
+        if value == "private" {
+            draft.company = ""
+            draft.jobTitle = ""
+            draft.bio = ""
+            draft.logoBase64 = ""
+        }
+        index = min(1, path.count - 1)
+        withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.38)) {
+            introShown = false
+        }
+    }
     private func advance(skip: Bool) {
         if skip {
             switch step {
@@ -645,7 +715,18 @@ struct ProfileWizard: View {
     private func save() {
         guard let prepared = normalizeURLs() else { error = "A hivatkozások teljes, https:// kezdetű címek legyenek."; return }
         onSaving()
-        do { try store.save(prepared); presentation.value.colorway = selectedStyle; published = true }
+        do {
+            var cardPresentation = presentation.value
+            cardPresentation.colorway = selectedStyle
+            if isAdditional {
+                try store.createBusinessCard(prepared, presentation: cardPresentation)
+            } else {
+                try store.save(prepared)
+                store.updateActiveCardPresentation(cardPresentation)
+            }
+            presentation.value = cardPresentation
+            published = true
+        }
         catch { onSaveFailed(); self.error = error.localizedDescription }
     }
     private func process(_ selection: PhotosPickerItem?, isLogo: Bool) async {
@@ -667,5 +748,367 @@ struct ProfileWizard: View {
             else { draft.photoBase64 = jpeg.base64EncodedString() }
         } catch is CancellationError { /* A newer selection owns the preview. */ }
         catch { self.error = "A kép betöltése nem sikerült. Válassz másik képet." }
+    }
+}
+
+private struct V10WizardTopBar: View {
+    let profileType: String
+    let group: V10WizardVisualGroup
+    let groupIndex: Int
+    let groupCount: Int
+    let canClose: Bool
+    let onClose: () -> Void
+    let onChangeType: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Group {
+                if canClose {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Bezárás")
+                } else {
+                    Color.clear.frame(width: 44, height: 44)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 1) {
+                Button(action: onChangeType) {
+                    HStack(spacing: 3) {
+                        Text("\(profileType) · \(groupIndex + 1)/\(groupCount)")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(VizitColor.textMuted)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(VizitColor.textMuted)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                }
+                .buttonStyle(.plain)
+                HStack(spacing: 7) {
+                    Circle().fill(group.color).frame(width: 9, height: 9)
+                    Text(group.title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(VizitColor.textPrimary)
+                        .lineLimit(1)
+                }
+            }
+            .layoutPriority(1)
+
+            Color.clear
+                .frame(width: 44, height: 44)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 2)
+        .padding(.bottom, 6)
+    }
+}
+
+private struct V10WizardProgress: View {
+    let groups: [V10WizardVisualGroup]
+    let currentIndex: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(groups.indices, id: \.self) { index in
+                GeometryReader { geo in
+                    let lineHeight: CGFloat = index == currentIndex ? 6 : 2
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: index == currentIndex ? 3 : 1)
+                            .fill(index < currentIndex ? groups[index].color : VizitColor.controlTrack)
+                        if index == currentIndex {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(groups[index].color)
+                                .frame(width: geo.size.width * 0.45)
+                        }
+                    }
+                    .frame(height: lineHeight)
+                    .frame(maxHeight: .infinity, alignment: .center)
+                }
+                .frame(height: 14)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+        .animation(.easeInOut(duration: 0.25), value: currentIndex)
+    }
+}
+
+private enum V10WizardIntroColor {
+    static let navy = Color(uiColor: UIColor(hex: 0x0C2C63))
+    static let blue = Color(uiColor: UIColor(hex: 0x2A5BD7))
+    static let cyanGlow = Color(uiColor: UIColor(hex: 0x4FB3D9)).opacity(0.38)
+    static let blueGlow = Color(uiColor: UIColor(hex: 0x2A5BD7)).opacity(0.60)
+    static let amber = Color(uiColor: UIColor { traits in
+        UIColor(hex: traits.userInterfaceStyle == .dark ? 0xE3A04A : 0xB86F0E)
+    })
+    static let teal = Color(uiColor: UIColor { traits in
+        UIColor(hex: traits.userInterfaceStyle == .dark ? 0x3DC1D1 : 0x0E8494)
+    })
+}
+
+/// The supplied V10 wizard cover: a theme-independent navy canvas, NFC waves,
+/// four block markers and the exact 0.38-second horizontal hand-off.
+private struct V10WizardIntro: View {
+    let selectedKind: String?
+    let canClose: Bool
+    let onClose: () -> Void
+    let onPick: (String) -> Void
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            GeometryReader { geo in
+                ZStack {
+                    V10WizardIntroColor.navy
+                    LinearGradient(
+                        stops: [
+                            .init(color: V10WizardIntroColor.blue.opacity(0), location: 0.45),
+                            .init(color: V10WizardIntroColor.blue.opacity(0.65), location: 1),
+                        ],
+                        startPoint: UnitPoint(x: 0.37, y: 0),
+                        endPoint: UnitPoint(x: 0.63, y: 1)
+                    )
+                    V10WizardEllipticalGlow(
+                        colors: [V10WizardIntroColor.blueGlow, .clear],
+                        transparentStop: 0.65
+                    )
+                    .frame(width: 1.8 * geo.size.width, height: 1.2 * geo.size.height)
+                    .position(x: -0.1 * geo.size.width, y: 1.05 * geo.size.height)
+                    V10WizardEllipticalGlow(
+                        colors: [V10WizardIntroColor.cyanGlow, .clear],
+                        transparentStop: 0.60
+                    )
+                    .frame(width: 2.4 * geo.size.width, height: 1.4 * geo.size.height)
+                    .position(x: 1.05 * geo.size.width, y: -0.05 * geo.size.height)
+                }
+            }
+            .clipped()
+            .ignoresSafeArea()
+
+            V10WizardIntroWaves()
+                .frame(width: 260, height: 284)
+                .offset(x: 40, y: 70)
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
+                .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    if canClose {
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(Circle().fill(.white.opacity(0.10)))
+                        }
+                        .buttonStyle(V10WizardIntroPressStyle(scale: 0.97))
+                        .accessibilityLabel("Bezárás")
+                    } else {
+                        Color.clear.frame(width: 44, height: 44)
+                    }
+                    Text("VIZIT")
+                        .font(.system(size: 13, weight: .heavy))
+                        .tracking(3.9)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .frame(maxWidth: .infinity)
+                    Color.clear.frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+
+                GeometryReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Kezdjük meg a profilod létrehozását!")
+                                .font(.system(size: 34, weight: .medium))
+                                .tracking(-0.34)
+                                .foregroundStyle(.white)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Milyen profil lesz?")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.70))
+                                .padding(.top, 6)
+                                .padding(.bottom, 2)
+                            VStack(spacing: 10) {
+                                V10WizardTypePick(
+                                    checked: selectedKind == "business",
+                                    kind: "business",
+                                    icon: "briefcase",
+                                    label: "Vállalkozói",
+                                    bars: [VizitColor.primary, V10WizardIntroColor.amber,
+                                           V10WizardIntroColor.teal, VizitColor.success],
+                                    onTap: onPick
+                                )
+                                .accessibilityIdentifier("wizard.business")
+                                V10WizardTypePick(
+                                    checked: selectedKind == "private",
+                                    kind: "private",
+                                    icon: "person",
+                                    label: "Magánszemély",
+                                    bars: [VizitColor.primary, V10WizardIntroColor.teal, VizitColor.success],
+                                    onTap: onPick
+                                )
+                                .accessibilityIdentifier("wizard.private")
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 28)
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .bottomLeading)
+                    }
+                }
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+private struct V10WizardEllipticalGlow: View {
+    let colors: [Color]
+    let transparentStop: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            RadialGradient(
+                stops: [
+                    .init(color: colors[0], location: 0),
+                    .init(color: colors[1], location: transparentStop),
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: min(geometry.size.width, geometry.size.height) / 2
+            )
+            .scaleEffect(
+                x: geometry.size.width / max(geometry.size.height, 1),
+                y: 1,
+                anchor: .center
+            )
+            .frame(width: geometry.size.height, height: geometry.size.height)
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct V10WizardTypePick: View {
+    let checked: Bool
+    let kind: String
+    let icon: String
+    let label: String
+    let bars: [Color]
+    let onTap: (String) -> Void
+
+    var body: some View {
+        Button { onTap(kind) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(checked ? V10WizardIntroColor.blue : .white.opacity(0.15)))
+                VStack(alignment: .leading, spacing: 9) {
+                    Text(label)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(checked ? VizitColor.ink : .white)
+                    HStack(spacing: 4) {
+                        ForEach(Array(bars.enumerated()), id: \.offset) { item in
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(item.element)
+                                .frame(width: 22, height: 5)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(checked ? V10WizardIntroColor.blue : .white.opacity(0.15)))
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(checked ? VizitColor.surface : .white.opacity(0.10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(checked ? VizitColor.surface : .white.opacity(0.22), lineWidth: 1)
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(V10WizardIntroPressStyle(scale: 0.985))
+        .animation(.easeOut(duration: 0.15), value: checked)
+    }
+}
+
+private struct V10WizardIntroPressStyle: ButtonStyle {
+    let scale: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private struct V10WizardIntroWaves: View {
+    var body: some View {
+        ZStack {
+            V10WizardWaveDot().fill(.white.opacity(0.15))
+            V10WizardWaveArcs().stroke(
+                .white.opacity(0.15),
+                style: StrokeStyle(lineWidth: 14.2, lineCap: .round, lineJoin: .round)
+            )
+        }
+    }
+}
+
+private struct V10WizardWaveDot: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = rect.width / 220
+        return Path(ellipseIn: CGRect(
+            x: rect.minX + 27 * scale,
+            y: rect.minY + 107 * scale,
+            width: 26 * scale,
+            height: 26 * scale
+        ))
+    }
+}
+
+private struct V10WizardWaveArcs: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = rect.width / 220
+        let arcs: [(x: CGFloat, y0: CGFloat, y1: CGFloat, radius: CGFloat)] = [
+            (78, 62, 178, 82),
+            (112, 30, 210, 124),
+            (146, -2, 242, 166),
+        ]
+        var path = Path()
+        for arc in arcs {
+            let half = (arc.y1 - arc.y0) / 2
+            let distance = sqrt(arc.radius * arc.radius - half * half)
+            let centerX = arc.x - distance
+            let centerY = (arc.y0 + arc.y1) / 2
+            let sweep = atan2(Double(half), Double(distance))
+            for index in 0...40 {
+                let angle = -sweep + 2 * sweep * Double(index) / 40
+                let point = CGPoint(
+                    x: rect.minX + (centerX + arc.radius * CGFloat(cos(angle))) * scale,
+                    y: rect.minY + (centerY + arc.radius * CGFloat(sin(angle))) * scale
+                )
+                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+        }
+        return path
     }
 }
