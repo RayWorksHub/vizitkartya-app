@@ -18,7 +18,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Verify source integrity and import native production adapters
-        run: python3 design/source-import/import_native.py
+        run: |
+          python3 design/source-import/import_native.py
+          python3 design/source-import/finalize.py
       - name: Commit source to repair branch only
         shell: bash
         run: |
@@ -31,4 +33,12 @@ jobs:
           git add app ios config docs
           git diff --cached --check
           git commit -m 'Restore actual native ZIP block wizard and registration routes'
+          git archive --format=tar.gz -o "$RUNNER_TEMP/vizit-source.tar.gz" HEAD
           git push origin "HEAD:$GITHUB_REF_NAME"
+      - name: Source snapshot for parity inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip-parity-source
+          path: ${{ runner.temp }}/vizit-source.tar.gz
+          if-no-files-found: warn
