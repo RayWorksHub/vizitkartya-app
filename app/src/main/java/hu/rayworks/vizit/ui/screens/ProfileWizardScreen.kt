@@ -1,64 +1,47 @@
 package hu.rayworks.vizit.ui.screens
 
-import androidx.activity.compose.rememberLauncherForActivityResult
+import android.graphics.Bitmap
+import android.net.Uri
+import android.util.Base64
 import androidx.activity.compose.BackHandler
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.luminance
 import hu.rayworks.vizit.data.ContactProfile
-import hu.rayworks.vizit.data.PhotoProcessor
 import hu.rayworks.vizit.data.card.CardColorway
 import hu.rayworks.vizit.data.card.CardPresentation
 import hu.rayworks.vizit.ui.design.Vizit
-import hu.rayworks.vizit.ui.design.components.VizitButton
-import hu.rayworks.vizit.ui.design.components.VizitButtonStyle
-import hu.rayworks.vizit.ui.design.components.VizitTextField
-import hu.rayworks.vizit.ui.util.rememberProfilePhoto
+import hu.rayworks.vizit.v10.data.AppState
+import hu.rayworks.vizit.v10.data.Pic
+import hu.rayworks.vizit.v10.data.Profile
+import hu.rayworks.vizit.v10.ui.theme.ThemeState
+import hu.rayworks.vizit.v10.ui.wizard.ThemedWizardHost as WizardHost
+import hu.rayworks.vizit.v10.ui.wizard.WizardState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.Normalizer
+import java.io.ByteArrayOutputStream
+import kotlin.math.max
+import kotlin.math.roundToInt
 
-/** Guided creation for the first or any additional business card. */
+/** The supplied native block pager, attached to the existing owner-isolated save path. */
 @Composable
 fun ProfileWizardScreen(
     onSave: suspend (ContactProfile) -> String?,
@@ -68,277 +51,106 @@ fun ProfileWizardScreen(
     isAdditional: Boolean = false,
     onCancel: (() -> Unit)? = null,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val bridge = remember { AppState(WizardState(takenSlugs = { emptyList() })) }
     val scope = rememberCoroutineScope()
-    var type by rememberSaveable { mutableStateOf("") }
-    var step by rememberSaveable { mutableStateOf(0) }
-    var draft by remember { mutableStateOf(ContactProfile(isPublic = true)) }
-    var style by remember { mutableStateOf(CardColorway.INK) }
-    var slugEdited by rememberSaveable { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(false) }
-    var published by rememberSaveable { mutableStateOf(false) }
-    var error by remember { mutableStateOf("") }
-    var skipped by remember { mutableStateOf(setOf<String>()) }
-    var returnToReview by remember { mutableStateOf(false) }
-    var introShown by rememberSaveable { mutableStateOf(true) }
-    val steps = if (type == "private") listOf("type", "identity", "photo", "contact", "social", "look", "done")
-        else listOf("type", "identity", "photo", "logo", "contact", "social", "bio", "look", "done")
-    val key = steps[step.coerceIn(steps.indices)]
-    val visualGroups = v10WizardVisualGroups(type)
-    val currentVisualGroupIndex = visualGroups.indexOfFirst { key in it.steps }.coerceAtLeast(0)
-    val names = mapOf("type" to "Névjegy típusa", "identity" to "Alapadatok", "photo" to "Profilkép",
-        "logo" to "Céges logó", "contact" to "Elérhetőségek", "social" to "Közösségi profilok",
-        "bio" to "Bemutatkozás", "look" to "Stílus", "done" to "Befejezés")
-    val optional = setOf("photo", "logo", "contact", "social", "bio")
-    val photo = rememberProfilePhoto(draft.photoBase64)
-    val logo = rememberProfilePhoto(draft.logoBase64)
-
-    fun pick(kind: String, selected: android.net.Uri?) {
-        if (selected == null) return
-        scope.launch {
-            loading = true; error = ""
-            runCatching { withContext(Dispatchers.IO) { PhotoProcessor.loadSquareJpegBase64(context, selected) } }
-                .onSuccess { image -> draft = if (kind == "photo") draft.copy(photoBase64 = image) else draft.copy(logoBase64 = image) }
-                .onFailure { error = "A kiválasztott kép nem dolgozható fel. Válassz JPG, PNG vagy WebP képet." }
-            loading = false
+    val save by rememberUpdatedState(onSave)
+    val done by rememberUpdatedState(onDone)
+    val cancel by rememberUpdatedState(onCancel)
+    val appearance by rememberUpdatedState(onAppearanceChange)
+    val currentPresentation by rememberUpdatedState(presentation)
+    val dark = Vizit.colors.canvas.luminance() < 0.5f
+    SideEffect {
+        ThemeState.dark = dark
+        bridge.onExit = {
+            if (cancel != null) cancel?.invoke()
+            else { bridge.wizard.confirmOpen = false; bridge.wizard.introShown = true }
+        }
+        bridge.onPublish = { value ->
+            if (!bridge.saving) {
+                bridge.saving = true
+                bridge.error = null
+                scope.launch {
+                    try {
+                        val draft = withContext(Dispatchers.Default) { value.productionProfile() }
+                        val issue = save(draft)
+                        if (issue == null) {
+                            val colorway = when (value.presetId) {
+                                "markakek" -> CardColorway.BRAND
+                                "smaragd" -> CardColorway.EMERALD
+                                "ametiszt" -> CardColorway.AMETHYST
+                                else -> CardColorway.INK
+                            }
+                            appearance(currentPresentation.copy(colorway = colorway))
+                            // The repository owns the actual synchronization status.
+                            // Never report a simulated or timer-based publication.
+                            done()
+                        } else bridge.error = issue
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        bridge.error = error.localizedMessage ?: "A névjegy mentése nem sikerült."
+                    } finally { bridge.saving = false }
+                }
+            }
         }
     }
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { pick("photo", it) }
-    val logoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { pick("logo", it) }
-    val has = when (key) {
-        "photo" -> draft.photoBase64.isNotBlank()
-        "logo" -> draft.logoBase64.isNotBlank()
-        "contact" -> listOf(draft.email, draft.phone, draft.website, draft.address).any(String::isNotBlank)
-        "social" -> listOf(draft.linkedIn, draft.facebook, draft.instagram, draft.youtube, draft.tiktok, draft.x, draft.github, draft.customSocial).any(String::isNotBlank)
-        "bio" -> draft.bio.isNotBlank()
-        else -> true
-    }
-    val valid = when (key) {
-        "type" -> type.isNotBlank()
-        "identity" -> draft.fullName.trim().length >= 2 && (type == "private" || draft.company.isNotBlank())
-        "contact" -> draft.email.isBlank() || Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$").matches(draft.email.trim())
-        "done" -> draft.publicSlug.matches(Regex("^[a-z0-9]+(?:-[a-z0-9]+)*$")) && draft.publicSlug.length in 3..50
-        else -> true
-    }
-    fun advance(skip: Boolean) {
-        if (skip) draft = when (key) {
-            "photo" -> draft.copy(photoBase64 = "")
-            "logo" -> draft.copy(logoBase64 = "")
-            "contact" -> draft.copy(phone = "", email = "", website = "", address = "")
-            "social" -> draft.copy(linkedIn = "", facebook = "", instagram = "", youtube = "", tiktok = "", x = "", github = "", customSocial = "")
-            "bio" -> draft.copy(bio = "")
-            else -> draft
-        }
-        skipped = if (skip) skipped + key else skipped - key
-        step = if (returnToReview) steps.lastIndex else (step + 1).coerceAtMost(steps.lastIndex)
-        returnToReview = false; error = ""
-        if (steps[step] == "done" && !slugEdited) draft = draft.copy(publicSlug = wizardSlug(
-            if (type == "business") draft.company else draft.fullName))
-    }
-    fun selectType(selected: String) {
-        type = selected
-        if (selected == "private") {
-            draft = draft.copy(company = "", jobTitle = "", bio = "", logoBase64 = "")
-        }
-        step = 1
-        returnToReview = false
-        error = ""
-        introShown = false
-    }
-    if (published) {
-        Column(Modifier.fillMaxSize().background(Vizit.colors.canvas)
-            .windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(24.dp), verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Elkészült a névjegyed", style = Vizit.type.h2, color = Vizit.colors.textPrimary)
-            Spacer(Modifier.height(12.dp))
-            Text(if (draft.isPublic) "A névjegyed publikálva. Most már megoszthatod a profilcímedet."
-                else "A névjegyed elmentve. A nyilvános profilt később is bekapcsolhatod.")
-            Spacer(Modifier.height(24.dp))
-            VizitButton("Tovább az áttekintéshez", onClick = onDone, modifier = Modifier.fillMaxWidth())
-        }
-        return
-    }
-    BackHandler(enabled = (introShown && onCancel != null) || (!introShown && (step > 0 || onCancel != null))) {
-        if (introShown) {
-            onCancel?.invoke()
-        } else if (!returnToReview && step <= 1) {
-            introShown = true
-        } else {
-            step = if (returnToReview) steps.lastIndex else (step - 1).coerceAtLeast(1)
-            returnToReview = false
-            error = ""
-        }
-    }
-    val contentAccessibility = if (introShown) Modifier.clearAndSetSemantics { } else Modifier
+    BackHandler { bridge.closeWizard(false) }
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(Vizit.colors.canvas).windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars).imePadding().then(contentAccessibility)) {
-        V10WizardTopBar(
-            profileType = if (type == "private") "Magánszemély" else "Vállalkozói",
-            group = visualGroups[currentVisualGroupIndex],
-            groupIndex = currentVisualGroupIndex,
-            groupCount = visualGroups.size,
-            canClose = isAdditional && onCancel != null,
-            onClose = { onCancel?.invoke() },
-            onChangeType = { introShown = true },
+        WizardHost(bridge)
+        if (bridge.saving) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.15f)).clickable {},
+                contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        }
+    }
+    bridge.error?.let { message ->
+        AlertDialog(
+            onDismissRequest = { bridge.error = null },
+            title = { Text("A névjegy mentése nem sikerült") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { bridge.error = null }) { Text("Rendben") } },
         )
-        V10WizardProgress(groups = visualGroups, currentIndex = currentVisualGroupIndex)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (key != "type") ProfileCard(profile = draft, presentation = presentation.copy(colorway = style))
-            when (key) {
-                "type" -> {
-                    Text(
-                        if (isAdditional) "Hozzuk létre az új névjegyedet" else "Hozzuk létre az első névjegyedet",
-                        style = Vizit.type.h2,
-                        color = Vizit.colors.textPrimary,
-                    )
-                    Text("Válaszd ki, hogy személyes vagy vállalkozói névjegyet szeretnél. Később minden adatot módosíthatsz.", color = Vizit.colors.textMuted)
-                    Text("Milyen névjegyet készítesz?", style = Vizit.type.h3, color = Vizit.colors.textPrimary)
-                    WizardChoice("Vállalkozói névjegy", "Vállalkozás, beosztás, logó és bemutatkozás", type == "business") { type = "business" }
-                    WizardChoice("Magánszemély", "Személyes kapcsolatokhoz, csak a lényeg", type == "private") {
-                        type = "private"; draft = draft.copy(company = "", jobTitle = "", bio = "", logoBase64 = "")
-                    }
-                }
-                "identity" -> {
-                    Text(if (type == "business") "Mutatkozz be" else "Hogy hívnak?", style = Vizit.type.h2)
-                    VizitTextField(draft.fullName, { draft = draft.copy(fullName = it) }, "Teljes név *")
-                    if (type == "business") {
-                        VizitTextField(draft.company, { draft = draft.copy(company = it) }, "Vállalkozás / szervezet *")
-                        VizitTextField(draft.jobTitle, { draft = draft.copy(jobTitle = it) }, "Beosztás · nem kötelező")
-                    }
-                }
-                "photo", "logo" -> {
-                    Text(if (key == "photo") "Profilkép" else "Céges logó", style = Vizit.type.h2)
-                    Text(if (key == "photo") "A partnereid könnyebben felismernek." else "A logó a profilkép sarkán jelenik meg.")
-                    val bitmap = if (key == "photo") photo else logo
-                    if (bitmap != null) Image(bitmap, contentDescription = if (key == "photo") "Profilkép" else "Céges logó",
-                        modifier = Modifier.fillMaxWidth().height(140.dp), contentScale = ContentScale.Fit)
-                    VizitButton(if (bitmap == null) "Kép kiválasztása" else "Másik kép", onClick = {
-                        (if (key == "photo") photoPicker else logoPicker).launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }, enabled = !loading, loading = loading, modifier = Modifier.fillMaxWidth())
-                    if (bitmap != null) VizitButton("Eltávolítás", onClick = { draft = if (key == "photo") draft.copy(photoBase64 = "") else draft.copy(logoBase64 = "") },
-                        style = VizitButtonStyle.Tertiary, modifier = Modifier.fillMaxWidth())
-                }
-                "contact" -> {
-                    Text("Hol érnek el?", style = Vizit.type.h2)
-                    Text("Csak azt add meg, amit nyilvánosan is megosztanál.")
-                    VizitTextField(draft.email, { draft = draft.copy(email = it) }, "Nyilvános e-mail", keyboardType = KeyboardType.Email)
-                    VizitTextField(draft.phone, { draft = draft.copy(phone = it) }, "Telefonszám", keyboardType = KeyboardType.Phone)
-                    VizitTextField(draft.website, { draft = draft.copy(website = it) }, "Weboldal", keyboardType = KeyboardType.Uri)
-                    if (type == "business") VizitTextField(draft.address, { draft = draft.copy(address = it) }, "Hely / cím")
-                    if (!valid) Text("Érvényes e-mail-címet adj meg.", color = Vizit.colors.error)
-                }
-                "social" -> {
-                    Text("Közösségi profilok", style = Vizit.type.h2)
-                    Text("Add meg, amelyiket használod. A többit később is hozzáadhatod.")
-                    VizitTextField(draft.linkedIn, { draft = draft.copy(linkedIn = it) }, "LinkedIn")
-                    VizitTextField(draft.facebook, { draft = draft.copy(facebook = it) }, "Facebook")
-                    VizitTextField(draft.instagram, { draft = draft.copy(instagram = it) }, "Instagram")
-                    VizitTextField(draft.youtube, { draft = draft.copy(youtube = it) }, "YouTube")
-                    VizitTextField(draft.tiktok, { draft = draft.copy(tiktok = it) }, "TikTok")
-                    VizitTextField(draft.x, { draft = draft.copy(x = it) }, "X")
-                    VizitTextField(draft.github, { draft = draft.copy(github = it) }, "GitHub")
-                    VizitTextField(draft.customSocial, { draft = draft.copy(customSocial = it) }, "Egyéb hivatkozás")
-                }
-                "bio" -> {
-                    Text("Pár mondat rólad", style = Vizit.type.h2)
-                    VizitTextField(draft.bio, { draft = draft.copy(bio = it.take(420)) }, "Rövid bemutatkozás", singleLine = false)
-                    Text("${draft.bio.length}/420", color = Vizit.colors.textMuted)
-                }
-                "look" -> {
-                    Text("Válassz stílust", style = Vizit.type.h2)
-                    CardColorway.entries.take(4).forEach { color ->
-                        WizardChoice(color.label, "Kártya színvilága", style == color) { style = color }
-                    }
-                }
-                "done" -> {
-                    Text("Elkészült a névjegyed", style = Vizit.type.h2)
-                    Text("Nézd át, és mentsd el. Később minden adatot módosíthatsz.")
-                    VizitTextField(draft.publicSlug, { slugEdited = true; draft = draft.copy(publicSlug = wizardSlug(it)) }, "Profilcím: vizitkartyam.hu/…")
-                    Text("A cím foglaltságát szinkronizáláskor ellenőrizzük.", color = Vizit.colors.textMuted)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Nyilvános profil", modifier = Modifier.weight(1f))
-                        Switch(checked = draft.isPublic, onCheckedChange = { draft = draft.copy(isPublic = it) })
-                    }
-                    if (skipped.isNotEmpty()) {
-                        Text("Később beállíthatod", style = Vizit.type.label)
-                        skipped.filter { it in steps }.forEach { missing ->
-                            VizitButton(names[missing].orEmpty(), onClick = { step = steps.indexOf(missing); returnToReview = true },
-                                style = VizitButtonStyle.Secondary, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                }
-            }
-            if (error.isNotBlank()) Text(error, color = Vizit.colors.error)
-        }
-        Column(Modifier.fillMaxWidth().background(Vizit.colors.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (step == 0 && onCancel != null) {
-                VizitButton(
-                    "Mégse",
-                    onClick = onCancel,
-                    style = VizitButtonStyle.Tertiary,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !loading,
-                )
-            }
-            if (step > 0) VizitButton("Vissza", onClick = {
-                if (!returnToReview && step == 1) introShown = true
-                else step = if (returnToReview) steps.lastIndex else (step - 1).coerceAtLeast(1)
-                returnToReview = false; error = ""
-            }, style = VizitButtonStyle.Tertiary, modifier = Modifier.fillMaxWidth())
-            VizitButton(if (key == "done") (if (draft.isPublic) "Névjegy publikálása" else "Névjegy mentése")
-                else (if (returnToReview) "Mentés" else "Tovább"), onClick = {
-                if (key != "done") advance(false) else scope.launch {
-                    loading = true; error = ""
-                    val prepared = wizardUrls(draft)
-                    if (prepared == null) error = "A webes és közösségi hivatkozások teljes, https:// kezdetű címek legyenek."
-                    else {
-                        val issue = runCatching { onSave(prepared) }.getOrElse { it.localizedMessage ?: "A mentés nem sikerült." }
-                        if (issue == null) { onAppearanceChange(presentation.copy(colorway = style)); published = true } else error = issue
-                    }
-                    loading = false
-                }
-            }, enabled = valid && (key !in optional || has) && !loading, loading = loading, modifier = Modifier.fillMaxWidth())
-            if (key in optional) VizitButton("Később állítom be", onClick = { advance(true) }, style = VizitButtonStyle.Tertiary,
-                modifier = Modifier.fillMaxWidth(), enabled = !loading)
-        }
-    }
-        val wizardEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
-        AnimatedVisibility(
-            visible = introShown,
-            enter = slideInHorizontally(tween(380, easing = wizardEasing)) { -it },
-            exit = slideOutHorizontally(tween(380, easing = wizardEasing)) { -it },
-        ) {
-            V10ProfileWizardIntro(
-                selectedType = type,
-                canClose = onCancel != null,
-                onClose = { onCancel?.invoke() },
-                onPick = ::selectType,
-            )
-        }
     }
 }
 
-@Composable
-private fun WizardChoice(title: String, detail: String, selected: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().background(if (selected) Vizit.colors.primarySubtle else Vizit.colors.surface,
-        RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Column { Text(title, style = Vizit.type.label); Text(detail, color = Vizit.colors.textSecondary) }
-        if (selected) Text("✓", color = Vizit.colors.primary)
+private fun Profile.productionProfile(): ContactProfile = ContactProfile(
+    fullName = name, company = company, jobTitle = title, phone = phone, email = email,
+    address = address, bio = bio, website = checkedUrl(web), publicSlug = slug, isPublic = isPublic,
+    photoBase64 = photo.jpeg(), logoBase64 = logo.jpeg(),
+    linkedIn = checkedUrl(socials["linkedin"].orEmpty()),
+    facebook = checkedUrl(socials["facebook"].orEmpty()),
+    instagram = checkedUrl(socials["instagram"].orEmpty()),
+    youtube = checkedUrl(socials["youtube"].orEmpty()),
+    tiktok = checkedUrl(socials["tiktok"].orEmpty()),
+    x = checkedUrl(socials["x"].orEmpty()),
+    github = checkedUrl(socials["github"].orEmpty()),
+    customSocial = checkedUrl(socials["other"].orEmpty()),
+)
+
+private fun checkedUrl(value: String): String {
+    val v = value.trim()
+    if (v.isEmpty()) return ""
+    val uri = Uri.parse(v)
+    require(uri.scheme == "https" && !uri.host.isNullOrBlank() && v.none(Char::isWhitespace)) {
+        "Érvényes, https:// kezdetű webcímet adj meg."
     }
+    return v
 }
 
-private fun wizardSlug(value: String): String = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)
-    .replace(Regex("[\\u0300-\\u036f]"), "").replace(Regex("[^a-z0-9]+"), "-")
-    .trim('-').take(50)
-
-private fun wizardUrls(p: ContactProfile): ContactProfile? {
-    fun url(value: String): String? = value.trim().takeIf(String::isNotBlank)?.let {
-        val result = if (it.contains("://")) it else "https://$it"
-        result.takeIf { link -> link.startsWith("https://") }
-    } ?: ""
-    val links = listOf(p.website,p.linkedIn,p.facebook,p.instagram,p.youtube,p.tiktok,p.x,p.github,p.customSocial).map(::url)
-    if (links.any { it == null }) return null
-    return p.copy(website=links[0]!!,linkedIn=links[1]!!,facebook=links[2]!!,instagram=links[3]!!,
-        youtube=links[4]!!,tiktok=links[5]!!,x=links[6]!!,github=links[7]!!,customSocial=links[8]!!)
+private fun Pic?.jpeg(): String {
+    if (this == null) return ""
+    require(this is Pic.Bmp) { "Válassz képet a készülékedről." }
+    val source = bitmap.asAndroidBitmap()
+    for (side in listOf(512, 384, 256)) {
+        val scale = minOf(1f, side.toFloat() / max(source.width, source.height))
+        val resized = Bitmap.createScaledBitmap(source,
+            max(1, (source.width * scale).roundToInt()), max(1, (source.height * scale).roundToInt()), true)
+        try {
+            for (quality in listOf(82, 65, 45)) {
+                val output = ByteArrayOutputStream()
+                check(resized.compress(Bitmap.CompressFormat.JPEG, quality, output))
+                if (output.size() <= 256 * 1024) return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+            }
+        } finally { if (resized !== source) resized.recycle() }
+    }
+    error("A kiválasztott kép túl nagy. Válassz másik képet.")
 }

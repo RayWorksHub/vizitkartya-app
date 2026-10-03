@@ -291,3 +291,21 @@ final class NativeIntegrationTests: XCTestCase {
         XCTAssertEqual(legacy, CardPresentation())
     }
 }
+
+final class ZIPWizardParityTests: XCTestCase {
+    @MainActor func testPrivateWizardHasThreeBlocksAndNoDemoName() {
+        let w = ZIPWizardState(takenSlugs: { [] })
+        XCTAssertTrue(w.name.isEmpty)
+        w.chooseType(.individual); w.begin()
+        XCTAssertEqual(w.flow.map(\.id), ["personal", "online", "done"])
+        XCTAssertFalse(w.valid("personal"))
+        w.input("name", "Teszt Elek")
+        XCTAssertTrue(w.valid("personal"))
+    }
+    @MainActor func testBusinessWizardKeepsFourBlocks() {
+        let w = ZIPWizardState(takenSlugs: { [] })
+        w.chooseType(.business); w.begin()
+        XCTAssertEqual(w.flow.map(\.id), ["personal", "company", "online", "done"])
+        XCTAssertFalse(w.valid("company"))
+    }
+}

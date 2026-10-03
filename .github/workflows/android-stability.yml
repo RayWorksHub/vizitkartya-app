@@ -89,4 +89,5 @@ jobs:
             app/build/reports
             app/build/outputs/androidTest-results
             app/build/test-results
+            app/build/outputs/connected_android_test_additional_output
           retention-days: 14
