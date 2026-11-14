@@ -2,6 +2,10 @@
 
 ## Konfiguráció
 
+Az éles Auth, PostgREST és Storage a Ganzmain szerveren futó, saját üzemeltetésű
+Supabase-rendszert használja a `https://db.vizitkartyam.hu` címen. A mobilkliensek
+közös alapbeállítása a `config/android-node.properties` fájlban található.
+
 A kliens csak publishable/anon kompatibilis kulcsot kaphat. Gradle property nevek:
 
 - `VIZIT_DEV_SUPABASE_URL`, `VIZIT_DEV_SUPABASE_KEY`
