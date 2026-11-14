@@ -51,7 +51,11 @@ jobs:
           # The Ganzmain database intentionally starts without the three legacy
           # profiles, so verify the configured site itself instead of a removed slug.
           site_url = urllib.parse.urljoin(values['publicProfileBaseUrl'] + '/', '/')
-          with urllib.request.urlopen(site_url, timeout=20) as response:
+          request = urllib.request.Request(site_url, headers={
+              'User-Agent': 'Mozilla/5.0 VIZIT-CI/1.0',
+              'Accept': 'text/html',
+          })
+          with urllib.request.urlopen(request, timeout=20) as response:
               assert response.status == 200
               assert response.headers.get_content_type() == 'text/html'
               assert response.read(1000000).strip()
