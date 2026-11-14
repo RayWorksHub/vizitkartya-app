@@ -42,13 +42,16 @@ jobs:
       - name: Verify shared public endpoint configuration
         run: |
           python3 - <<'PYCONFIG'
-          import os, urllib.request
+          import os, urllib.parse, urllib.request
           values = dict(line.strip().split('=',1) for line in open('config/sharing.properties') if '=' in line and not line.startswith('#'))
           assert values['publicProfileBaseUrl'] == os.environ['VIZIT_PUBLIC_PROFILE_BASE_URL']
           auth = dict(line.strip().split('=',1) for line in open('config/android-node.properties') if '=' in line and not line.startswith('#'))
           assert auth['authUrl'] == os.environ['VIZIT_SUPABASE_URL']
           assert auth['authPublishableKey'] == os.environ['VIZIT_SUPABASE_KEY']
-          with urllib.request.urlopen(values['publicProfileBaseUrl'] + '/csukardi-rajmund', timeout=20) as response:
+          # The Ganzmain database intentionally starts without the three legacy
+          # profiles, so verify the configured site itself instead of a removed slug.
+          site_url = urllib.parse.urljoin(values['publicProfileBaseUrl'] + '/', '/')
+          with urllib.request.urlopen(site_url, timeout=20) as response:
               assert response.status == 200
               assert response.headers.get_content_type() == 'text/html'
               assert response.read(1000000).strip()
