@@ -23,8 +23,8 @@ jobs:
     env:
       # Supabase publishable keys are designed to ship in clients. Authorization
       # is enforced by RLS; service-role credentials must never appear here.
-      VIZIT_SUPABASE_URL: https://zlrrmkbbyfkbjeqozzde.supabase.co
-      VIZIT_SUPABASE_KEY: sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS
+      VIZIT_SUPABASE_URL: https://db.vizitkartyam.hu
+      VIZIT_SUPABASE_KEY: sb_publishable_mGQ-ZO5YzyhWl6sMQJtNgH_hLZTAGiC
       VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
@@ -297,8 +297,8 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     env:
-      VIZIT_SUPABASE_URL: https://zlrrmkbbyfkbjeqozzde.supabase.co
-      VIZIT_SUPABASE_KEY: sb_publishable_olw6MVbXv4MZooIL1NPZlA_EKc4z1sS
+      VIZIT_SUPABASE_URL: https://db.vizitkartyam.hu
+      VIZIT_SUPABASE_KEY: sb_publishable_mGQ-ZO5YzyhWl6sMQJtNgH_hLZTAGiC
       VIZIT_PRIVACY_POLICY_URL: ${{ secrets.VIZIT_PRIVACY_POLICY_URL }}
       VIZIT_PRIVACY_POLICY_VERSION: ${{ secrets.VIZIT_PRIVACY_POLICY_VERSION }}
       VIZIT_TERMS_URL: ${{ secrets.VIZIT_TERMS_URL }}
