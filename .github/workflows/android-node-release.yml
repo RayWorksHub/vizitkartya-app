@@ -95,7 +95,7 @@ jobs:
           pathlib.Path('release-output/build.json').write_text(json.dumps({
             'commit':os.environ['GITHUB_SHA'],'version':os.environ['VIZIT_VERSION'],
             'versionCode':int(os.environ['VIZIT_VERSION_CODE']),
-            'package':'hu.rayworks.vizit','backend':'https://vizitkartyam-backend.vercel.app',
+            'package':'hu.rayworks.vizit','backend':'https://api.vizitkartyam.hu',
             'testsRun':False,'productionSigned':True
           },indent=2))
           PY
