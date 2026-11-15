@@ -12,11 +12,13 @@ ANDROID_VERSION_FILE = ROOT / "config" / "android-version.properties"
 IOS_VERSION_FILE = ROOT / "config" / "ios-version.properties"
 ANDROID_BUILD_FILE = ROOT / "app" / "build.gradle.kts"
 IOS_PROJECT_FILE = ROOT / "ios" / "VIZIT.xcodeproj" / "project.pbxproj"
+IOS_UI_TEST_FILE = ROOT / "ios" / "UITests" / "VizitUITests.swift"
 
 SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 ANDROID_VERSION_NAME_RE = re.compile(r'(\bversionName\s*=\s*")[^"]+(")')
 ANDROID_VERSION_CODE_RE = re.compile(r"(\bversionCode\s*=\s*)\d+")
 IOS_MARKETING_VERSION_RE = re.compile(r'(\bMARKETING_VERSION\s*=\s*")[^"]+(")')
+IOS_UI_VERSION_RE = re.compile(r'(label\.contains\("VIZIT )\d+\.\d+\.\d+("\)\))')
 
 
 def load_properties(path: Path) -> dict[str, str]:
@@ -66,6 +68,11 @@ def expected_ios_text(version: str) -> str:
     return IOS_MARKETING_VERSION_RE.sub(rf"\g<1>{version}\g<2>", text)
 
 
+def expected_ios_ui_test_text(version: str) -> str:
+    text = IOS_UI_TEST_FILE.read_text(encoding="utf-8")
+    return IOS_UI_VERSION_RE.sub(rf"\g<1>{version}\g<2>", text)
+
+
 def check_android() -> int:
     version, version_code = load_android_version()
     if ANDROID_BUILD_FILE.read_text(encoding="utf-8") != expected_android_text(version, version_code):
@@ -78,7 +85,9 @@ def check_android() -> int:
 
 def check_ios() -> int:
     version = load_ios_version()
-    if IOS_PROJECT_FILE.read_text(encoding="utf-8") != expected_ios_text(version):
+    project_matches = IOS_PROJECT_FILE.read_text(encoding="utf-8") == expected_ios_text(version)
+    ui_test_matches = IOS_UI_TEST_FILE.read_text(encoding="utf-8") == expected_ios_ui_test_text(version)
+    if not project_matches or not ui_test_matches:
         print(f"iOS version drift: expected MARKETING_VERSION={version}")
         print("Run: python3 scripts/sync-version.py --apply-ios")
         return 1
@@ -96,6 +105,7 @@ def apply_android() -> int:
 def apply_ios() -> int:
     version = load_ios_version()
     IOS_PROJECT_FILE.write_text(expected_ios_text(version), encoding="utf-8")
+    IOS_UI_TEST_FILE.write_text(expected_ios_ui_test_text(version), encoding="utf-8")
     print(f"Applied iOS {version}; Android was not changed.")
     return 0
 
